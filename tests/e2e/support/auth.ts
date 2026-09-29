@@ -21,9 +21,19 @@ export async function signIn(
   await page.getByRole("button", { name: "ورود" }).click();
 }
 
+/** Pages a successful sign-in without a callback URL can land on (D25). */
+const HOME = /\/(my-shifts|home|review)$/;
+
+/**
+ * Signs in and waits for the final page: sign-in redirects to `/`, which
+ * redirects again to the user's home, so "no longer on /login" is not enough
+ * (WebKit reports the intermediate URL).
+ */
 export async function signInAndWait(page: Page, email: string) {
   await signIn(page, email);
-  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page).toHaveURL(HOME);
+  await expect(page.getByRole("button", { name: "خروج" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
 }
 
 export const isDesktop = (page: Page) =>

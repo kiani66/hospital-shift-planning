@@ -142,6 +142,8 @@ test.describe("session", () => {
     await signInAndWait(page, DEMO_USERS.icuNurse1.email);
     await page.getByRole("button", { name: "خروج" }).click();
     await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByLabel("ایمیل")).toBeVisible();
+    await page.waitForLoadState("networkidle");
     await page.goto("/my-shifts");
     await expect(page).toHaveURL(/\/login/);
   });
