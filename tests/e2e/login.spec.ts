@@ -148,6 +148,17 @@ test.describe("session", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  test("never re-issues the session cookie, so sign-out cannot be undone by a request in flight", async ({
+    page,
+  }) => {
+    await signInAndWait(page, DEMO_USERS.icuNurse1.email);
+    for (const path of ["/my-shifts", "/preferences", "/"]) {
+      const response = await page.request.get(path, { maxRedirects: 0 });
+      expect(response.status(), path).toBeLessThan(400);
+      expect(response.headers()["set-cookie"], path).toBeUndefined();
+    }
+  });
+
   test("an already signed-in user skips the login page", async ({ page }) => {
     await signInAndWait(page, DEMO_USERS.icuNurse1.email);
     await page.goto("/login");

@@ -141,7 +141,7 @@ Phase 3. Details in `docs/security.md`.
 
 ### D24 · Session and trusted actor
 
-Auth.js JWT session holding only the user id, maximum 12 hours. `getActor()` loads active
+Auth.js JWT session holding only the user id, absolute 12 hours (never refreshed by the proxy). `getActor()` loads active
 status, effective memberships (D19) and supervisor assignments from PostgreSQL on every request;
 nothing authorization-related is read from the session. A deactivated user loses access
 immediately, whatever cookie they hold.

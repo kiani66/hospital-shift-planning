@@ -19,7 +19,8 @@
 ## Session
 
 - Strategy: Auth.js **JWT** session (encrypted cookie, `HttpOnly`, `SameSite=Lax`, `Secure` on
-  HTTPS), maximum 12 hours. No session tables: Credentials sign-in does not support database
+  HTTPS), **absolute** 12 hours from sign-in (not sliding: the proxy only reads the cookie and
+  never re-issues it, so a request in flight during sign-out cannot restore the session). No session tables: Credentials sign-in does not support database
   sessions, and the session carries nothing that needs revoking server-side (see below).
 - Content: **only the user id** (`sub`). The default name/e-mail/picture claims are dropped;
   roles, memberships, supervisor assignments and active status are never stored in it.
@@ -44,7 +45,8 @@ actor (`ACTOR_INACTIVE`) as defense in depth.
 ## Route protection
 
 1. **`src/proxy.ts`** (convenience): requests without a valid session cookie are redirected to
-   `/login?callbackUrl=…`. It never decides access to data.
+   `/login?callbackUrl=…`. It verifies the cookie read-only (`getToken`), never writes cookies, and
+   never decides access to data.
 2. **Server-side** (the boundary): every protected page calls `requireRequestContext()` itself
    (layouts are not relied on), and department pages authorize through the domain policy
    (`department.manage` for the schedule page, `audit.view` for history; supervisors' `/review`
