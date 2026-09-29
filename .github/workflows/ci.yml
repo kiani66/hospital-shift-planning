@@ -28,7 +28,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm format:check
-      - run: pnpm test
+      - run: pnpm test:coverage
 
   e2e:
     name: Build and end-to-end tests
