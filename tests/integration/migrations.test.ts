@@ -11,6 +11,7 @@ const EXPECTED_TABLES = [
   "audit_events",
   "department_memberships",
   "departments",
+  "login_throttles",
   "notifications",
   "nurse_preferences",
   "preference_window_dates",
@@ -149,7 +150,8 @@ describe("migrations (applied to an empty database by the global setup)", () => 
         )
       ).rows[0]!.n;
     const before = await count();
-    expect(before).toBe(4); // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps
+    // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login throttles
+    expect(before).toBe(5);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

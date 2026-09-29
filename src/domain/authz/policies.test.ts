@@ -61,6 +61,7 @@ type ActorName = keyof typeof actors;
 const ACTOR_NAMES = Object.keys(actors) as ActorName[];
 
 const HEAD_NURSE_ONLY = [
+  "department.manage",
   "schedule.create",
   "schedule.openPreferences",
   "schedule.closePreferences",

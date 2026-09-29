@@ -5,3 +5,4 @@ export * from "./schedules";
 export * from "./change-requests";
 export * from "./notifications";
 export * from "./audit";
+export * from "./auth";

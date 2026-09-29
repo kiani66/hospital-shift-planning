@@ -20,10 +20,17 @@ export const DEMO_DEPARTMENTS = [
 
 export const [DEMO_ICU, DEMO_ER] = DEMO_DEPARTMENTS;
 
+/**
+ * Password of every demo account (development, CI and preview databases only).
+ * Demo-only: the seed refuses to run in production, and the UI never shows it.
+ */
+export const DEMO_PASSWORD = "demo-only-password";
+
 export interface DemoUser {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
+  readonly isActive?: boolean;
 }
 
 export const DEMO_USERS = {
@@ -82,6 +89,13 @@ export const DEMO_USERS = {
     id: user(30),
     email: "transfer@demo.invalid",
     displayName: "لیلا نمونه",
+  },
+  /** A deactivated former ICU nurse (D22): keeps history, has no access. */
+  inactiveNurse: {
+    id: user(40),
+    email: "inactive@demo.invalid",
+    displayName: "پرستار غیرفعال نمونه",
+    isActive: false,
   },
 } as const satisfies Record<string, DemoUser>;
 
@@ -161,6 +175,13 @@ export const DEMO_MEMBERSHIPS: readonly DemoMembership[] = [
     departmentId: DEMO_ICU.id,
     role: "NURSE",
     startedOn: "2026-09-23",
+  },
+  {
+    userId: u.inactiveNurse.id,
+    departmentId: DEMO_ICU.id,
+    role: "NURSE",
+    startedOn: "2026-01-01",
+    endedOn: "2026-06-30",
   },
 ];
 

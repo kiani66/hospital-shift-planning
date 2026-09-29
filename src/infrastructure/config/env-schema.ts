@@ -17,6 +17,24 @@ export const serverEnvSchema = z.object({
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
+/**
+ * Auth.js reads these itself; the schema documents them and lets
+ * `/api/health` report a misconfiguration without revealing values.
+ */
+export const authEnvSchema = z.object({
+  /** Encrypts the session cookie. `openssl rand -base64 32`; one per environment. */
+  AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
+  /** "true" outside Vercel (Auth.js trusts the host automatically on Vercel). */
+  AUTH_TRUST_HOST: z.enum(["true", "false"]).optional(),
+});
+
+/** Whether the auth variables are usable; never includes their values. */
+export function authEnvStatus(
+  source: Record<string, string | undefined>,
+): "ok" | "misconfigured" {
+  return authEnvSchema.safeParse(source).success ? "ok" : "misconfigured";
+}
+
 export const migrationEnvSchema = z
   .object({
     /** Direct (non-pooled) connection string; preferred for migrations. */

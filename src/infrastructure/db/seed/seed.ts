@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
 
 import { SHIFT_TYPES } from "../../../domain/shifts/shift-type";
+import { hashPassword } from "../../auth/password";
 import type { Database, DbExecutor } from "../database";
 import { snapshotRosterFromMemberships } from "../../repositories/roster";
 import {
   auditEvents,
   departmentMemberships,
   departments,
+  loginThrottles,
   notifications,
   nursePreferences,
   preferenceWindowDates,
@@ -28,6 +30,7 @@ import {
 import {
   DEMO_DEPARTMENTS,
   DEMO_MEMBERSHIPS,
+  DEMO_PASSWORD,
   DEMO_SCHEDULE,
   DEMO_SUPERVISED_DEPARTMENTS,
   DEMO_USERS,
@@ -35,6 +38,7 @@ import {
 
 /** Every application table except the `shift_types` reference data. */
 export const DATA_TABLES = [
+  loginThrottles,
   auditEvents,
   notifications,
   shiftChangeRequestItems,
@@ -55,6 +59,10 @@ export const DATA_TABLES = [
   departments,
   users,
 ];
+
+// Hashed once per process: Argon2 is deliberately slow, and every demo
+// account shares the demo password.
+let demoPasswordHash: Promise<string> | undefined;
 
 const SHIFT_LABELS = { M: "صبح", E: "عصر", N: "شب", ME: "صبح و عصر" } as const;
 
@@ -96,6 +104,8 @@ export interface SeedSummary {
  * it again produces the same rows with the same ids.
  */
 export async function seedDemoData(db: Database): Promise<SeedSummary> {
+  demoPasswordHash ??= hashPassword(DEMO_PASSWORD);
+  const passwordHash = await demoPasswordHash;
   return db.transaction(async (tx) => {
     await resetData(tx);
 
@@ -113,7 +123,9 @@ export async function seedDemoData(db: Database): Promise<SeedSummary> {
       .onConflictDoNothing();
 
     await tx.insert(departments).values([...DEMO_DEPARTMENTS]);
-    await tx.insert(users).values(Object.values(DEMO_USERS));
+    await tx
+      .insert(users)
+      .values(Object.values(DEMO_USERS).map((u) => ({ ...u, passwordHash })));
     await tx.insert(departmentMemberships).values([...DEMO_MEMBERSHIPS]);
     await tx.insert(supervisorAssignments).values(
       DEMO_SUPERVISED_DEPARTMENTS.map((departmentId) => ({
