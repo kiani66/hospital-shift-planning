@@ -176,3 +176,34 @@ Enforced in `domain/authz/policies.ts`.
 Five failed sign-ins per e-mail address within 15 minutes lock that address for 15 minutes,
 tracked in PostgreSQL by a hash of the address. No Redis, no per-IP limit in the MVP.
 Enforced in `infrastructure/repositories/login-throttles.ts`.
+
+## Schedule period and preference-window decisions
+
+Phase 4. Paths are relative to `src/`.
+
+### D29 · Jalali month selection
+
+The Head Nurse picks a Jalali year and month; the presentation adapter converts it to the ISO
+`period_start`/`period_end` of that whole month with ICU's Persian calendar (`Intl`), not
+hand-written arithmetic, and the server action converts again (the client never supplies dates).
+Only ISO dates and a display label (`آبان ۱۴۰۵`) are stored. The use case still accepts any valid
+period up to 62 days. "Today" (default month, current schedule) is the Asia/Tehran calendar day.
+Enforced in `features/calendar/jalali.ts` and `features/schedule/actions.ts`.
+
+### D30 · Schedule creation and preference window lifecycle
+
+- A schedule is created in `DRAFT` by a Head Nurse of the department, with its roster snapshotted
+  in the same transaction (D19, D21). A period overlapping another schedule of the department is
+  `CONFLICT` (D18); a period with no effective member is rejected.
+- Opening preference collection is the state machine's `OPEN_PREFERENCES` (`DRAFT → PLANNING`)
+  and creates one `INITIAL` window: by default the whole period for the whole roster. A narrower
+  date scope (`DateScope`) or nurse scope must lie inside the period and the roster.
+- Closing closes every open window; the status does not change. Reopening (scoped `REOPEN`
+  windows) is a later phase.
+- Every write carries the schedule revision the caller saw: stale or concurrent attempts get
+  `CONFLICT`; audit events and notifications commit with the change.
+- Opening notifies the nurses in scope (`PREFERENCES_OPENED`). Closing writes no notification:
+  the `notification_type` enum has no such type, and adding one needs a migration.
+
+Enforced in `application/schedules/create-schedule.ts` and
+`application/schedules/preference-windows.ts`.

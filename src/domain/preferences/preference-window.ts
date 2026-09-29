@@ -1,4 +1,6 @@
 import type { IsoDate } from "../shared/dates";
+import { ValidationError } from "../shared/errors";
+import { err, ok, type Result } from "../shared/result";
 
 /**
  * A period during which nurses may enter preferences. "Open preference
@@ -33,3 +35,39 @@ export const countActiveWindows = (
   windows: readonly PreferenceWindow[],
   now: Date,
 ): number => windows.filter((w) => isWindowActive(w, now)).length;
+
+/**
+ * Where preference collection stands for a schedule, as the Head Nurse sees it:
+ * NONE (never opened), OPEN (at least one active window) or CLOSED (every
+ * window closed or past its deadline).
+ */
+export type PreferenceCollectionState = "NONE" | "OPEN" | "CLOSED";
+
+export function preferenceCollectionState(
+  windows: readonly PreferenceWindow[],
+  now: Date,
+): PreferenceCollectionState {
+  if (windows.length === 0) return "NONE";
+  return countActiveWindows(windows, now) > 0 ? "OPEN" : "CLOSED";
+}
+
+/**
+ * The nurse scope of a new window: every id must be on the schedule roster
+ * (no silent dropping). Returns the de-duplicated, sorted ids; empty means the
+ * whole roster.
+ */
+export function checkWindowNurses(
+  nurseIds: readonly string[],
+  rosterIds: ReadonlySet<string>,
+): Result<string[], ValidationError> {
+  const unique = [...new Set(nurseIds)].sort();
+  const outside = unique.filter((id) => !rosterIds.has(id));
+  return outside.length === 0
+    ? ok(unique)
+    : err(
+        new ValidationError(
+          `${outside.length} selected nurse(s) are not on the schedule roster`,
+          "nurseIds",
+        ),
+      );
+}
