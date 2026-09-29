@@ -14,8 +14,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
@@ -24,7 +24,9 @@
     "db:down": "docker compose down",
     "vercel-build": "tsx scripts/db-migrate.ts && next build",
     "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --project unit --coverage",
+    "db:seed": "tsx scripts/db-seed.ts",
+    "test:integration": "vitest run --project integration"
   },
   "dependencies": {
     "@fontsource-variable/vazirmatn": "^5.3.0",

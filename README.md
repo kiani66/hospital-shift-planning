@@ -7,9 +7,10 @@ The UI is Persian (RTL) with a Solar Hijri calendar. The workflow runs from nurs
 head nurse scheduling and finalization, then supervisor review and approval, ending in a closed
 monthly schedule.
 
-> **Status: Phase 1 (domain layer).** Tooling, CI, database pipeline, the RTL shell and the pure
-> business rules (`src/domain`) are in place. Features arrive in later phases. See
-> [docs/decisions.md](docs/decisions.md).
+> **Status: Phase 2 (persistence).** Tooling, CI, the RTL shell, the pure business rules
+> (`src/domain`), the database schema, repositories and the transactional use-case foundation are in
+> place. Features arrive in later phases. See [docs/decisions.md](docs/decisions.md) and
+> [docs/database.md](docs/database.md).
 
 ## Stack
 
@@ -25,6 +26,7 @@ pnpm install
 cp .env.example .env.local   # local connection strings
 pnpm db:up                   # PostgreSQL 17 in Docker
 pnpm db:migrate
+pnpm db:seed                 # optional: deterministic demo data
 pnpm dev                     # http://localhost:3000
 ```
 
@@ -40,11 +42,14 @@ misconfigured).
 | `pnpm lint`                    | ESLint, including layer-boundary and RTL rules                       |
 | `pnpm typecheck`               | `next typegen` + `tsc --noEmit`                                      |
 | `pnpm format` / `format:check` | Prettier (with Tailwind class sorting)                               |
-| `pnpm test` / `test:watch`     | Vitest                                                               |
+| `pnpm test` / `test:watch`     | Vitest unit tests (no database)                                      |
+| `pnpm test:coverage`           | Unit tests with coverage; `src/domain` must stay at 100%             |
+| `pnpm test:integration`        | Integration tests against real PostgreSQL (`TEST_DATABASE_URL`)      |
 | `pnpm test:e2e`                | Playwright against a production build (`pnpm build` first)           |
 | `pnpm db:up` / `db:down`       | Local PostgreSQL via Docker Compose                                  |
 | `pnpm db:generate`             | Generate a SQL migration from the Drizzle schema                     |
 | `pnpm db:migrate`              | Apply migrations                                                     |
+| `pnpm db:seed`                 | Reset the database to deterministic demo data (never in production)  |
 | `pnpm db:studio`               | Drizzle Studio                                                       |
 
 ## Project structure
@@ -54,12 +59,12 @@ src/
   app/              routes (RSC pages, route handlers); thin
   features/         UI by feature: components + Server Action adapters      (Phase 3+)
   components/       shared UI; components/ui holds shadcn/ui components     (Phase 3+)
-  application/      use cases: authorize → domain → persist → audit → notify (Phase 2+)
+  application/      use cases: authorize → domain → persist → audit → notify
   domain/           pure business rules, no framework imports
-  infrastructure/   config (env), db (Drizzle client, schema, migrations), auth
+  infrastructure/   config (env), db (Drizzle client, schema, migrations, seed), repositories
   lib/              UI utilities (cn; Jalali calendar adapter in a later phase)
 scripts/            db-migrate (used locally, in CI and on Vercel)
-tests/              unit/, e2e/ (Playwright), support/
+tests/              unit/, integration/ (real PostgreSQL), e2e/ (Playwright), support/
 eslint-rules/       project ESLint rules (RTL-safe classes)
 docs/               decisions, deployment
 ```
@@ -68,11 +73,14 @@ Layer boundaries are enforced by ESLint; see [AGENTS.md](AGENTS.md) for the conv
 
 ## Testing
 
-- Unit tests: `pnpm test`.
+- Unit tests: `pnpm test` (`pnpm test:coverage` enforces 100% for `src/domain`).
+- Integration tests: `pnpm test:integration` against real PostgreSQL. Set `TEST_DATABASE_URL`
+  (see `.env.example`); the database is wiped and migrated on every run, and its name must contain
+  `test`.
 - End-to-end: `pnpm build && pnpm test:e2e`. Needs a migrated database. Projects: `api`,
   `desktop-chromium`, `mobile-android`, `mobile-ios` (WebKit). Install browsers with
   `pnpm exec playwright install chromium webkit`.
-- CI (GitHub Actions) runs both on every PR and push to `main`.
+- CI (GitHub Actions) runs all three on every PR and push to `main`.
 
 ## Deployment
 
