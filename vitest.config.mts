@@ -16,5 +16,18 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
     restoreMocks: true,
+    coverage: {
+      provider: "v8",
+      include: ["src/domain/**/*.ts"],
+      exclude: ["src/domain/**/*.test.ts", "src/domain/index.ts"],
+      reporter: ["text", "json-summary"],
+      // The domain layer holds the business rules; keep it fully covered.
+      thresholds: {
+        lines: 100,
+        functions: 100,
+        statements: 100,
+        branches: 100,
+      },
+    },
   },
 });

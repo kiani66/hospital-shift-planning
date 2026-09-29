@@ -7,8 +7,9 @@ The UI is Persian (RTL) with a Solar Hijri calendar. The workflow runs from nurs
 head nurse scheduling and finalization, then supervisor review and approval, ending in a closed
 monthly schedule.
 
-> **Status: Phase 0 (foundation).** Tooling, CI, database pipeline and the RTL shell are in place.
-> Features arrive in later phases. See [docs/decisions.md](docs/decisions.md).
+> **Status: Phase 1 (domain layer).** Tooling, CI, database pipeline, the RTL shell and the pure
+> business rules (`src/domain`) are in place. Features arrive in later phases. See
+> [docs/decisions.md](docs/decisions.md).
 
 ## Stack
 
@@ -54,7 +55,7 @@ src/
   features/         UI by feature: components + Server Action adapters      (Phase 3+)
   components/       shared UI; components/ui holds shadcn/ui components     (Phase 3+)
   application/      use cases: authorize → domain → persist → audit → notify (Phase 2+)
-  domain/           pure business rules, no framework imports               (Phase 1)
+  domain/           pure business rules, no framework imports
   infrastructure/   config (env), db (Drizzle client, schema, migrations), auth
   lib/              UI utilities (cn; Jalali calendar adapter in a later phase)
 scripts/            db-migrate (used locally, in CI and on Vercel)
