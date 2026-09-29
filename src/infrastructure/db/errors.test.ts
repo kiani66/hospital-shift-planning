@@ -20,6 +20,14 @@ describe("pgErrorCode / pgConstraint", () => {
     expect(pgConstraint(error)).toBe("schedule_submissions_one_pending_key");
   });
 
+  it("reads an exclusion violation (SQLSTATE with a letter)", () => {
+    const error = {
+      cause: { code: "23P01", constraint: "schedules_period_no_overlap" },
+    };
+    expect(pgErrorCode(error)).toBe("23P01");
+    expect(pgConstraint(error)).toBe("schedules_period_no_overlap");
+  });
+
   it.each([
     ["undefined", undefined],
     ["a plain error", new Error("x")],

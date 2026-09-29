@@ -2,6 +2,8 @@
 export const PG_UNIQUE_VIOLATION = "23505";
 export const PG_FOREIGN_KEY_VIOLATION = "23503";
 export const PG_CHECK_VIOLATION = "23514";
+/** An EXCLUDE constraint, e.g. overlapping schedule periods or memberships. */
+export const PG_EXCLUSION_VIOLATION = "23P01";
 
 /** Drizzle wraps driver errors (`DrizzleQueryError.cause`); look through the chain. */
 export function pgErrorCode(error: unknown): string | undefined {

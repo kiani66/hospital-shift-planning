@@ -104,6 +104,28 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     );
   });
 
+  it("creates the no-overlap exclusion constraints with btree_gist (D18, D19)", async () => {
+    const { rows } = await db.execute<{ table: string; name: string }>(sql`
+      select conrelid::regclass::text as table, conname as name
+      from pg_constraint where contype = 'x' order by 1
+    `);
+    expect(rows).toEqual([
+      {
+        table: "department_memberships",
+        name: "department_memberships_no_overlap",
+      },
+      { table: "schedules", name: "schedules_period_no_overlap" },
+      {
+        table: "supervisor_assignments",
+        name: "supervisor_assignments_no_overlap",
+      },
+    ]);
+    const { rows: ext } = await db.execute<{ extname: string }>(
+      sql`select extname from pg_extension where extname = 'btree_gist'`,
+    );
+    expect(ext).toHaveLength(1);
+  });
+
   it("inserts the shift types exactly as the domain defines them", async () => {
     const { rows } = await db.execute<{
       code: string;
@@ -127,7 +149,7 @@ describe("migrations (applied to an empty database by the global setup)", () => 
         )
       ).rows[0]!.n;
     const before = await count();
-    expect(before).toBe(3); // 0000 baseline, 0001 schema, 0002 shift types
+    expect(before).toBe(4); // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

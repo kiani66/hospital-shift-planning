@@ -39,7 +39,12 @@ export const departments = pgTable("departments", {
 
 /**
  * Department-scoped roles. A HEAD_NURSE is also a nurse of the department.
- * Leaving sets `ended_on`; rows are never deleted, so history survives (D16).
+ * Effective-dated (D19): active on D when `started_on <= D` and (`ended_on` is
+ * null or `ended_on >= D`); either bound may be in the future. Leaving sets
+ * `ended_on`; rows are never deleted, so history survives (D16).
+ * Overlapping ranges per user and department are rejected by the exclusion
+ * constraint `department_memberships_no_overlap` (migration 0003; Drizzle
+ * cannot model it). The partial unique index keeps at most one open-ended row.
  */
 export const departmentMemberships = pgTable(
   "department_memberships",
@@ -68,7 +73,11 @@ export const departmentMemberships = pgTable(
   ],
 );
 
-/** Supervisors review departments without being members (not rostered). */
+/**
+ * Supervisors review departments without being members (not rostered).
+ * Effective-dated like memberships; overlaps are rejected by
+ * `supervisor_assignments_no_overlap` (migration 0003).
+ */
 export const supervisorAssignments = pgTable(
   "supervisor_assignments",
   {

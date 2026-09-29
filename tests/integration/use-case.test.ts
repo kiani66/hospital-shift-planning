@@ -25,6 +25,7 @@ import { setupTestDatabase } from "./support/database";
 const { db } = setupTestDatabase();
 const U = DEMO_USERS;
 const S = DEMO_SCHEDULE.id;
+const TODAY = isoDate("2026-10-01");
 
 let headNurse: Actor;
 let nurse: Actor;
@@ -36,9 +37,9 @@ const as = (actor: Actor, clock?: () => Date): AppContext => ({
 });
 
 beforeEach(async () => {
-  headNurse = (await loadActor(db, U.icuHead.id))!;
-  nurse = (await loadActor(db, U.icuNurse1.id))!;
-  otherHeadNurse = (await loadActor(db, U.erHead.id))!;
+  headNurse = (await loadActor(db, U.icuHead.id, TODAY))!;
+  nurse = (await loadActor(db, U.icuNurse1.id, TODAY))!;
+  otherHeadNurse = (await loadActor(db, U.erHead.id, TODAY))!;
 });
 
 const state = async () => {

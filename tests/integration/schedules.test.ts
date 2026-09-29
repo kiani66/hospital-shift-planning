@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { toActionError } from "../../src/application/result";
 import { isoDate } from "../../src/domain/shared/dates";
 import { createDatabase } from "../../src/infrastructure/db/database";
 import {
@@ -58,7 +59,7 @@ describe("schedules repository", () => {
     ]);
   });
 
-  it("allows one schedule per department and period start", async () => {
+  it("allows one schedule per department and period start (unique key, checked before D18)", async () => {
     await expect(
       createSchedule(db, {
         departmentId: DEMO_ICU.id,
@@ -67,6 +68,63 @@ describe("schedules repository", () => {
         createdBy: DEMO_USERS.icuHead.id,
       }),
     ).rejects.toThrow();
+  });
+
+  describe("no overlapping periods per department (D18)", () => {
+    // The seeded ICU schedule covers 2026-10-23..2026-11-21 (both inclusive).
+    const create = (departmentId: string, start: string, end: string) =>
+      createSchedule(db, {
+        departmentId,
+        period: { start: isoDate(start), end: isoDate(end) },
+        label: "x",
+        createdBy: DEMO_USERS.icuHead.id,
+      });
+    const overlap = {
+      cause: { code: "23P01", constraint: "schedules_period_no_overlap" },
+    };
+
+    it.each([
+      ["a partial overlap at the start", "2026-10-01", "2026-10-23"],
+      ["a partial overlap at the end", "2026-11-21", "2026-12-20"],
+      ["a period inside it", "2026-11-01", "2026-11-10"],
+      ["a period containing it", "2026-10-01", "2026-12-31"],
+      ["a single shared day", "2026-11-21", "2026-11-21"],
+    ])("rejects %s", async (_, start, end) => {
+      await expect(create(DEMO_ICU.id, start, end)).rejects.toMatchObject(
+        overlap,
+      );
+    });
+
+    it("accepts adjacent periods on both sides", async () => {
+      await create(DEMO_ICU.id, "2026-09-23", "2026-10-22");
+      await create(DEMO_ICU.id, "2026-11-22", "2026-12-21");
+      // The approved example: consecutive Gregorian months.
+      await create(DEMO_ER.id, "2026-01-01", "2026-01-31");
+      await create(DEMO_ER.id, "2026-02-01", "2026-02-28");
+      expect(
+        (await listSchedulesForDepartment(db, DEMO_ICU.id)).map((s) => [
+          s.period.start,
+          s.period.end,
+        ]),
+      ).toEqual([
+        ["2026-09-23", "2026-10-22"],
+        ["2026-10-23", "2026-11-21"],
+        ["2026-11-22", "2026-12-21"],
+      ]);
+    });
+
+    it("allows the same period in another department", async () => {
+      await create(DEMO_ER.id, "2026-10-23", "2026-11-21");
+      await create(DEMO_ER.id, "2026-11-22", "2026-12-21");
+    });
+
+    it("maps an overlap to a CONFLICT action error", async () => {
+      const error = await create(DEMO_ICU.id, "2026-11-01", "2026-11-30").then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(toActionError(error).code).toBe("CONFLICT");
+    });
   });
 
   it("rejects a period that ends before it starts", async () => {

@@ -112,7 +112,8 @@ describe("shift change requests", () => {
 
     const [request] = await listChangeRequestsForRequester(db, U.icuNurse1.id);
     expect(request?.id).toBe(id);
-    const actor = (await loadActor(db, U.icuNurse1.id))!;
+    // The day after the last day of membership.
+    const actor = (await loadActor(db, U.icuNurse1.id, isoDate("2026-12-01")))!;
     const resource = {
       departmentId: request!.departmentId,
       requesterId: request!.requesterId,

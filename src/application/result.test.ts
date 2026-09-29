@@ -79,6 +79,7 @@ describe("toActionError", () => {
 
   it.each([
     ["23505", "CONFLICT"],
+    ["23P01", "CONFLICT"],
     ["23503", "VALIDATION"],
     ["23514", "VALIDATION"],
     ["40001", "INTERNAL"],

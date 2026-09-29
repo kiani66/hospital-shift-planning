@@ -125,7 +125,6 @@ export async function seedDemoData(db: Database): Promise<SeedSummary> {
     await tx.insert(schedules).values(DEMO_SCHEDULE);
     const rosterEntries = await snapshotRosterFromMemberships(tx, {
       scheduleId: DEMO_SCHEDULE.id,
-      departmentId: DEMO_SCHEDULE.departmentId,
       addedBy: DEMO_SCHEDULE.createdBy,
     });
 

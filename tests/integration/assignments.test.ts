@@ -141,7 +141,6 @@ describe("shift assignments (working copy)", () => {
     });
     await snapshotRosterFromMemberships(db, {
       scheduleId: mehr.id,
-      departmentId: DEMO_ICU.id,
       addedBy: head,
     });
     await setAssignment(db, {

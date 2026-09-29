@@ -13,6 +13,10 @@ outside a throwaway local database.
 4. Keep migrations backward compatible (expand, then contract): the previous deployment keeps
    running while the new one migrates.
 
+Constraints Drizzle cannot model (exclusion constraints) go in a custom migration
+(`pnpm db:generate --custom --name <what>`) and are listed below; they are not visible in the
+TypeScript schema.
+
 ## Tables
 
 | Area                | Tables                                                                                                                                     |
@@ -29,20 +33,24 @@ outside a throwaway local database.
 
 ## Where each rule is enforced
 
-| Rule                                                                             | Enforced by                                                                                  |
-| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| One assignment / one preference per nurse per day                                | Primary keys `(schedule_id, user_id, date)`                                                  |
-| Only rostered nurses have preferences, assignments or change requests            | Composite foreign keys to `schedule_roster`                                                  |
-| One pending submission; one open revision; one active membership per department  | Partial unique indexes                                                                       |
-| One schedule per department and period start; `period_end >= period_start`       | Unique constraint, check constraint                                                          |
-| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                   |
-| History survives membership changes                                              | Memberships are ended (`ended_on`), never deleted; roster rows are protected by foreign keys |
-| Approved versions are immutable; audit is append-only                            | Application: their repositories expose no update or delete                                   |
-| State machine, authorization, night-rest, revision scope, visibility             | Domain (`src/domain`) called from application use cases, not SQL                             |
+| Rule                                                                                 | Enforced by                                                                                               |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| One assignment / one preference per nurse per day                                    | Primary keys `(schedule_id, user_id, date)`                                                               |
+| Only rostered nurses have preferences, assignments or change requests                | Composite foreign keys to `schedule_roster`                                                               |
+| One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                    |
+| Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                     |
+| One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                           |
+| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                |
+| History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows |
+| Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                   |
+| State machine, authorization, night-rest, revision scope, visibility                 | Domain (`src/domain`) called from application use cases, not SQL                                          |
 
 ## Dates and times
 
 - `date` columns are read and written as ISO `YYYY-MM-DD` strings (Drizzle `mode: "string"`).
+- Date ranges (periods, memberships) are inclusive on both ends. A membership or supervisor
+  assignment is active on D when `started_on <= D AND (ended_on IS NULL OR ended_on >= D)` (D19);
+  repositories take the day explicitly.
 - `timestamptz` columns are instants (`Date`).
 
 ## Local data

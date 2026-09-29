@@ -29,7 +29,9 @@ import { shiftTypes } from "./reference";
 
 /**
  * One department's schedule for one period. The period is calendar agnostic
- * (a Jalali month is stored as its Gregorian start/end dates).
+ * (a Jalali month is stored as its Gregorian start/end dates). Periods of one
+ * department never overlap (D18): enforced by the exclusion constraint
+ * `schedules_period_no_overlap` (migration 0003; Drizzle cannot model it).
  */
 export const schedules = pgTable(
   "schedules",

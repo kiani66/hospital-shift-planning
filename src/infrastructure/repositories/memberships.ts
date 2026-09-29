@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { Actor, MembershipRole } from "../../domain/authz/actor";
 import type { IsoDate } from "../../domain/shared/dates";
@@ -9,8 +9,19 @@ import {
   users,
 } from "../db/schema";
 
-// A membership or supervisor assignment is active while `ended_on` is null.
-// Ending one keeps the row, so history (and D16 access) survives.
+// Memberships and supervisor assignments are effective-dated (D19): one is
+// active on day D when `started_on <= D` and (`ended_on` is null or
+// `ended_on >= D`). Both bounds may lie in the future. Ending one keeps the
+// row, so history (and D16 access) survives. The database rejects overlapping
+// ranges for the same user and department (migration 0003).
+
+/** SQL predicate: the membership or supervisor assignment is in effect on `onDate`. */
+export function activeOn(
+  table: typeof departmentMemberships | typeof supervisorAssignments,
+  onDate: IsoDate,
+): SQL {
+  return sql`(${table.startedOn} <= ${onDate} and (${table.endedOn} is null or ${table.endedOn} >= ${onDate}))`;
+}
 
 export async function addMembership(
   db: DbExecutor,
@@ -19,12 +30,17 @@ export async function addMembership(
     departmentId: string;
     role: MembershipRole;
     startedOn: IsoDate;
+    /** Known last day, e.g. a fixed-term contract; null or omitted means open-ended. */
+    endedOn?: IsoDate | null;
   },
 ): Promise<void> {
   await db.insert(departmentMemberships).values(input);
 }
 
-/** Ends the active membership; returns false if there was none. */
+/**
+ * Sets the last day (inclusive, may be in the future) of the open-ended
+ * membership; returns false if there is none.
+ */
 export async function endMembership(
   db: DbExecutor,
   input: { userId: string; departmentId: string; endedOn: IsoDate },
@@ -43,9 +59,11 @@ export async function endMembership(
   return rows.length > 0;
 }
 
+/** Members (nurses and head nurses) of the department on `onDate`. */
 export async function listActiveMembers(
   db: DbExecutor,
   departmentId: string,
+  onDate: IsoDate,
 ): Promise<{ userId: string; role: MembershipRole }[]> {
   return db
     .select({
@@ -56,7 +74,7 @@ export async function listActiveMembers(
     .where(
       and(
         eq(departmentMemberships.departmentId, departmentId),
-        isNull(departmentMemberships.endedOn),
+        activeOn(departmentMemberships, onDate),
       ),
     )
     .orderBy(departmentMemberships.userId);
@@ -64,11 +82,17 @@ export async function listActiveMembers(
 
 export async function assignSupervisor(
   db: DbExecutor,
-  input: { userId: string; departmentId: string; startedOn: IsoDate },
+  input: {
+    userId: string;
+    departmentId: string;
+    startedOn: IsoDate;
+    endedOn?: IsoDate | null;
+  },
 ): Promise<void> {
   await db.insert(supervisorAssignments).values(input);
 }
 
+/** Sets the last day of the open-ended supervisor assignment; false if there is none. */
 export async function endSupervisorAssignment(
   db: DbExecutor,
   input: { userId: string; departmentId: string; endedOn: IsoDate },
@@ -88,12 +112,14 @@ export async function endSupervisorAssignment(
 }
 
 /**
- * Builds the domain `Actor` from current (active) relations only; historical
- * access is decided per resource (roster, requester). Null for unknown users.
+ * Builds the domain `Actor` from the relations in effect on `onDate` (the
+ * caller's current day in the department timezone); historical access is
+ * decided per resource (roster, requester). Null for unknown users.
  */
 export async function loadActor(
   db: DbExecutor,
   userId: string,
+  onDate: IsoDate,
 ): Promise<Actor | null> {
   const [user] = await db
     .select({ isActive: users.isActive })
@@ -111,7 +137,7 @@ export async function loadActor(
       .where(
         and(
           eq(departmentMemberships.userId, userId),
-          isNull(departmentMemberships.endedOn),
+          activeOn(departmentMemberships, onDate),
         ),
       ),
     db
@@ -120,7 +146,7 @@ export async function loadActor(
       .where(
         and(
           eq(supervisorAssignments.userId, userId),
-          isNull(supervisorAssignments.endedOn),
+          activeOn(supervisorAssignments, onDate),
         ),
       ),
   ]);

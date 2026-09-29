@@ -10,6 +10,7 @@ import {
 import type { Violation } from "../domain/rules/violation";
 import {
   PG_CHECK_VIOLATION,
+  PG_EXCLUSION_VIOLATION,
   PG_FOREIGN_KEY_VIOLATION,
   PG_UNIQUE_VIOLATION,
   pgErrorCode,
@@ -80,6 +81,7 @@ export function toActionError(error: unknown): ActionError {
   }
   switch (pgErrorCode(error)) {
     case PG_UNIQUE_VIOLATION:
+    case PG_EXCLUSION_VIOLATION:
       return { code: "CONFLICT", message: "This conflicts with existing data" };
     case PG_FOREIGN_KEY_VIOLATION:
     case PG_CHECK_VIOLATION:

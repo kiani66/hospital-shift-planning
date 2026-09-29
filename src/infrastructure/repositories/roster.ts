@@ -1,8 +1,15 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { MembershipRole } from "../../domain/authz/actor";
+import type { IsoDate } from "../../domain/shared/dates";
 import type { DbExecutor } from "../db/database";
-import { departmentMemberships, scheduleRoster, users } from "../db/schema";
+import {
+  departmentMemberships,
+  scheduleRoster,
+  schedules,
+  users,
+} from "../db/schema";
+import { activeOn } from "./memberships";
 
 export interface RosterEntry {
   readonly userId: string;
@@ -12,19 +19,27 @@ export interface RosterEntry {
 }
 
 /**
- * Copies the department's active members (nurses and head nurses) onto the
- * schedule's roster. Existing entries are kept. Returns the number added.
+ * Copies onto the roster everyone who is a member of the schedule's department
+ * on at least one day of its period (D19), including known future joiners and
+ * leavers. A user with two memberships in the period (e.g. promoted mid-period)
+ * gets the role of the later one. Existing entries are kept; later membership
+ * changes never rewrite the roster, and adding someone afterwards is explicit
+ * (`addToRoster`). Returns the number added.
  */
 export async function snapshotRosterFromMemberships(
   db: DbExecutor,
-  input: { scheduleId: string; departmentId: string; addedBy: string },
+  input: { scheduleId: string; addedBy: string },
 ): Promise<number> {
+  const m = departmentMemberships;
   const result = await db.execute(sql`
     insert into ${scheduleRoster} (schedule_id, user_id, role, added_by)
-    select ${input.scheduleId}, ${departmentMemberships.userId}, ${departmentMemberships.role}, ${input.addedBy}
-    from ${departmentMemberships}
-    where ${departmentMemberships.departmentId} = ${input.departmentId}
-      and ${departmentMemberships.endedOn} is null
+    select distinct on (${m.userId}) ${schedules.id}, ${m.userId}, ${m.role}, ${input.addedBy}::uuid
+    from ${schedules}
+    join ${m} on ${m.departmentId} = ${schedules.departmentId}
+      and ${m.startedOn} <= ${schedules.periodEnd}
+      and (${m.endedOn} is null or ${m.endedOn} >= ${schedules.periodStart})
+    where ${schedules.id} = ${input.scheduleId}
+    order by ${m.userId}, ${m.startedOn} desc
     on conflict do nothing
   `);
   return result.rowCount ?? 0;
@@ -92,20 +107,24 @@ export async function isOnRoster(
   return row !== undefined;
 }
 
-/** Roster members whose department membership has since ended (for D16-aware reads). */
+/**
+ * Roster members who are not members of the schedule's department on `onDate`
+ * (left, not yet started, or added from elsewhere); for D16-aware reads.
+ */
 export async function listFormerMembersOnRoster(
   db: DbExecutor,
-  input: { scheduleId: string; departmentId: string },
+  input: { scheduleId: string; onDate: IsoDate },
 ): Promise<string[]> {
   const rows = await db
     .select({ userId: scheduleRoster.userId })
     .from(scheduleRoster)
+    .innerJoin(schedules, eq(schedules.id, scheduleRoster.scheduleId))
     .leftJoin(
       departmentMemberships,
       and(
         eq(departmentMemberships.userId, scheduleRoster.userId),
-        eq(departmentMemberships.departmentId, input.departmentId),
-        isNull(departmentMemberships.endedOn),
+        eq(departmentMemberships.departmentId, schedules.departmentId),
+        activeOn(departmentMemberships, input.onDate),
       ),
     )
     .where(
