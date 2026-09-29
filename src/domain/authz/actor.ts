@@ -9,6 +9,10 @@ export interface Membership {
 /**
  * The authenticated user as the domain sees it. Built by the application layer
  * from the database on every request; never trusted from the session token.
+ *
+ * `memberships` and `supervisedDepartmentIds` are current (active) relations
+ * only. Historical relations (a former nurse's own requests and rostered
+ * schedules) are expressed on the resource being accessed, not here.
  */
 export interface Actor {
   readonly userId: string;

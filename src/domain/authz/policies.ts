@@ -37,7 +37,11 @@ export interface ActionResources extends Record<
   "schedule.viewDepartment": DepartmentResource & {
     readonly status: ScheduleStatus;
   };
-  "schedule.viewOwn": DepartmentResource;
+  /**
+   * The actor's own shifts in one schedule. `onRoster` is true when the actor is
+   * or was rostered on it, which keeps history readable after leaving (D16).
+   */
+  "schedule.viewOwn": DepartmentResource & { readonly onRoster: boolean };
   "schedule.approve": DepartmentResource & { readonly submittedBy: string };
   "schedule.return": DepartmentResource & { readonly submittedBy: string };
   "audit.view": DepartmentResource;
@@ -46,6 +50,10 @@ export interface ActionResources extends Record<
     readonly status: ScheduleStatus;
   };
   "changeRequest.view": DepartmentResource & { readonly requesterId: string };
+  /** Withdrawing (the only nurse-side change to) an existing request. */
+  "changeRequest.withdraw": DepartmentResource & {
+    readonly requesterId: string;
+  };
 }
 
 export type Action = keyof ActionResources;
@@ -54,6 +62,7 @@ export type AuthzDenial =
   | "ACTOR_INACTIVE"
   | "NOT_HEAD_NURSE_OF_DEPARTMENT"
   | "NOT_MEMBER_OF_DEPARTMENT"
+  | "NOT_REQUESTER"
   | "NOT_SUPERVISOR_OF_DEPARTMENT"
   | "NO_DEPARTMENT_ACCESS"
   | "SELF_APPROVAL"
@@ -107,7 +116,14 @@ export function decide<A extends Action>(
     }
     case "audit.view":
       return headNurse || supervisor ? allow : deny("NO_DEPARTMENT_ACCESS");
-    case "schedule.viewOwn":
+    case "schedule.viewOwn": {
+      // Historical access (D16): a former member keeps read-only access to the
+      // schedules they were rostered on; visibility rules still apply.
+      const { onRoster } = r as ActionResources["schedule.viewOwn"];
+      return isMemberOf(actor, departmentId) || onRoster
+        ? allow
+        : deny("NOT_MEMBER_OF_DEPARTMENT");
+    }
     case "preference.editOwn":
       return isMemberOf(actor, departmentId)
         ? allow
@@ -121,12 +137,19 @@ export function decide<A extends Action>(
         : deny("SCHEDULE_NOT_YET_FINALIZED");
     }
     case "changeRequest.view": {
+      // Requesters keep read-only access to their own requests after leaving (D16).
       const { requesterId } = r as ActionResources["changeRequest.view"];
-      const own =
-        requesterId === actor.userId && isMemberOf(actor, departmentId);
-      return own || headNurse || supervisor
+      return requesterId === actor.userId || headNurse || supervisor
         ? allow
         : deny("NO_DEPARTMENT_ACCESS");
+    }
+    case "changeRequest.withdraw": {
+      const { requesterId } = r as ActionResources["changeRequest.withdraw"];
+      if (requesterId !== actor.userId) return deny("NOT_REQUESTER");
+      // Changing a request needs active membership; history is read-only (D16).
+      return isMemberOf(actor, departmentId)
+        ? allow
+        : deny("NOT_MEMBER_OF_DEPARTMENT");
     }
   }
 }

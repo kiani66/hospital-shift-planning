@@ -94,8 +94,20 @@ describe("authorization matrix", () => {
   ][] = [
     [
       "schedule.viewOwn",
-      () => ({ departmentId: DEPT }),
+      () => ({ departmentId: DEPT, onRoster: false }),
       ["nurse", "headNurse"],
+    ],
+    [
+      "schedule.viewOwn",
+      () => ({ departmentId: DEPT, onRoster: true }),
+      [
+        "nurse",
+        "headNurse",
+        "otherHeadNurse",
+        "otherNurse",
+        "supervisor",
+        "otherSupervisor",
+      ],
     ],
     [
       "preference.editOwn",
@@ -126,12 +138,29 @@ describe("authorization matrix", () => {
     [
       "changeRequest.view",
       (actor) => ({ departmentId: DEPT, requesterId: actor.userId }),
-      ["nurse", "headNurse", "supervisor"],
+      [
+        "nurse",
+        "headNurse",
+        "otherHeadNurse",
+        "otherNurse",
+        "supervisor",
+        "otherSupervisor",
+      ],
     ],
     [
       "changeRequest.view",
       () => ({ departmentId: DEPT, requesterId: "someone-else" }),
       ["headNurse", "supervisor"],
+    ],
+    [
+      "changeRequest.withdraw",
+      (actor) => ({ departmentId: DEPT, requesterId: actor.userId }),
+      ["nurse", "headNurse"],
+    ],
+    [
+      "changeRequest.withdraw",
+      () => ({ departmentId: DEPT, requesterId: "someone-else" }),
+      [],
     ],
   ];
 
@@ -297,15 +326,6 @@ describe("specific denials", () => {
     });
   });
 
-  it("owning a request is not enough after leaving the department", () => {
-    expect(
-      decide(actors.otherNurse, "changeRequest.view", {
-        departmentId: DEPT,
-        requesterId: "nurse-er",
-      }).allowed,
-    ).toBe(false);
-  });
-
   it("own-data actions require membership", () => {
     expect(
       decide(actors.supervisor, "preference.editOwn", { departmentId: DEPT }),
@@ -355,5 +375,94 @@ describe("actor helpers", () => {
   it("supervisors are not members unless they have a membership", () => {
     expect(isSupervisorOf(actors.supervisor, DEPT)).toBe(true);
     expect(isMemberOf(actors.supervisor, DEPT)).toBe(false);
+  });
+});
+
+describe("historical access after leaving a department (D16)", () => {
+  // Was a nurse in ICU; the membership has ended (now in ER).
+  const former = actors.otherNurse;
+
+  it("keeps read-only access to own change requests", () => {
+    expect(
+      decide(former, "changeRequest.view", {
+        departmentId: DEPT,
+        requesterId: former.userId,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("cannot withdraw or otherwise change an old request", () => {
+    expect(
+      decide(former, "changeRequest.withdraw", {
+        departmentId: DEPT,
+        requesterId: former.userId,
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_MEMBER_OF_DEPARTMENT" });
+  });
+
+  it("cannot submit new requests", () => {
+    expect(
+      decide(former, "changeRequest.submit", {
+        departmentId: DEPT,
+        status: "APPROVED",
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_MEMBER_OF_DEPARTMENT" });
+  });
+
+  it("keeps access to own shifts in schedules they were rostered on", () => {
+    expect(
+      decide(former, "schedule.viewOwn", {
+        departmentId: DEPT,
+        onRoster: true,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("gets nothing for schedules they were never rostered on", () => {
+    expect(
+      decide(former, "schedule.viewOwn", {
+        departmentId: DEPT,
+        onRoster: false,
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_MEMBER_OF_DEPARTMENT" });
+  });
+
+  it("cannot enter preferences", () => {
+    expect(
+      decide(former, "preference.editOwn", { departmentId: DEPT }),
+    ).toEqual({ allowed: false, reason: "NOT_MEMBER_OF_DEPARTMENT" });
+  });
+
+  it("gains no department-wide access", () => {
+    expect(
+      decide(former, "schedule.viewDepartment", {
+        departmentId: DEPT,
+        status: "APPROVED",
+      }).allowed,
+    ).toBe(false);
+    expect(decide(former, "audit.view", { departmentId: DEPT }).allowed).toBe(
+      false,
+    );
+  });
+
+  it("a deactivated account loses even historical access", () => {
+    const deactivated = { ...former, isActive: false };
+    expect(
+      decide(deactivated, "changeRequest.view", {
+        departmentId: DEPT,
+        requesterId: former.userId,
+      }),
+    ).toEqual({ allowed: false, reason: "ACTOR_INACTIVE" });
+  });
+});
+
+describe("change-request withdrawal", () => {
+  it("only the requester may withdraw", () => {
+    expect(
+      decide(actors.headNurse, "changeRequest.withdraw", {
+        departmentId: DEPT,
+        requesterId: "nurse",
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_REQUESTER" });
   });
 });

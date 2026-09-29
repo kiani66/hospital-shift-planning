@@ -79,7 +79,16 @@ describe("validateSchedule", () => {
     });
   });
 
-  it("flags duplicate assignments for the same nurse and day", () => {
+  it("D15: ME is the single assignment for a long day", () => {
+    expect(
+      validateSchedule({
+        period,
+        assignments: [a("sara", "2026-03-24", "ME")],
+      }),
+    ).toEqual([]);
+  });
+
+  it("D15: M and E on the same day are two assignments (use ME instead)", () => {
     const result = validateSchedule({
       period,
       assignments: [a("sara", "2026-03-24", "M"), a("sara", "2026-03-24", "E")],

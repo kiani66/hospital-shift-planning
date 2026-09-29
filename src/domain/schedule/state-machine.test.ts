@@ -103,6 +103,24 @@ describe("schedule state machine", () => {
   });
 });
 
+describe("approved workflow decisions", () => {
+  it.each(["APPROVED", "RETURNED"] as const)(
+    "D10: WITHDRAW is no longer possible once the Supervisor has acted (%s)",
+    (status) => {
+      const result = transition(status, passing.WITHDRAW);
+      expect(!result.ok && result.error).toBeInstanceOf(InvalidStateError);
+    },
+  );
+
+  it.each(SCHEDULE_STATUSES.filter((s) => s !== "SUBMITTED"))(
+    "D12: APPROVE and RETURN are only available in SUBMITTED, not %s",
+    (status) => {
+      expect(transition(status, passing.APPROVE).ok).toBe(false);
+      expect(transition(status, passing.RETURN).ok).toBe(false);
+    },
+  );
+});
+
 describe("guards", () => {
   describe.each(["FINALIZE", "SUBMIT"] as const)("%s", (event) => {
     const from: ScheduleStatus =
