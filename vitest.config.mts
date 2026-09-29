@@ -2,19 +2,17 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+const alias = {
+  "@": fileURLToPath(new URL("./src", import.meta.url)),
+  // `server-only` throws outside React Server Components; tests run in plain Node.
+  "server-only": fileURLToPath(
+    new URL("./tests/support/empty-module.ts", import.meta.url),
+  ),
+};
+
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-      // `server-only` throws outside React Server Components; tests run in plain Node.
-      "server-only": fileURLToPath(
-        new URL("./tests/support/empty-module.ts", import.meta.url),
-      ),
-    },
-  },
+  resolve: { alias },
   test: {
-    environment: "node",
-    include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
     restoreMocks: true,
     coverage: {
       provider: "v8",
@@ -29,5 +27,30 @@ export default defineConfig({
         branches: 100,
       },
     },
+    projects: [
+      {
+        resolve: { alias },
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
+          restoreMocks: true,
+        },
+      },
+      {
+        // Real PostgreSQL (TEST_DATABASE_URL). The database is wiped and migrated once per run.
+        resolve: { alias },
+        test: {
+          name: "integration",
+          environment: "node",
+          include: ["tests/integration/**/*.test.ts"],
+          globalSetup: ["tests/integration/global-setup.ts"],
+          fileParallelism: false,
+          testTimeout: 20_000,
+          hookTimeout: 60_000,
+          restoreMocks: true,
+        },
+      },
+    ],
   },
 });

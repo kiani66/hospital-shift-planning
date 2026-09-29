@@ -72,3 +72,65 @@ A nurse whose membership has ended:
 This is historical access, not membership. A deactivated account loses all access.
 Enforced in `authz/policies.ts` (`changeRequest.view`, `changeRequest.withdraw`,
 `schedule.viewOwn` with the resource's `onRoster`).
+
+## Persistence decisions
+
+Approved after Phase 2 review. Paths are relative to `src/infrastructure/`.
+
+### D17 · Immutability of approved versions and audit
+
+Approved versions (`schedule_versions`, `schedule_version_assignments`) and `audit_events` are
+immutable. For the MVP this is enforced by the application: their repositories expose no update
+or delete path. No database triggers. Restricted database roles and grants may be added before
+real production use.
+Enforced in `repositories/versions.ts` and `repositories/audit.ts`.
+
+### D18 · No overlapping schedule periods
+
+One department never has two schedules whose periods overlap. Periods are inclusive, so adjacent
+periods are valid (`2026-01-01..2026-01-31` and `2026-02-01..2026-02-28`); any shared day is an
+overlap. Different departments are independent.
+Enforced by the exclusion constraint `schedules_period_no_overlap` (`btree_gist`, migration
+0003); a violation maps to `CONFLICT`.
+
+### D19 · Effective-dated memberships
+
+A department membership is active on date D when
+`started_on <= D AND (ended_on IS NULL OR ended_on >= D)`. Both dates may lie in the future
+(known joiners, leavers, fixed terms). "Active" is always relative to a date, never just
+`ended_on IS NULL`. The same applies to supervisor assignments. A user has at most one membership
+per department on any day; a role change ends one membership and starts the next on the
+following day.
+
+- `loadActor` builds the actor from the relations in effect on the given day (the caller passes
+  today in the department timezone).
+- The roster snapshot takes everyone who is a member on at least one day of the schedule period,
+  so historical and future schedules get the right people.
+
+Enforced in `repositories/memberships.ts` (`activeOn`), `repositories/roster.ts`, and the
+exclusion constraints `department_memberships_no_overlap` and
+`supervisor_assignments_no_overlap` (migration 0003).
+
+### D20 · Night-rest scope
+
+The night-rest rule (D7) is checked within one department only, including across that
+department's schedule boundaries. No cross-department validation in the MVP.
+Enforced in `repositories/assignments.ts` (`listAdjacentAssignments`) and `domain/rules`.
+
+### D21 · Roster snapshot
+
+The roster is snapshotted when a schedule is created (D19 decides who). Later membership changes
+never modify an existing roster; adding a later joiner or removing someone is an explicit
+roster edit.
+Enforced in `repositories/roster.ts`.
+
+### D22 · User lifecycle
+
+Users are deactivated (`users.is_active = false`), never deleted, so every foreign key to them
+keeps history intact. Retention and anonymization are a later decision.
+
+### D23 · Shift labels
+
+The shift code (`M`, `E`, `N`, `ME`) and its semantic fields (`covers`, `is_night`) are the
+source of truth. The Persian `label` in `shift_types` is reference metadata; the UI must not use
+the database label as its only translation source.

@@ -6,14 +6,9 @@
  * Migrations must therefore stay backward compatible (expand, then contract).
  */
 import { loadEnvConfig } from "@next/env";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { Pool } from "pg";
 
 import { migrationDatabaseUrl } from "../src/infrastructure/config/env-schema";
-
-// Arbitrary constant; serializes concurrent migration runs against one database.
-const MIGRATION_LOCK_ID = 7_310_422;
+import { runMigrations } from "../src/infrastructure/db/migrate";
 
 async function main() {
   loadEnvConfig(process.cwd());
@@ -26,19 +21,8 @@ async function main() {
   const url = migrationDatabaseUrl(process.env);
   const { host, pathname } = new URL(url);
   console.log(`[db:migrate] target ${host}${pathname}`);
-
-  // max: 1 keeps the advisory lock and the migration on the same session.
-  const pool = new Pool({ connectionString: url, max: 1 });
-  try {
-    await pool.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
-    await migrate(drizzle({ client: pool }), {
-      migrationsFolder: "src/infrastructure/db/migrations",
-    });
-    await pool.query("select pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
-    console.log("[db:migrate] up to date");
-  } finally {
-    await pool.end();
-  }
+  await runMigrations(url);
+  console.log("[db:migrate] up to date");
 }
 
 main().catch((error: unknown) => {

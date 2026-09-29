@@ -1,0 +1,2109 @@
+{
+  "id": "6de37bd7-0f8b-48bb-b6f6-cdbbe4d4707b",
+  "prevId": "9f47e327-2d1e-41d7-8e24-98abd6b62217",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.department_memberships": {
+      "name": "department_memberships",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_id": {
+          "name": "department_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "membership_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_on": {
+          "name": "started_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_on": {
+          "name": "ended_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "department_memberships_active_key": {
+          "name": "department_memberships_active_key",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "department_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"department_memberships\".\"ended_on\" is null",
+          "concurrently": false
+        },
+        "department_memberships_department_idx": {
+          "name": "department_memberships_department_idx",
+          "columns": [
+            {
+              "expression": "department_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "department_memberships_user_id_users_id_fk": {
+          "name": "department_memberships_user_id_users_id_fk",
+          "tableFrom": "department_memberships",
+          "columnsFrom": ["user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "department_memberships_department_id_departments_id_fk": {
+          "name": "department_memberships_department_id_departments_id_fk",
+          "tableFrom": "department_memberships",
+          "columnsFrom": ["department_id"],
+          "tableTo": "departments",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "department_memberships_dates_check": {
+          "name": "department_memberships_dates_check",
+          "value": "\"department_memberships\".\"ended_on\" is null or \"department_memberships\".\"ended_on\" >= \"department_memberships\".\"started_on\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.departments": {
+      "name": "departments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Asia/Tehran'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "departments_code_unique": {
+          "name": "departments_code_unique",
+          "columns": ["code"],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.supervisor_assignments": {
+      "name": "supervisor_assignments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_id": {
+          "name": "department_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_on": {
+          "name": "started_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_on": {
+          "name": "ended_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "supervisor_assignments_active_key": {
+          "name": "supervisor_assignments_active_key",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "department_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"supervisor_assignments\".\"ended_on\" is null",
+          "concurrently": false
+        },
+        "supervisor_assignments_department_idx": {
+          "name": "supervisor_assignments_department_idx",
+          "columns": [
+            {
+              "expression": "department_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "supervisor_assignments_user_id_users_id_fk": {
+          "name": "supervisor_assignments_user_id_users_id_fk",
+          "tableFrom": "supervisor_assignments",
+          "columnsFrom": ["user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "supervisor_assignments_department_id_departments_id_fk": {
+          "name": "supervisor_assignments_department_id_departments_id_fk",
+          "tableFrom": "supervisor_assignments",
+          "columnsFrom": ["department_id"],
+          "tableTo": "departments",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "supervisor_assignments_dates_check": {
+          "name": "supervisor_assignments_dates_check",
+          "value": "\"supervisor_assignments\".\"ended_on\" is null or \"supervisor_assignments\".\"ended_on\" >= \"supervisor_assignments\".\"started_on\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_email_lower_key": {
+          "name": "users_email_lower_key",
+          "columns": [
+            {
+              "expression": "lower(\"email\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.shift_types": {
+      "name": "shift_types",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "covers": {
+          "name": "covers",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_night": {
+          "name": "is_night",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.nurse_preferences": {
+      "name": "nurse_preferences",
+      "schema": "",
+      "columns": {
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "preference_value",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "nurse_preferences_roster_fk": {
+          "name": "nurse_preferences_roster_fk",
+          "tableFrom": "nurse_preferences",
+          "columnsFrom": ["schedule_id", "user_id"],
+          "tableTo": "schedule_roster",
+          "columnsTo": ["schedule_id", "user_id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "nurse_preferences_schedule_id_user_id_date_pk": {
+          "name": "nurse_preferences_schedule_id_user_id_date_pk",
+          "columns": ["schedule_id", "user_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.preference_window_dates": {
+      "name": "preference_window_dates",
+      "schema": "",
+      "columns": {
+        "window_id": {
+          "name": "window_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "preference_window_dates_window_id_preference_windows_id_fk": {
+          "name": "preference_window_dates_window_id_preference_windows_id_fk",
+          "tableFrom": "preference_window_dates",
+          "columnsFrom": ["window_id"],
+          "tableTo": "preference_windows",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "preference_window_dates_window_id_date_pk": {
+          "name": "preference_window_dates_window_id_date_pk",
+          "columns": ["window_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.preference_window_nurses": {
+      "name": "preference_window_nurses",
+      "schema": "",
+      "columns": {
+        "window_id": {
+          "name": "window_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "preference_window_nurses_window_id_preference_windows_id_fk": {
+          "name": "preference_window_nurses_window_id_preference_windows_id_fk",
+          "tableFrom": "preference_window_nurses",
+          "columnsFrom": ["window_id"],
+          "tableTo": "preference_windows",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "preference_window_nurses_user_id_users_id_fk": {
+          "name": "preference_window_nurses_user_id_users_id_fk",
+          "tableFrom": "preference_window_nurses",
+          "columnsFrom": ["user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "preference_window_nurses_window_id_user_id_pk": {
+          "name": "preference_window_nurses_window_id_user_id_pk",
+          "columns": ["window_id", "user_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.preference_windows": {
+      "name": "preference_windows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "preference_window_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope_kind": {
+          "name": "scope_kind",
+          "type": "date_scope_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opened_by": {
+          "name": "opened_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "closes_at": {
+          "name": "closes_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "preference_windows_schedule_idx": {
+          "name": "preference_windows_schedule_idx",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "preference_windows_schedule_id_schedules_id_fk": {
+          "name": "preference_windows_schedule_id_schedules_id_fk",
+          "tableFrom": "preference_windows",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "preference_windows_opened_by_users_id_fk": {
+          "name": "preference_windows_opened_by_users_id_fk",
+          "tableFrom": "preference_windows",
+          "columnsFrom": ["opened_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "preference_windows_closed_by_users_id_fk": {
+          "name": "preference_windows_closed_by_users_id_fk",
+          "tableFrom": "preference_windows",
+          "columnsFrom": ["closed_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "preference_windows_closed_check": {
+          "name": "preference_windows_closed_check",
+          "value": "(\"preference_windows\".\"closed_by\" is null) = (\"preference_windows\".\"closed_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schedule_revision_dates": {
+      "name": "schedule_revision_dates",
+      "schema": "",
+      "columns": {
+        "revision_id": {
+          "name": "revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "schedule_revision_dates_revision_id_schedule_revisions_id_fk": {
+          "name": "schedule_revision_dates_revision_id_schedule_revisions_id_fk",
+          "tableFrom": "schedule_revision_dates",
+          "columnsFrom": ["revision_id"],
+          "tableTo": "schedule_revisions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "schedule_revision_dates_added_by_users_id_fk": {
+          "name": "schedule_revision_dates_added_by_users_id_fk",
+          "tableFrom": "schedule_revision_dates",
+          "columnsFrom": ["added_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "schedule_revision_dates_revision_id_date_pk": {
+          "name": "schedule_revision_dates_revision_id_date_pk",
+          "columns": ["revision_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.schedule_revisions": {
+      "name": "schedule_revisions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "revision_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "started_by": {
+          "name": "started_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "schedule_revisions_one_open_key": {
+          "name": "schedule_revisions_one_open_key",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"schedule_revisions\".\"status\" = 'OPEN'",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "schedule_revisions_schedule_id_schedules_id_fk": {
+          "name": "schedule_revisions_schedule_id_schedules_id_fk",
+          "tableFrom": "schedule_revisions",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_revisions_started_by_users_id_fk": {
+          "name": "schedule_revisions_started_by_users_id_fk",
+          "tableFrom": "schedule_revisions",
+          "columnsFrom": ["started_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "schedule_revisions_closed_check": {
+          "name": "schedule_revisions_closed_check",
+          "value": "(\"schedule_revisions\".\"status\" = 'OPEN') = (\"schedule_revisions\".\"closed_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schedule_roster": {
+      "name": "schedule_roster",
+      "schema": "",
+      "columns": {
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "membership_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "schedule_roster_user_idx": {
+          "name": "schedule_roster_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "schedule_roster_schedule_id_schedules_id_fk": {
+          "name": "schedule_roster_schedule_id_schedules_id_fk",
+          "tableFrom": "schedule_roster",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_roster_user_id_users_id_fk": {
+          "name": "schedule_roster_user_id_users_id_fk",
+          "tableFrom": "schedule_roster",
+          "columnsFrom": ["user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_roster_added_by_users_id_fk": {
+          "name": "schedule_roster_added_by_users_id_fk",
+          "tableFrom": "schedule_roster",
+          "columnsFrom": ["added_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "schedule_roster_schedule_id_user_id_pk": {
+          "name": "schedule_roster_schedule_id_user_id_pk",
+          "columns": ["schedule_id", "user_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.schedule_submissions": {
+      "name": "schedule_submissions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision_id": {
+          "name": "revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "submission_decision",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_comment": {
+          "name": "decision_comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "schedule_submissions_one_pending_key": {
+          "name": "schedule_submissions_one_pending_key",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"schedule_submissions\".\"decision\" is null",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "schedule_submissions_schedule_id_schedules_id_fk": {
+          "name": "schedule_submissions_schedule_id_schedules_id_fk",
+          "tableFrom": "schedule_submissions",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_submissions_revision_id_schedule_revisions_id_fk": {
+          "name": "schedule_submissions_revision_id_schedule_revisions_id_fk",
+          "tableFrom": "schedule_submissions",
+          "columnsFrom": ["revision_id"],
+          "tableTo": "schedule_revisions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_submissions_submitted_by_users_id_fk": {
+          "name": "schedule_submissions_submitted_by_users_id_fk",
+          "tableFrom": "schedule_submissions",
+          "columnsFrom": ["submitted_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_submissions_decided_by_users_id_fk": {
+          "name": "schedule_submissions_decided_by_users_id_fk",
+          "tableFrom": "schedule_submissions",
+          "columnsFrom": ["decided_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "schedule_submissions_decided_check": {
+          "name": "schedule_submissions_decided_check",
+          "value": "(\"schedule_submissions\".\"decision\" is null) = (\"schedule_submissions\".\"decided_at\" is null) and (\"schedule_submissions\".\"decided_by\" is null) = (\"schedule_submissions\".\"decided_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schedule_version_assignments": {
+      "name": "schedule_version_assignments",
+      "schema": "",
+      "columns": {
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shift_code": {
+          "name": "shift_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "schedule_version_assignments_user_date_idx": {
+          "name": "schedule_version_assignments_user_date_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "schedule_version_assignments_version_id_schedule_versions_id_fk": {
+          "name": "schedule_version_assignments_version_id_schedule_versions_id_fk",
+          "tableFrom": "schedule_version_assignments",
+          "columnsFrom": ["version_id"],
+          "tableTo": "schedule_versions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_version_assignments_user_id_users_id_fk": {
+          "name": "schedule_version_assignments_user_id_users_id_fk",
+          "tableFrom": "schedule_version_assignments",
+          "columnsFrom": ["user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_version_assignments_shift_code_shift_types_code_fk": {
+          "name": "schedule_version_assignments_shift_code_shift_types_code_fk",
+          "tableFrom": "schedule_version_assignments",
+          "columnsFrom": ["shift_code"],
+          "tableTo": "shift_types",
+          "columnsTo": ["code"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "schedule_version_assignments_version_id_user_id_date_pk": {
+          "name": "schedule_version_assignments_version_id_user_id_date_pk",
+          "columns": ["version_id", "user_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.schedule_versions": {
+      "name": "schedule_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_no": {
+          "name": "version_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submission_id": {
+          "name": "submission_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "schedule_versions_schedule_id_schedules_id_fk": {
+          "name": "schedule_versions_schedule_id_schedules_id_fk",
+          "tableFrom": "schedule_versions",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_versions_submission_id_schedule_submissions_id_fk": {
+          "name": "schedule_versions_submission_id_schedule_submissions_id_fk",
+          "tableFrom": "schedule_versions",
+          "columnsFrom": ["submission_id"],
+          "tableTo": "schedule_submissions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedule_versions_approved_by_users_id_fk": {
+          "name": "schedule_versions_approved_by_users_id_fk",
+          "tableFrom": "schedule_versions",
+          "columnsFrom": ["approved_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "schedule_versions_submissionId_unique": {
+          "name": "schedule_versions_submissionId_unique",
+          "columns": ["submission_id"],
+          "nullsNotDistinct": false
+        },
+        "schedule_versions_schedule_version_key": {
+          "name": "schedule_versions_schedule_version_key",
+          "columns": ["schedule_id", "version_no"],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "schedule_versions_version_no_check": {
+          "name": "schedule_versions_version_no_check",
+          "value": "\"schedule_versions\".\"version_no\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schedules": {
+      "name": "schedules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "department_id": {
+          "name": "department_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "schedule_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DRAFT'"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "current_version_id": {
+          "name": "current_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "schedules_department_id_departments_id_fk": {
+          "name": "schedules_department_id_departments_id_fk",
+          "tableFrom": "schedules",
+          "columnsFrom": ["department_id"],
+          "tableTo": "departments",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedules_current_version_id_schedule_versions_id_fk": {
+          "name": "schedules_current_version_id_schedule_versions_id_fk",
+          "tableFrom": "schedules",
+          "columnsFrom": ["current_version_id"],
+          "tableTo": "schedule_versions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "schedules_created_by_users_id_fk": {
+          "name": "schedules_created_by_users_id_fk",
+          "tableFrom": "schedules",
+          "columnsFrom": ["created_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "schedules_department_period_key": {
+          "name": "schedules_department_period_key",
+          "columns": ["department_id", "period_start"],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "schedules_period_check": {
+          "name": "schedules_period_check",
+          "value": "\"schedules\".\"period_end\" >= \"schedules\".\"period_start\""
+        },
+        "schedules_revision_check": {
+          "name": "schedules_revision_check",
+          "value": "\"schedules\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.shift_assignments": {
+      "name": "shift_assignments",
+      "schema": "",
+      "columns": {
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shift_code": {
+          "name": "shift_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "assignment_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MANUAL'"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "shift_assignments_user_date_idx": {
+          "name": "shift_assignments_user_date_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "shift_assignments_shift_code_shift_types_code_fk": {
+          "name": "shift_assignments_shift_code_shift_types_code_fk",
+          "tableFrom": "shift_assignments",
+          "columnsFrom": ["shift_code"],
+          "tableTo": "shift_types",
+          "columnsTo": ["code"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_assignments_updated_by_users_id_fk": {
+          "name": "shift_assignments_updated_by_users_id_fk",
+          "tableFrom": "shift_assignments",
+          "columnsFrom": ["updated_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_assignments_roster_fk": {
+          "name": "shift_assignments_roster_fk",
+          "tableFrom": "shift_assignments",
+          "columnsFrom": ["schedule_id", "user_id"],
+          "tableTo": "schedule_roster",
+          "columnsTo": ["schedule_id", "user_id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "shift_assignments_schedule_id_user_id_date_pk": {
+          "name": "shift_assignments_schedule_id_user_id_date_pk",
+          "columns": ["schedule_id", "user_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.shift_change_request_items": {
+      "name": "shift_change_request_items",
+      "schema": "",
+      "columns": {
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_shift_code": {
+          "name": "current_shift_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "desired_shift_code": {
+          "name": "desired_shift_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "shift_change_request_items_request_id_shift_change_requests_id_fk": {
+          "name": "shift_change_request_items_request_id_shift_change_requests_id_fk",
+          "tableFrom": "shift_change_request_items",
+          "columnsFrom": ["request_id"],
+          "tableTo": "shift_change_requests",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "shift_change_request_items_current_shift_code_shift_types_code_fk": {
+          "name": "shift_change_request_items_current_shift_code_shift_types_code_fk",
+          "tableFrom": "shift_change_request_items",
+          "columnsFrom": ["current_shift_code"],
+          "tableTo": "shift_types",
+          "columnsTo": ["code"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_request_items_desired_shift_code_shift_types_code_fk": {
+          "name": "shift_change_request_items_desired_shift_code_shift_types_code_fk",
+          "tableFrom": "shift_change_request_items",
+          "columnsFrom": ["desired_shift_code"],
+          "tableTo": "shift_types",
+          "columnsTo": ["code"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "shift_change_request_items_request_id_date_pk": {
+          "name": "shift_change_request_items_request_id_date_pk",
+          "columns": ["request_id", "date"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.shift_change_requests": {
+      "name": "shift_change_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requester_id": {
+          "name": "requester_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "counterpart_user_id": {
+          "name": "counterpart_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "change_request_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_revision_id": {
+          "name": "resolved_revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "shift_change_requests_schedule_idx": {
+          "name": "shift_change_requests_schedule_idx",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "shift_change_requests_requester_idx": {
+          "name": "shift_change_requests_requester_idx",
+          "columns": [
+            {
+              "expression": "requester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "shift_change_requests_schedule_id_schedules_id_fk": {
+          "name": "shift_change_requests_schedule_id_schedules_id_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_requests_requester_id_users_id_fk": {
+          "name": "shift_change_requests_requester_id_users_id_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["requester_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_requests_counterpart_user_id_users_id_fk": {
+          "name": "shift_change_requests_counterpart_user_id_users_id_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["counterpart_user_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_requests_reviewed_by_users_id_fk": {
+          "name": "shift_change_requests_reviewed_by_users_id_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["reviewed_by"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_requests_resolved_revision_id_schedule_revisions_id_fk": {
+          "name": "shift_change_requests_resolved_revision_id_schedule_revisions_id_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["resolved_revision_id"],
+          "tableTo": "schedule_revisions",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "shift_change_requests_roster_fk": {
+          "name": "shift_change_requests_roster_fk",
+          "tableFrom": "shift_change_requests",
+          "columnsFrom": ["schedule_id", "requester_id"],
+          "tableTo": "schedule_roster",
+          "columnsTo": ["schedule_id", "user_id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "shift_change_requests_counterpart_check": {
+          "name": "shift_change_requests_counterpart_check",
+          "value": "\"shift_change_requests\".\"counterpart_user_id\" is null or \"shift_change_requests\".\"counterpart_user_id\" <> \"shift_change_requests\".\"requester_id\""
+        },
+        "shift_change_requests_reviewed_check": {
+          "name": "shift_change_requests_reviewed_check",
+          "value": "(\"shift_change_requests\".\"reviewed_by\" is null) = (\"shift_change_requests\".\"reviewed_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "recipient_id": {
+          "name": "recipient_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "notification_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notifications_recipient_idx": {
+          "name": "notifications_recipient_idx",
+          "columns": [
+            {
+              "expression": "recipient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "notifications_recipient_id_users_id_fk": {
+          "name": "notifications_recipient_id_users_id_fk",
+          "tableFrom": "notifications",
+          "columnsFrom": ["recipient_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "notifications_schedule_id_schedules_id_fk": {
+          "name": "notifications_schedule_id_schedules_id_fk",
+          "tableFrom": "notifications",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.audit_events": {
+      "name": "audit_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "name": "audit_events_id_seq",
+            "increment": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "startWith": "1",
+            "cache": "1",
+            "cycle": false,
+            "schema": "public",
+            "type": "always"
+          }
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_id": {
+          "name": "department_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "audit_events_schedule_idx": {
+          "name": "audit_events_schedule_idx",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "audit_events_department_idx": {
+          "name": "audit_events_department_idx",
+          "columns": [
+            {
+              "expression": "department_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "audit_events_actor_id_users_id_fk": {
+          "name": "audit_events_actor_id_users_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": ["actor_id"],
+          "tableTo": "users",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_events_department_id_departments_id_fk": {
+          "name": "audit_events_department_id_departments_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": ["department_id"],
+          "tableTo": "departments",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_events_schedule_id_schedules_id_fk": {
+          "name": "audit_events_schedule_id_schedules_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": ["schedule_id"],
+          "tableTo": "schedules",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.assignment_source": {
+      "name": "assignment_source",
+      "schema": "public",
+      "values": ["MANUAL", "PREFILL"]
+    },
+    "public.change_request_status": {
+      "name": "change_request_status",
+      "schema": "public",
+      "values": ["PENDING", "ACKNOWLEDGED", "DECLINED", "RESOLVED", "WITHDRAWN"]
+    },
+    "public.date_scope_kind": {
+      "name": "date_scope_kind",
+      "schema": "public",
+      "values": ["DAY", "DAYS", "RANGE", "WEEK", "PERIOD"]
+    },
+    "public.membership_role": {
+      "name": "membership_role",
+      "schema": "public",
+      "values": ["NURSE", "HEAD_NURSE"]
+    },
+    "public.notification_type": {
+      "name": "notification_type",
+      "schema": "public",
+      "values": [
+        "PREFERENCES_OPENED",
+        "DATES_REOPENED",
+        "SCHEDULE_FINALIZED",
+        "SCHEDULE_SUBMITTED",
+        "SCHEDULE_APPROVED",
+        "SCHEDULE_RETURNED",
+        "REVISION_STARTED",
+        "CHANGE_REQUEST_SUBMITTED",
+        "CHANGE_REQUEST_REVIEWED"
+      ]
+    },
+    "public.preference_value": {
+      "name": "preference_value",
+      "schema": "public",
+      "values": ["M", "E", "N", "ME", "OFF"]
+    },
+    "public.preference_window_kind": {
+      "name": "preference_window_kind",
+      "schema": "public",
+      "values": ["INITIAL", "REOPEN"]
+    },
+    "public.revision_status": {
+      "name": "revision_status",
+      "schema": "public",
+      "values": ["OPEN", "APPROVED", "DISCARDED"]
+    },
+    "public.schedule_status": {
+      "name": "schedule_status",
+      "schema": "public",
+      "values": [
+        "DRAFT",
+        "PLANNING",
+        "FINALIZED",
+        "SUBMITTED",
+        "RETURNED",
+        "APPROVED",
+        "REVISING"
+      ]
+    },
+    "public.submission_decision": {
+      "name": "submission_decision",
+      "schema": "public",
+      "values": ["APPROVED", "RETURNED", "WITHDRAWN"]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
