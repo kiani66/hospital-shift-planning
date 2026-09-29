@@ -1,0 +1,21 @@
+# Local PostgreSQL matching production (Neon, PostgreSQL 17).
+# Start with `pnpm db:up`; connection strings are in .env.example.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: hsp
+      POSTGRES_PASSWORD: hsp
+      POSTGRES_DB: hsp_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hsp -d hsp_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

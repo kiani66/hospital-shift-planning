@@ -1,0 +1,130 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens (shadcn/ui "neutral" base + project tokens).
+ * RTL: the document is dir="rtl". Use logical utilities only
+ * (ms-/me-, ps-/pe-, start-/end-, text-start/end, border-s/e, rounded-s/e);
+ * physical ones (ml-, pr-, left-, text-right, ...) are rejected by ESLint.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  /* Shift types. Always paired with the shift code text; never color alone. */
+  --shift-m: oklch(0.93 0.08 85);
+  --shift-m-foreground: oklch(0.38 0.09 70);
+  --shift-e: oklch(0.92 0.06 235);
+  --shift-e-foreground: oklch(0.38 0.1 245);
+  --shift-n: oklch(0.88 0.06 280);
+  --shift-n-foreground: oklch(0.33 0.12 280);
+  --shift-me: oklch(0.91 0.07 175);
+  --shift-me-foreground: oklch(0.36 0.07 180);
+  --shift-off: oklch(0.96 0 0);
+  --shift-off-foreground: oklch(0.45 0 0);
+
+  /* Schedule rule violations (e.g. night-rest). */
+  --violation: oklch(0.577 0.245 27.325);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+
+  --shift-m: oklch(0.4 0.08 75);
+  --shift-m-foreground: oklch(0.95 0.05 85);
+  --shift-e: oklch(0.38 0.08 240);
+  --shift-e-foreground: oklch(0.94 0.04 235);
+  --shift-n: oklch(0.35 0.1 280);
+  --shift-n-foreground: oklch(0.93 0.04 280);
+  --shift-me: oklch(0.38 0.07 178);
+  --shift-me-foreground: oklch(0.94 0.05 175);
+  --shift-off: oklch(0.27 0 0);
+  --shift-off-foreground: oklch(0.75 0 0);
+
+  --violation: oklch(0.704 0.191 22.216);
+}
+
+@theme inline {
+  --font-sans: "Vazirmatn Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-shift-m: var(--shift-m);
+  --color-shift-m-foreground: var(--shift-m-foreground);
+  --color-shift-e: var(--shift-e);
+  --color-shift-e-foreground: var(--shift-e-foreground);
+  --color-shift-n: var(--shift-n);
+  --color-shift-n-foreground: var(--shift-n-foreground);
+  --color-shift-me: var(--shift-me);
+  --color-shift-me-foreground: var(--shift-me-foreground);
+  --color-shift-off: var(--shift-off);
+  --color-shift-off-foreground: var(--shift-off-foreground);
+  --color-violation: var(--violation);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
