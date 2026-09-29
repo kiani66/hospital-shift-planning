@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 
 import type { DatePeriod } from "../../domain/shared/period";
 import type { ScheduleStatus } from "../../domain/schedule/status";
@@ -102,6 +102,31 @@ export async function listSchedulesForDepartment(
     .where(eq(schedules.departmentId, departmentId))
     .orderBy(asc(schedules.periodStart));
   return rows.map(toRecord);
+}
+
+/**
+ * A schedule of the department whose period shares at least one day with
+ * `period` (periods are inclusive, D18), or null. The exclusion constraint
+ * `schedules_period_no_overlap` stays the final guard against races.
+ */
+export async function findOverlappingSchedule(
+  db: DbExecutor,
+  departmentId: string,
+  period: DatePeriod,
+): Promise<ScheduleRecord | null> {
+  const [row] = await db
+    .select(columns)
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.departmentId, departmentId),
+        lte(schedules.periodStart, period.end),
+        gte(schedules.periodEnd, period.start),
+      ),
+    )
+    .orderBy(asc(schedules.periodStart))
+    .limit(1);
+  return row ? toRecord(row) : null;
 }
 
 /**

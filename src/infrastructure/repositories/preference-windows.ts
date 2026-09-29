@@ -15,6 +15,9 @@ export interface PreferenceWindowRecord extends PreferenceWindow {
   readonly id: string;
   readonly scopeKind: DateScopeKind;
   readonly reason: string | null;
+  readonly openedBy: string;
+  readonly openedAt: Date;
+  readonly closedBy: string | null;
 }
 
 export async function createPreferenceWindow(
@@ -28,6 +31,8 @@ export async function createPreferenceWindow(
     reason?: string;
     closesAt?: Date | null;
     openedBy: string;
+    /** Defaults to the database clock. */
+    openedAt?: Date;
   },
 ): Promise<string> {
   const [window] = await db
@@ -39,6 +44,7 @@ export async function createPreferenceWindow(
       reason: input.reason,
       closesAt: input.closesAt ?? null,
       openedBy: input.openedBy,
+      openedAt: input.openedAt,
     })
     .returning({ id: preferenceWindows.id });
   const windowId = window!.id;
@@ -82,6 +88,9 @@ export async function listPreferenceWindows(
     kind: w.kind,
     scopeKind: w.scopeKind,
     reason: w.reason,
+    openedBy: w.openedBy,
+    openedAt: w.openedAt,
+    closedBy: w.closedBy,
     dates: new Set<IsoDate>(
       dates.filter((d) => d.windowId === w.id).map((d) => asIsoDate(d.date)),
     ),
@@ -93,11 +102,11 @@ export async function listPreferenceWindows(
   }));
 }
 
-/** Closes every not-yet-closed window (e.g. on FINALIZE). Returns how many. */
-export async function closeOpenPreferenceWindows(
+/** Closes every not-yet-closed window (e.g. on FINALIZE). Returns their ids. */
+export async function closeOpenPreferenceWindowIds(
   db: DbExecutor,
   input: { scheduleId: string; closedBy: string; now: Date },
-): Promise<number> {
+): Promise<string[]> {
   const rows = await db
     .update(preferenceWindows)
     .set({ closedBy: input.closedBy, closedAt: input.now })
@@ -108,5 +117,13 @@ export async function closeOpenPreferenceWindows(
       ),
     )
     .returning({ id: preferenceWindows.id });
-  return rows.length;
+  return rows.map((r) => r.id);
+}
+
+/** Closes every not-yet-closed window (e.g. on FINALIZE). Returns how many. */
+export async function closeOpenPreferenceWindows(
+  db: DbExecutor,
+  input: { scheduleId: string; closedBy: string; now: Date },
+): Promise<number> {
+  return (await closeOpenPreferenceWindowIds(db, input)).length;
 }

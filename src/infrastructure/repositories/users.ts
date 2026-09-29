@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "../db/database";
 import { users } from "../db/schema";
@@ -60,4 +60,17 @@ export async function setUserActive(
     .update(users)
     .set({ isActive, updatedAt: new Date() })
     .where(eq(users.id, id));
+}
+
+/** Display names of the given users, keyed by id (unknown ids are absent). */
+export async function listDisplayNames(
+  db: DbExecutor,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, displayName: users.displayName })
+    .from(users)
+    .where(inArray(users.id, [...new Set(ids)]));
+  return new Map(rows.map((r) => [r.id, r.displayName]));
 }
