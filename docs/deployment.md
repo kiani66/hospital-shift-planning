@@ -32,16 +32,26 @@ the database variables are missing.
 
 ## Environment variables
 
-| Variable                | Where                         | Purpose                                                 |
-| ----------------------- | ----------------------------- | ------------------------------------------------------- |
-| `DATABASE_URL`          | Vercel (Neon integration), CI | Pooled connection for the running app                   |
-| `DATABASE_URL_UNPOOLED` | Vercel (Neon integration), CI | Direct connection for migrations                        |
-| `SKIP_DB_MIGRATIONS`    | Vercel (optional)             | `1` skips migrations in `vercel-build` (emergency only) |
-| `AUTH_SECRET`           | Vercel, per environment       | Added in Phase 3 (`openssl rand -base64 32`)            |
-| `AUTH_TRUST_HOST`       | Vercel                        | Added in Phase 3 (`true`)                               |
+| Variable                | Where                            | Purpose                                                  |
+| ----------------------- | -------------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`          | Vercel (Neon integration), CI    | Pooled connection for the running app                    |
+| `DATABASE_URL_UNPOOLED` | Vercel (Neon integration), CI    | Direct connection for migrations                         |
+| `SKIP_DB_MIGRATIONS`    | Vercel (optional)                | `1` skips migrations in `vercel-build` (emergency only)  |
+| `AUTH_SECRET`           | Vercel (Production, Preview), CI | Session encryption (`openssl rand -base64 32`); required |
+| `AUTH_TRUST_HOST`       | Local and CI only                | `true`; not needed on Vercel (trusted automatically)     |
 
 Never prefix secrets with `NEXT_PUBLIC_`. Local values go in `.env.local` (gitignored); see
 `.env.example`.
+
+## Auth setup (manual, once)
+
+1. Vercel project → Settings → Environment Variables → add `AUTH_SECRET` for **Production**
+   and **Preview**, each a different value from `openssl rand -base64 32`. Redeploy.
+2. Check `/api/health`: `checks.auth` must be `"ok"` (it reports `"misconfigured"`, and HTTP
+   503, while the secret is missing or shorter than 32 characters).
+3. Production has no accounts until they are provisioned; the demo seed never runs there. To
+   try a preview, seed its Neon branch by hand: `DATABASE_URL_UNPOOLED=<preview branch URL>
+pnpm db:seed` (resets that branch to demo data).
 
 ## Before real hospital use
 

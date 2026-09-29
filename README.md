@@ -26,12 +26,17 @@ pnpm install
 cp .env.example .env.local   # local connection strings
 pnpm db:up                   # PostgreSQL 17 in Docker
 pnpm db:migrate
-pnpm db:seed                 # optional: deterministic demo data
+pnpm db:seed                 # demo data and demo accounts
 pnpm dev                     # http://localhost:3000
 ```
 
-`GET /api/health` reports app and database status (HTTP 503 when the database is unreachable or
-misconfigured).
+Set `AUTH_SECRET` in `.env.local` (`openssl rand -base64 32`). Sign in with a demo account, e.g.
+`nurse1.icu@demo.invalid`, `head.icu@demo.invalid` or `supervisor@demo.invalid`, password
+`demo-only-password` (development and preview databases only; see
+[docs/security.md](docs/security.md)).
+
+`GET /api/health` reports app, database and auth-configuration status (HTTP 503 when the
+database is unreachable or misconfigured, or `AUTH_SECRET` is missing).
 
 ## Scripts
 
@@ -57,16 +62,16 @@ misconfigured).
 ```
 src/
   app/              routes (RSC pages, route handlers); thin
-  features/         UI by feature: components + Server Action adapters      (Phase 3+)
-  components/       shared UI; components/ui holds shadcn/ui components     (Phase 3+)
+  features/         UI by feature (auth, shell): components + Server Action adapters
+  components/       shared UI; components/ui holds shadcn/ui-style primitives
   application/      use cases: authorize → domain → persist → audit → notify
   domain/           pure business rules, no framework imports
-  infrastructure/   config (env), db (Drizzle client, schema, migrations, seed), repositories
+  infrastructure/   auth (Auth.js, Argon2id, getActor), config (env), db, repositories
   lib/              UI utilities (cn; Jalali calendar adapter in a later phase)
 scripts/            db-migrate (used locally, in CI and on Vercel)
 tests/              unit/, integration/ (real PostgreSQL), e2e/ (Playwright), support/
 eslint-rules/       project ESLint rules (RTL-safe classes)
-docs/               decisions, deployment
+docs/               decisions, database, deployment, security
 ```
 
 Layer boundaries are enforced by ESLint; see [AGENTS.md](AGENTS.md) for the conventions.
@@ -77,7 +82,8 @@ Layer boundaries are enforced by ESLint; see [AGENTS.md](AGENTS.md) for the conv
 - Integration tests: `pnpm test:integration` against real PostgreSQL. Set `TEST_DATABASE_URL`
   (see `.env.example`); the database is wiped and migrated on every run, and its name must contain
   `test`.
-- End-to-end: `pnpm build && pnpm test:e2e`. Needs a migrated database. Projects: `api`,
+- End-to-end: `pnpm build && pnpm test:e2e`. Needs a migrated and seeded database
+  (`pnpm db:seed`) and `AUTH_SECRET` / `AUTH_TRUST_HOST=true`. Projects: `api`,
   `desktop-chromium`, `mobile-android`, `mobile-ios` (WebKit). Install browsers with
   `pnpm exec playwright install chromium webkit`.
 - CI (GitHub Actions) runs all three on every PR and push to `main`.

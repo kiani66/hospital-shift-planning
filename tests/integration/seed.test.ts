@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { verifyPassword } from "../../src/infrastructure/auth/password";
 import {
   DEMO_ICU,
+  DEMO_PASSWORD,
   DEMO_SCHEDULE,
   DEMO_USERS,
 } from "../../src/infrastructure/db/seed/demo-data";
@@ -34,16 +36,16 @@ describe("demo seed", () => {
     const summary = await seedDemoData(db);
     expect(summary).toEqual({
       departments: 2,
-      users: 11,
-      memberships: 11,
+      users: 12,
+      memberships: 12,
       supervisorAssignments: 2,
       schedules: 1,
       rosterEntries: 6,
     });
     expect(await counts()).toEqual({
       departments: 2,
-      users: 11,
-      memberships: 11,
+      users: 12,
+      memberships: 12,
       supervisors: 2,
       schedules: 1,
       roster: 6,
@@ -62,7 +64,7 @@ describe("demo seed", () => {
     const first = await snapshot();
     await seedDemoData(db);
     expect(await snapshot()).toEqual(first);
-    expect(await counts()).toMatchObject({ users: 11, roster: 6 });
+    expect(await counts()).toMatchObject({ users: 12, roster: 6 });
   });
 
   it("gives every department a head nurse and several nurses, and one supervisor for both", async () => {
@@ -83,6 +85,22 @@ describe("demo seed", () => {
     expect(rows).toEqual([
       { code: "er", heads: 1, nurses: 3, supervisors: 1 },
       { code: "icu", heads: 1, nurses: 5, supervisors: 1 },
+    ]);
+  });
+
+  it("gives every demo account an Argon2id hash of the demo password, and deactivates one", async () => {
+    await seedDemoData(db);
+    const { rows } = await db.execute<{
+      password_hash: string;
+      is_active: boolean;
+      email: string;
+    }>(sql`select password_hash, is_active, email from users`);
+    for (const row of rows) {
+      expect(row.password_hash).toMatch(/^\$argon2id\$/);
+      expect(await verifyPassword(row.password_hash, DEMO_PASSWORD)).toBe(true);
+    }
+    expect(rows.filter((r) => !r.is_active).map((r) => r.email)).toEqual([
+      DEMO_USERS.inactiveNurse.email,
     ]);
   });
 
@@ -108,6 +126,10 @@ describe("demo seed", () => {
       role: "NURSE",
     });
     expect(rows.map((r) => r.user_id)).not.toContain(DEMO_USERS.erNurse1.id);
+    // Left before the period (and deactivated): not on the roster.
+    expect(rows.map((r) => r.user_id)).not.toContain(
+      DEMO_USERS.inactiveNurse.id,
+    );
     expect(DEMO_SCHEDULE.departmentId).toBe(DEMO_ICU.id);
   });
 

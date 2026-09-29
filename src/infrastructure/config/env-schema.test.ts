@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  authEnvStatus,
   EnvValidationError,
   migrationDatabaseUrl,
   parseEnv,
@@ -68,5 +69,27 @@ describe("migrationDatabaseUrl", () => {
     expect(() => migrationDatabaseUrl({})).toThrowError(
       /DATABASE_URL_UNPOOLED or DATABASE_URL/,
     );
+  });
+});
+
+describe("authEnvStatus", () => {
+  const secret = "x".repeat(44);
+
+  it("is ok with a long enough AUTH_SECRET", () => {
+    expect(authEnvStatus({ AUTH_SECRET: secret })).toBe("ok");
+    expect(
+      authEnvStatus({ AUTH_SECRET: secret, AUTH_TRUST_HOST: "true" }),
+    ).toBe("ok");
+  });
+
+  it.each([
+    ["a missing secret", {}],
+    ["a short secret", { AUTH_SECRET: "short" }],
+    [
+      "an invalid AUTH_TRUST_HOST",
+      { AUTH_SECRET: secret, AUTH_TRUST_HOST: "1" },
+    ],
+  ])("reports %s as misconfigured", (_, env) => {
+    expect(authEnvStatus(env)).toBe("misconfigured");
   });
 });

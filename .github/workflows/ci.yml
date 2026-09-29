@@ -81,7 +81,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://hsp:hsp@localhost:5432/hsp_test
       DATABASE_URL_UNPOOLED: postgresql://hsp:hsp@localhost:5432/hsp_test
+      AUTH_TRUST_HOST: "true"
     steps:
+      # A throwaway session secret per run; never a committed value.
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -90,6 +93,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
+      # Demo accounts (with the demo-only password) for the login journeys.
+      - run: pnpm db:seed
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e

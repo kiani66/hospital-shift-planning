@@ -6,6 +6,8 @@ import { isHeadNurseOf, isMemberOf, isSupervisorOf, type Actor } from "./actor";
 
 /** Head Nurse actions on a department's schedules. */
 const HEAD_NURSE_ACTIONS = [
+  /** The department workspace (schedule planning and history pages). */
+  "department.manage",
   "schedule.create",
   "schedule.openPreferences",
   "schedule.closePreferences",

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 
 import type { DbExecutor } from "../db/database";
 import { departments } from "../db/schema";
@@ -42,4 +42,28 @@ export async function listDepartments(
   db: DbExecutor,
 ): Promise<DepartmentRecord[]> {
   return db.select(columns).from(departments).orderBy(asc(departments.code));
+}
+
+export async function findDepartmentByCode(
+  db: DbExecutor,
+  code: string,
+): Promise<DepartmentRecord | null> {
+  const [row] = await db
+    .select(columns)
+    .from(departments)
+    .where(eq(departments.code, code));
+  return row ?? null;
+}
+
+/** The departments with the given ids, ordered by code. */
+export async function listDepartmentsByIds(
+  db: DbExecutor,
+  ids: readonly string[],
+): Promise<DepartmentRecord[]> {
+  if (ids.length === 0) return [];
+  return db
+    .select(columns)
+    .from(departments)
+    .where(inArray(departments.id, [...ids]))
+    .orderBy(asc(departments.code));
 }

@@ -30,6 +30,7 @@ TypeScript schema.
 | Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                           |
 | Change requests     | `shift_change_requests`, `shift_change_request_items`                                                                                      |
 | Messaging and audit | `notifications`, `audit_events` (append-only)                                                                                              |
+| Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                              |
 
 ## Where each rule is enforced
 

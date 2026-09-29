@@ -134,3 +134,45 @@ keeps history intact. Retention and anonymization are a later decision.
 The shift code (`M`, `E`, `N`, `ME`) and its semantic fields (`covers`, `is_night`) are the
 source of truth. The Persian `label` in `shift_types` is reference metadata; the UI must not use
 the database label as its only translation source.
+
+## Authentication decisions
+
+Phase 3. Details in `docs/security.md`.
+
+### D24 · Session and trusted actor
+
+Auth.js JWT session holding only the user id, maximum 12 hours. `getActor()` loads active
+status, effective memberships (D19) and supervisor assignments from PostgreSQL on every request;
+nothing authorization-related is read from the session. A deactivated user loses access
+immediately, whatever cookie they hold.
+Enforced in `infrastructure/auth/actor.ts` and `infrastructure/auth/config.ts`.
+
+### D25 · Default page after sign-in
+
+Deterministic, from database-loaded capabilities:
+
+1. Supervisor with no current membership → `/review`.
+2. Head Nurse of any department, or member and supervisor → `/home` (overview of every
+   capability).
+3. Otherwise (nurse only, or no current relation, e.g. a former nurse, D16) → `/my-shifts`.
+
+Enforced in `features/shell/navigation.ts` (`homePath`).
+
+### D26 · Denied department URLs are 404
+
+A department page the actor may not open answers 404, the same as an unknown department code.
+Department pages are addressed by department code (`/departments/icu/schedule`).
+Enforced in `application/workspace/queries.ts` (`getDepartmentForPage`).
+
+### D27 · Department workspace action
+
+`department.manage` (Head Nurse of the department) guards the department schedule page, added to
+the Head Nurse actions of the Phase 1 policy; history uses `audit.view` (Head Nurse or
+supervisor). No new role model.
+Enforced in `domain/authz/policies.ts`.
+
+### D28 · Login throttling
+
+Five failed sign-ins per e-mail address within 15 minutes lock that address for 15 minutes,
+tracked in PostgreSQL by a hash of the address. No Redis, no per-IP limit in the MVP.
+Enforced in `infrastructure/repositories/login-throttles.ts`.
