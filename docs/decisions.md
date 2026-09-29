@@ -207,3 +207,47 @@ Enforced in `features/calendar/jalali.ts` and `features/schedule/actions.ts`.
 
 Enforced in `application/schedules/create-schedule.ts` and
 `application/schedules/preference-windows.ts`.
+
+## Notification center decisions
+
+Phase 5. Paths are relative to `src/`. No schema change: `notifications` already has
+`recipient_id`, `read_at` and the `(recipient_id, created_at DESC)` index.
+
+### D31 · Ownership is the only rule
+
+A notification is visible to, and changeable by, its recipient only: every query and update is
+scoped to `recipient_id = actor.userId`, and the client never sends a user id. The policy action
+`notification.access` (`{ recipientId }`) allows exactly the recipient and denies a deactivated
+actor; it needs no current membership, so a former nurse keeps their own notifications (D16).
+An unknown id and another user's id both answer `NOT_FOUND`, so nothing reveals whether someone
+else's notification exists.
+Enforced in `domain/authz/policies.ts` and `application/notifications/`.
+
+### D32 · Read on open, idempotent, not audited
+
+- Opening a notification marks it read, then navigates to its destination. The destination is
+  derived on the server from the stored type and schedule, never from the request.
+- Mark-read updates only `read_at IS NULL` rows of the actor (the first read time is kept);
+  repeating it or racing it is harmless. Mark-all-read does the same for all of the actor's
+  unread rows and is safe to repeat.
+- Reading is the user's own UI state, not a schedule change: no audit event is written.
+- Each command still runs in one transaction through `defineCommand` (mandatory authorization,
+  stable error codes).
+
+### D33 · Destinations
+
+`PREFERENCES_OPENED` (and `DATES_REOPENED`) open `/preferences?schedule=<id>`; the page is a
+placeholder until Phase 6 and must authorize the schedule itself. Types not created yet have
+Persian wording but no destination; the phase that creates them defines where they lead.
+Enforced in `features/notifications/presentation.ts`.
+
+### D34 · List, pagination and badge
+
+- Newest first (`created_at DESC, id DESC`), 25 per page, keyset pagination with an opaque
+  cursor (exact microsecond `created_at` + id). Filters: all, unread. A malformed cursor shows the
+  first page.
+- The shell shows the unread count from a single `COUNT` (loaded once per request with the shell
+  context); no badge at zero, `۹۹+` above 99. On the mobile bar, when notifications do not fit,
+  the badge moves to "بیشتر".
+- No real-time delivery: the count refreshes on navigation and after the user's own actions
+  (`revalidatePath('/', 'layout')`). No polling, WebSockets or SSE.

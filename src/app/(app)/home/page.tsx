@@ -1,18 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getShellContext } from "@/application/workspace/queries";
-import { requireRequestContext } from "@/features/auth/guards";
 import { describeRoles } from "@/features/shell/app-shell";
 import { NavIcon } from "@/features/shell/nav-icon";
 import { buildNavigation } from "@/features/shell/navigation";
 import { PageHeader } from "@/features/shell/page-header";
+import { loadShellContext } from "@/features/shell/shell-context";
 
 export const metadata: Metadata = { title: "نمای کلی" };
 
 /** Overview for users with more than one kind of access (e.g. Head Nurses). */
 export default async function HomePage() {
-  const context = await getShellContext(await requireRequestContext());
+  const context = await loadShellContext();
   const { sections } = buildNavigation(context);
 
   return (

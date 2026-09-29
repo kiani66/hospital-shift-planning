@@ -163,6 +163,12 @@ describe("authorization matrix", () => {
       () => ({ departmentId: DEPT, requesterId: "someone-else" }),
       [],
     ],
+    [
+      "notification.access",
+      (actor) => ({ recipientId: actor.userId }),
+      ACTOR_NAMES.filter((name) => actors[name].isActive),
+    ],
+    ["notification.access", () => ({ recipientId: "someone-else" }), []],
   ];
 
   describe.each(RESOURCE_RULES)("%s %#", (action, resource, allowed) => {
@@ -341,6 +347,39 @@ describe("specific denials", () => {
       allowed: false,
       reason: "NO_DEPARTMENT_ACCESS",
     });
+  });
+});
+
+describe("notifications", () => {
+  it("only the recipient may access a notification, whatever their roles", () => {
+    expect(
+      decide(actors.supervisor, "notification.access", {
+        recipientId: "nurse",
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_RECIPIENT" });
+    expect(
+      decide(actors.headNurse, "notification.access", { recipientId: "nurse" }),
+    ).toEqual({ allowed: false, reason: "NOT_RECIPIENT" });
+  });
+
+  it("needs no current membership (former members keep their own)", () => {
+    const former: Actor = {
+      userId: "former",
+      isActive: true,
+      memberships: [],
+      supervisedDepartmentIds: [],
+    };
+    expect(
+      decide(former, "notification.access", { recipientId: "former" }).allowed,
+    ).toBe(true);
+  });
+
+  it("a deactivated recipient is denied", () => {
+    expect(
+      decide(actors.inactiveHeadNurse, "notification.access", {
+        recipientId: "head-old",
+      }),
+    ).toEqual({ allowed: false, reason: "ACTOR_INACTIVE" });
   });
 });
 
