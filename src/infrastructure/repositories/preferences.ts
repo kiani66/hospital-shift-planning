@@ -73,7 +73,7 @@ export async function findPreference(
 export async function listPreferences(
   db: DbExecutor,
   scheduleId: string,
-  filter: { userId?: string } = {},
+  filter: { userId?: string; date?: IsoDate } = {},
 ): Promise<PreferenceRecord[]> {
   const rows = await db
     .select({
@@ -86,6 +86,7 @@ export async function listPreferences(
       and(
         eq(nursePreferences.scheduleId, scheduleId),
         filter.userId ? eq(nursePreferences.userId, filter.userId) : undefined,
+        filter.date ? eq(nursePreferences.date, filter.date) : undefined,
       ),
     )
     .orderBy(asc(nursePreferences.date), asc(nursePreferences.userId));

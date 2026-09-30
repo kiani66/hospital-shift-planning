@@ -7,12 +7,10 @@ import {
   LockOpen,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type {
   PreferenceWindowSummary,
-  ScheduleListItem,
   ScheduleOverview,
 } from "@/application/schedules/queries";
 import type { PreferenceCollectionState } from "@/domain/preferences/preference-window";
@@ -114,44 +112,6 @@ function Facts({ items }: { items: readonly [string, ReactNode][] }) {
         </div>
       ))}
     </dl>
-  );
-}
-
-/** Other schedules of the department, as links (the selected one is current). */
-export function ScheduleSwitcher({
-  departmentCode,
-  schedules,
-  selectedId,
-}: {
-  departmentCode: string;
-  schedules: readonly ScheduleListItem[];
-  selectedId: string;
-}) {
-  if (schedules.length < 2) return null;
-  return (
-    <nav aria-label="برنامه‌های بخش">
-      <ul className="flex flex-wrap gap-2">
-        {schedules.map((s) => {
-          const current = s.id === selectedId;
-          return (
-            <li key={s.id}>
-              <Link
-                href={`/departments/${departmentCode}/schedule?schedule=${s.id}`}
-                aria-current={current ? "page" : undefined}
-                className={cn(
-                  "inline-flex min-h-11 items-center rounded-md border px-3 text-sm focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none",
-                  current
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-accent",
-                )}
-              >
-                {s.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
   );
 }
 
@@ -327,10 +287,13 @@ function RosterCard({ schedule }: { schedule: ScheduleOverview }) {
   );
 }
 
+/** The selected schedule: its summary, the month review (`calendar`), then preferences and roster. */
 export function ScheduleOverviewView({
   schedule,
+  calendar,
 }: {
   schedule: ScheduleOverview;
+  calendar?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -359,6 +322,8 @@ export function ScheduleOverviewView({
           <ScheduleStatusBadge status={schedule.status} />
         </div>
       </section>
+
+      {calendar}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <PreferencesCard schedule={schedule} />
