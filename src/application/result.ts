@@ -65,7 +65,12 @@ export function toActionError(error: unknown): ActionError {
       };
     }
     if (error instanceof InvalidStateError)
-      return { code: "INVALID_STATE", message: error.message };
+      return {
+        code: "INVALID_STATE",
+        message: error.message,
+        // What was refused (e.g. FINALIZE, EDIT_ASSIGNMENT); lets the UI word it.
+        reason: error.attempted,
+      };
   }
   if (error instanceof ApplicationError)
     return { code: error.code, message: error.message };

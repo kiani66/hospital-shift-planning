@@ -92,6 +92,32 @@ export async function listAssignments(
 }
 
 /**
+ * The schedule's assignments of the given nurses on the given dates (one
+ * query; the caller picks the exact cells it needs from the result).
+ */
+export async function listAssignmentsFor(
+  db: DbExecutor,
+  input: {
+    scheduleId: string;
+    nurseIds: readonly string[];
+    dates: readonly IsoDate[];
+  },
+): Promise<Assignment[]> {
+  if (input.nurseIds.length === 0 || input.dates.length === 0) return [];
+  const rows = await db
+    .select(assignmentColumns)
+    .from(shiftAssignments)
+    .where(
+      and(
+        eq(shiftAssignments.scheduleId, input.scheduleId),
+        inArray(shiftAssignments.userId, [...input.nurseIds]),
+        inArray(shiftAssignments.date, [...input.dates]),
+      ),
+    );
+  return rows.map(toAssignment);
+}
+
+/**
  * Working-copy assignments of the given nurses on the given dates in the
  * department's other schedules; the cross-boundary context for night-rest.
  */
