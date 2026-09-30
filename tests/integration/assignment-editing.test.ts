@@ -5,9 +5,14 @@ import { setAssignments } from "../../src/application/schedules/edit-assignments
 import { getScheduleReview } from "../../src/application/schedules/review";
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
-import { isoDate } from "../../src/domain/shared/dates";
+import { addDays, isoDate } from "../../src/domain/shared/dates";
 import type { ShiftCode } from "../../src/domain/shifts/shift-type";
-import { schedules } from "../../src/infrastructure/db/schema";
+import {
+  departmentMemberships,
+  schedules,
+  shiftAssignments,
+  users,
+} from "../../src/infrastructure/db/schema";
 import {
   DEMO_ICU,
   DEMO_SCHEDULE,
@@ -15,6 +20,7 @@ import {
 } from "../../src/infrastructure/db/seed/demo-data";
 import { listAssignments } from "../../src/infrastructure/repositories/assignments";
 import { listAuditEventsForSchedule } from "../../src/infrastructure/repositories/audit";
+import { createDepartment } from "../../src/infrastructure/repositories/departments";
 import { loadActor } from "../../src/infrastructure/repositories/memberships";
 import {
   listPreferences,
@@ -24,12 +30,16 @@ import { startRevision } from "../../src/infrastructure/repositories/revisions";
 import {
   isOnRoster,
   listRoster,
+  snapshotRosterFromMemberships,
 } from "../../src/infrastructure/repositories/roster";
-import { findScheduleById } from "../../src/infrastructure/repositories/schedules";
+import {
+  createSchedule as createScheduleRow,
+  findScheduleById,
+} from "../../src/infrastructure/repositories/schedules";
 import { setUserActive } from "../../src/infrastructure/repositories/users";
 import { setupTestDatabase } from "./support/database";
 
-const { db } = setupTestDatabase();
+const { db, pool } = setupTestDatabase();
 const U = DEMO_USERS;
 const S = DEMO_SCHEDULE.id; // ICU, Aban 1405: 2026-10-23 .. 2026-11-21, DRAFT, revision 0
 const TODAY = isoDate("2026-10-01");
@@ -606,5 +616,108 @@ describe("review data for editing", () => {
       allowed: false,
       reason: "NOT_AUTHORIZED",
     });
+  });
+});
+
+describe("performance", () => {
+  /** A department of `size` nurses with a fully planned 31-day month (Farvardin 1406). */
+  async function department(size: number) {
+    const dept = await createDepartment(db, {
+      code: `edit-load-${size}`,
+      name: `بخش ${size} نفره`,
+    });
+    const people = await db
+      .insert(users)
+      .values(
+        Array.from({ length: size }, (_, i) => ({
+          email: `edit${size}.${i}@test.invalid`,
+          displayName: `پرستار ${i}`,
+        })),
+      )
+      .returning({ id: users.id });
+    await db.insert(departmentMemberships).values(
+      people.map((p, i) => ({
+        userId: p.id,
+        departmentId: dept.id,
+        role: i === 0 ? ("HEAD_NURSE" as const) : ("NURSE" as const),
+        startedOn: "2026-01-01",
+      })),
+    );
+    const period = { start: isoDate("2027-03-21"), end: isoDate("2027-04-20") };
+    const schedule = await createScheduleRow(db, {
+      departmentId: dept.id,
+      period,
+      label: "فروردین ۱۴۰۶",
+      createdBy: people[0]!.id,
+    });
+    await snapshotRosterFromMemberships(db, {
+      scheduleId: schedule.id,
+      addedBy: people[0]!.id,
+    });
+    const pattern: (ShiftCode | null)[] = ["M", "E", "ME", "N", null];
+    await db.insert(shiftAssignments).values(
+      people.flatMap((p, i) =>
+        Array.from({ length: 31 }, (_, d) => {
+          const shift = pattern[(i + d) % pattern.length];
+          return shift
+            ? {
+                scheduleId: schedule.id,
+                userId: p.id,
+                date: addDays(period.start, d),
+                shiftCode: shift,
+                updatedBy: people[0]!.id,
+              }
+            : null;
+        }).filter((r) => r !== null),
+      ),
+    );
+    const head = (await loadActor(db, people[0]!.id, TODAY))!;
+    return { schedule, head, nurse: people[1]!.id, period };
+  }
+
+  /** Statements sent to PostgreSQL by one edit (inside its transaction). */
+  async function statementsFor(
+    d: Awaited<ReturnType<typeof department>>,
+    dates: string[],
+  ) {
+    const { revision } = (await findScheduleById(db, d.schedule.id))!;
+    // Transactions run on a client checked out of the pool: count its queries.
+    let count = 0;
+    const wrapped = new WeakSet<object>();
+    const onAcquire = (client: { query: (...args: never[]) => unknown }) => {
+      if (wrapped.has(client)) return;
+      wrapped.add(client);
+      const query = client.query.bind(client);
+      client.query = (...args: never[]) => {
+        count += 1;
+        return query(...args);
+      };
+    };
+    pool.on("acquire", onAcquire);
+    try {
+      const result = await setAssignments(as(d.head), {
+        scheduleId: d.schedule.id,
+        expectedRevision: revision,
+        changes: dates.map((date) => ({ nurseId: d.nurse, date, shift: "M" })),
+      });
+      expect(result.ok).toBe(true);
+    } finally {
+      pool.off("acquire", onAcquire);
+    }
+    return count;
+  }
+
+  it("uses a constant number of statements per edit, whatever the roster size (60 × 31)", async () => {
+    const small = await department(6);
+    const large = await department(60);
+    // These are ME days for nurse 1 in the pattern, so setting M changes each.
+    const one = ["2027-03-22"];
+    const single = await statementsFor(large, one);
+    expect(single).toBe(await statementsFor(small, one));
+    // A range adds a write and an audit row per changed day, nothing per nurse.
+    const range = ["2027-03-27", "2027-04-01", "2027-04-06"];
+    expect((await statementsFor(large, range)) - single).toBe(
+      2 * (range.length - 1),
+    );
   });
 });

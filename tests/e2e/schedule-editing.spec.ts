@@ -228,7 +228,6 @@ test.describe("Head Nurse schedule editing", () => {
 
   test("a stale tab gets a conflict instead of overwriting newer work", async ({
     page,
-    browser,
   }) => {
     test.skip(!isDesktop(page), "desktop flow");
     const nurse2 = department.nurseNames[1]!;
@@ -258,7 +257,6 @@ test.describe("Head Nurse schedule editing", () => {
       .getByRole("button", { name: "صبح (M)" })
       .click();
     await saved(stale);
-    void browser;
   });
 
   test("a locked schedule offers no editing", async ({ page }) => {
