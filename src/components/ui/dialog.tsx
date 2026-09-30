@@ -12,7 +12,9 @@ import { cn } from "@/lib/utils";
  * click and programmatic closes alike.
  *
  * With `closeLabel`, the header gets a close button (for content dialogs
- * that have no action buttons of their own).
+ * that have no action buttons of their own); `headerActions` go beside it.
+ * `stickyHeader` keeps the header (title and those controls) visible while
+ * long content scrolls.
  */
 export function Dialog({
   open,
@@ -20,6 +22,8 @@ export function Dialog({
   title,
   description,
   closeLabel,
+  headerActions,
+  stickyHeader = false,
   children,
   className,
 }: {
@@ -28,6 +32,8 @@ export function Dialog({
   title: ReactNode;
   description?: ReactNode;
   closeLabel?: string;
+  headerActions?: ReactNode;
+  stickyHeader?: boolean;
   children: ReactNode;
   className?: string;
 }) {
@@ -59,7 +65,13 @@ export function Dialog({
       )}
     >
       <div className="flex flex-col gap-4 p-5">
-        <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "flex items-start gap-3",
+            stickyHeader &&
+              "sticky top-0 z-10 -mx-5 -mt-5 border-b bg-background px-5 pt-5 pb-3",
+          )}
+        >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <h2 id={titleId} className="text-lg leading-relaxed font-bold">
               {title}
@@ -73,6 +85,7 @@ export function Dialog({
               </div>
             )}
           </div>
+          {headerActions}
           {closeLabel && (
             <button
               type="button"
