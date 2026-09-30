@@ -156,10 +156,11 @@ describe("provisionUser", () => {
 
   it("fails clearly for a missing department and writes nothing", async () => {
     await expect(provisionUser(db, input(), NOW)).rejects.toThrow(
-      /Department "icu" does not exist/,
+      /Department "icu" does not exist.*PROVISION_DEPARTMENT_NAME/,
     );
     expect(await allUsers()).toHaveLength(0);
-    expect((await db.select().from(departments)).length).toBe(0);
+    expect(await db.select().from(departments)).toHaveLength(0);
+    expect(await allMemberships()).toHaveLength(0);
   });
 
   it("refuses an inactive department", async () => {
@@ -284,6 +285,128 @@ describe("provisionUser", () => {
     expect(JSON.stringify(spies.flatMap((s) => s.mock.calls))).not.toContain(
       PASSWORD,
     );
+  });
+});
+
+describe("department bootstrap", () => {
+  const withName = (over: Partial<ProvisionInput> = {}) =>
+    input({ departmentCode: "ICU", departmentName: "Intensive Care", ...over });
+
+  it("creates a missing department when a name is given, with the exact code", async () => {
+    const result = await provisionUser(db, withName(), NOW);
+    expect(result).toMatchObject({
+      departmentCode: "ICU",
+      departmentStatus: "created",
+      userCreated: true,
+      membership: "created",
+    });
+    const [department] = await db.select().from(departments);
+    expect(department).toMatchObject({
+      code: "ICU", // not lowercased or rewritten
+      name: "Intensive Care",
+      isActive: true,
+      timezone: "Asia/Tehran",
+    });
+    expect(await allMemberships()).toMatchObject([
+      { departmentId: department!.id, role: "HEAD_NURSE" },
+    ]);
+  });
+
+  it("does not create a department without a name and writes nothing", async () => {
+    await expect(
+      provisionUser(db, input({ departmentCode: "ICU" }), NOW),
+    ).rejects.toThrow(/PROVISION_DEPARTMENT_NAME/);
+    expect(await db.select().from(departments)).toHaveLength(0);
+    expect(await allUsers()).toHaveLength(0);
+    expect(await allMemberships()).toHaveLength(0);
+  });
+
+  it("reuses an existing department and never renames it", async () => {
+    const departmentId = await addDepartment("icu");
+    const result = await provisionUser(
+      db,
+      withName({ departmentCode: "icu" }),
+      NOW,
+    );
+    expect(result.departmentStatus).toBe("existing");
+    expect(await db.select().from(departments)).toMatchObject([
+      { id: departmentId, code: "icu", name: "icu" },
+    ]);
+  });
+
+  it("repeat runs create no second department, user or membership", async () => {
+    expect((await provisionUser(db, withName(), NOW)).departmentStatus).toBe(
+      "created",
+    );
+    expect((await provisionUser(db, withName(), NOW)).departmentStatus).toBe(
+      "existing",
+    );
+    expect(await db.select().from(departments)).toHaveLength(1);
+    expect(await allUsers()).toHaveLength(1);
+    expect(await allMemberships()).toHaveLength(1);
+  });
+
+  it("does not reactivate an inactive department, even with a name", async () => {
+    await addDepartment("ICU", false);
+    await expect(provisionUser(db, withName(), NOW)).rejects.toThrow(
+      /inactive/,
+    );
+    expect(await db.select().from(departments)).toMatchObject([
+      { isActive: false },
+    ]);
+    expect(await allUsers()).toHaveLength(0);
+  });
+
+  it("rolls back the department, user and membership if a later step fails", async () => {
+    const boom = vi
+      .spyOn(
+        await import("../../src/infrastructure/repositories/memberships"),
+        "addMembership",
+      )
+      .mockRejectedValueOnce(new Error("boom"));
+    await expect(provisionUser(db, withName(), NOW)).rejects.toThrow("boom");
+    expect(boom).toHaveBeenCalled();
+    expect(await db.select().from(departments)).toHaveLength(0);
+    expect(await allUsers()).toHaveLength(0);
+    expect(await allMemberships()).toHaveLength(0);
+  });
+
+  it("concurrent runs for a new department create it exactly once", async () => {
+    const results = await Promise.all([
+      provisionUser(db, withName({ email: "a@example.com" }), NOW),
+      provisionUser(db, withName({ email: "b@example.com" }), NOW),
+      // Same code in another case must resolve to the same department.
+      provisionUser(
+        db,
+        withName({ email: "c@example.com", departmentCode: "icu" }),
+        NOW,
+      ),
+    ]);
+    expect(
+      results.filter((r) => r.departmentStatus === "created"),
+    ).toHaveLength(1);
+    expect(await db.select().from(departments)).toHaveLength(1);
+    expect(await allUsers()).toHaveLength(3);
+    expect(await allMemberships()).toHaveLength(3);
+  });
+
+  it("concurrent runs for the same user still yield one user and membership", async () => {
+    await Promise.all([
+      provisionUser(db, withName(), NOW),
+      provisionUser(db, withName(), NOW),
+    ]);
+    expect(await db.select().from(departments)).toHaveLength(1);
+    expect(await allUsers()).toHaveLength(1);
+    expect(await allMemberships()).toHaveLength(1);
+  });
+
+  it("reports department state without exposing secrets", async () => {
+    const result = await provisionUser(db, withName(), NOW);
+    const [user] = await allUsers();
+    const serialized = JSON.stringify(result);
+    expect(serialized).toContain('"departmentStatus":"created"');
+    expect(serialized).not.toContain(PASSWORD);
+    expect(serialized).not.toContain(user!.passwordHash!);
   });
 });
 

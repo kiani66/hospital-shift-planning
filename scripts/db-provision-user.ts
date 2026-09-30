@@ -5,7 +5,8 @@
  * deployment. Not the demo seed (`db:seed`), which stays forbidden in production.
  *
  * Input: PROVISION_EMAIL, PROVISION_PASSWORD, PROVISION_DEPARTMENT_CODE,
- * PROVISION_ROLE (HEAD_NURSE | NURSE), optional PROVISION_DISPLAY_NAME.
+ * PROVISION_ROLE (HEAD_NURSE | NURSE), optional PROVISION_DISPLAY_NAME, and
+ * PROVISION_DEPARTMENT_NAME (required only if the department does not exist yet).
  */
 import { loadEnvConfig } from "@next/env";
 
@@ -33,6 +34,7 @@ async function main() {
         "Provisioned user:",
         `email: ${result.email}`,
         `department: ${result.departmentCode}`,
+        `department status: ${result.departmentStatus}`,
         `role: ${result.role}`,
         "status: active",
         `user: ${result.userCreated ? "created" : "updated (password refreshed)"}`,

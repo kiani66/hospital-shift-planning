@@ -8,6 +8,7 @@ import { normalizeEmail } from "../auth/credentials";
 import { hashPassword } from "../auth/password";
 import type { Database, DbExecutor } from "../db/database";
 import { departmentMemberships, departments } from "../db/schema";
+import { createDepartment } from "../repositories/departments";
 import { activeOn, addMembership } from "../repositories/memberships";
 import {
   createUser,
@@ -57,6 +58,8 @@ export const provisionInputSchema = z.object({
   }),
   /** Only used when the user is created; defaults to the e-mail's local part. */
   displayName: nonEmpty("PROVISION_DISPLAY_NAME").max(200).optional(),
+  /** Only used when the department does not exist yet; never renames one. */
+  departmentName: nonEmpty("PROVISION_DEPARTMENT_NAME").max(200).optional(),
 });
 
 export type ProvisionInput = z.infer<typeof provisionInputSchema>;
@@ -77,6 +80,7 @@ export function parseProvisionEnv(
     departmentCode: env.PROVISION_DEPARTMENT_CODE,
     role: env.PROVISION_ROLE,
     displayName: blankToUndefined(env.PROVISION_DISPLAY_NAME),
+    departmentName: blankToUndefined(env.PROVISION_DEPARTMENT_NAME),
   });
   if (result.success) return result.data;
   throw new ProvisionError(
@@ -89,13 +93,17 @@ export function parseProvisionEnv(
 export interface ProvisionResult {
   readonly email: string;
   readonly departmentCode: string;
+  readonly departmentStatus: "created" | "existing";
   readonly role: MembershipRole;
   readonly isActive: true;
   readonly userCreated: boolean;
   readonly membership: "created" | "unchanged";
 }
 
-/** Exact code first, then a case-insensitive match if it is unambiguous. */
+/**
+ * Exact code first, then a case-insensitive match if it is unambiguous.
+ * Null when there is none; throws for an ambiguous code.
+ */
 async function findDepartment(db: DbExecutor, code: string) {
   const rows = await db
     .select({
@@ -105,16 +113,45 @@ async function findDepartment(db: DbExecutor, code: string) {
     })
     .from(departments)
     .where(sql`lower(${departments.code}) = lower(${code})`);
-  const match = rows.find((r) => r.code === code) ?? rows[0];
-  if (!match || (rows.length > 1 && match.code !== code))
+  const exact = rows.find((r) => r.code === code);
+  if (exact) return exact;
+  if (rows.length > 1)
     throw new ProvisionError(
-      rows.length > 1
-        ? `Department code "${code}" is ambiguous; use the exact code`
-        : `Department "${code}" does not exist (departments are never created by this command)`,
+      `Department code "${code}" is ambiguous; use the exact code`,
     );
-  if (!match.isActive)
-    throw new ProvisionError(`Department "${match.code}" is inactive`);
-  return match;
+  return rows[0] ?? null;
+}
+
+/**
+ * The department to grant membership in. An existing one is used as is (never
+ * renamed or reactivated); a missing one is created only when a name was given
+ * explicitly, with the code exactly as supplied.
+ */
+async function resolveDepartment(db: DbExecutor, input: ProvisionInput) {
+  // Serializes concurrent runs for the same code (case-insensitively, which the
+  // unique index on `code` does not cover) until this transaction ends, so a
+  // racing run finds the committed department instead of inserting a second one.
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${"provision-department:" + input.departmentCode.toLowerCase()}))`,
+  );
+
+  const existing = await findDepartment(db, input.departmentCode);
+  if (existing) {
+    if (!existing.isActive)
+      throw new ProvisionError(`Department "${existing.code}" is inactive`);
+    return { ...existing, status: "existing" as const };
+  }
+
+  if (!input.departmentName)
+    throw new ProvisionError(
+      `Department "${input.departmentCode}" does not exist. To create it as part of ` +
+        `the first bootstrap, also set PROVISION_DEPARTMENT_NAME.`,
+    );
+  const created = await createDepartment(db, {
+    code: input.departmentCode,
+    name: input.departmentName,
+  });
+  return { ...created, status: "created" as const };
 }
 
 async function ensureMembership(
@@ -153,8 +190,8 @@ async function ensureMembership(
 }
 
 /**
- * Creates or updates the user and ensures the department membership, all in
- * one transaction (any failure leaves nothing behind).
+ * Ensures the department (creating it only when a name was given), creates or
+ * updates the user and ensures the membership, all in one transaction (any failure leaves nothing behind).
  *
  * Idempotent apart from the password: a repeat run reuses the user, keeps the
  * existing membership and only refreshes the password hash (a new salt every
@@ -170,7 +207,7 @@ export async function provisionUser(
   const today = todayIn(APP_TIMEZONE, now);
 
   return db.transaction(async (tx) => {
-    const department = await findDepartment(tx, input.departmentCode);
+    const department = await resolveDepartment(tx, input);
 
     const existing = await findUserByEmail(tx, input.email);
     let userId: string;
@@ -196,6 +233,7 @@ export async function provisionUser(
     return {
       email: input.email,
       departmentCode: department.code,
+      departmentStatus: department.status,
       role: input.role,
       isActive: true,
       userCreated: !existing,

@@ -44,6 +44,22 @@ describe("parseProvisionEnv", () => {
     ).toBeUndefined();
   });
 
+  it("reads the optional department name; blank means unset", () => {
+    expect(
+      parseProvisionEnv({
+        ...valid,
+        PROVISION_DEPARTMENT_NAME: "Intensive Care",
+      }).departmentName,
+    ).toBe("Intensive Care");
+    expect(
+      parseProvisionEnv({ ...valid, PROVISION_DEPARTMENT_NAME: " " })
+        .departmentName,
+    ).toBeUndefined();
+    expect(
+      messageFor({ ...valid, PROVISION_DEPARTMENT_NAME: "x".repeat(201) }),
+    ).toContain("PROVISION_DEPARTMENT_NAME");
+  });
+
   it.each([
     ["missing e-mail", { PROVISION_EMAIL: undefined }, "PROVISION_EMAIL"],
     ["invalid e-mail", { PROVISION_EMAIL: "not-an-email" }, "valid e-mail"],

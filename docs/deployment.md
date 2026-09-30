@@ -67,7 +67,8 @@ without manual SQL. It is **production-safe** and is not the demo seed:
 | Production   | Allowed                                              | Refused (`assertSeedAllowed`), unchanged |
 | When it runs | Only when you invoke it; never during a deploy/build | Only when invoked, dev/preview only      |
 
-It never creates departments: the department must already exist and be active.
+It can also create the initial department, but only deliberately: see `PROVISION_DEPARTMENT_NAME`
+below. It is meant for the minimal first production bootstrap (department, user, membership).
 
 Inputs (environment variables; nothing is hard-coded or committed):
 
@@ -86,7 +87,8 @@ e.g. from the Neon production connection string. PowerShell (placeholders only):
 $env:DATABASE_URL_UNPOOLED="<production direct connection string>"
 $env:PROVISION_EMAIL="head@example.com"
 $env:PROVISION_PASSWORD="<strong-password>"
-$env:PROVISION_DEPARTMENT_CODE="ICU"
+$env:PROVISION_DEPARTMENT_CODE="icu"
+$env:PROVISION_DEPARTMENT_NAME="ICU"
 $env:PROVISION_ROLE="HEAD_NURSE"
 
 pnpm db:provision-user
@@ -97,8 +99,14 @@ Remove-Item Env:PROVISION_PASSWORD, Env:DATABASE_URL_UNPOOLED
 
 Behavior:
 
-- **Transaction:** everything happens in one transaction; any failure leaves no user, membership
-  or password change behind. Input is validated before the database is contacted.
+- **Department:** an existing active department is reused as is: it is never renamed and
+  `PROVISION_DEPARTMENT_NAME` is ignored. An existing inactive one is an error (it is not
+  reactivated). If it does not exist, `PROVISION_DEPARTMENT_NAME` is required, otherwise the
+  command fails and writes nothing (no default name is ever used); with a name, the department is
+  created active with exactly the given code and name. Concurrent runs are serialized per code, so
+  a race cannot create two.
+- **Transaction:** the department, user and membership are written in one transaction; any
+  failure leaves no department, user, membership or password change behind. Input is validated before the database is contacted.
 - **New user:** created active, with a generated id and the normalized e-mail.
 - **Existing user** (matched on `lower(email)`, like sign-in): the password hash is replaced and
   `is_active` set to true; the e-mail spelling, display name and all other data are kept.
@@ -108,9 +116,10 @@ Behavior:
   - current one with another role, or one starting in the future: the command stops with a
     conflict error and changes nothing (it never rewrites history; end the old membership
     deliberately first). Ended memberships are kept and a new one is added.
-- **Idempotent:** re-running with the same values adds no user or membership. It only refreshes
+- **Idempotent:** re-running with the same values adds no department, user or membership. It only refreshes
   the password hash (new salt) and `is_active`, so a repeat run also resets the password.
-- **Output:** e-mail, department code, role and status only. The password, its hash and the
+- **Output:** e-mail, department code, department status (`created` or `existing`), role and
+  status only. The password, its hash and the
   connection string are never printed; only the database host and name are.
 
 ## Before real hospital use
