@@ -6,6 +6,7 @@ import {
 } from "../../infrastructure/repositories/departments";
 import { findUserById } from "../../infrastructure/repositories/users";
 import { NotFoundError } from "../errors";
+import { getUnreadNotificationCount } from "../notifications/queries";
 import type { AppContext } from "../use-case";
 
 export interface DepartmentSummary {
@@ -24,12 +25,17 @@ export interface ShellContext {
   }[];
   /** Departments the user currently supervises, ordered by code. */
   readonly supervised: readonly DepartmentSummary[];
+  /** The actor's unread notifications (a COUNT; the list is never loaded for it). */
+  readonly unreadNotifications: number;
 }
 
 /** Loads the names the shell needs for the actor's current relations. */
 export async function getShellContext(ctx: AppContext): Promise<ShellContext> {
   const { db, actor } = ctx;
-  const user = await findUserById(db, actor.userId);
+  const [user, unreadNotifications] = await Promise.all([
+    findUserById(db, actor.userId),
+    getUnreadNotificationCount(ctx),
+  ]);
   if (!user) throw new NotFoundError("User");
 
   const ids = [
@@ -56,6 +62,7 @@ export async function getShellContext(ctx: AppContext): Promise<ShellContext> {
     supervised: actor.supervisedDepartmentIds
       .flatMap((id) => departments.get(id) ?? [])
       .sort(byCode),
+    unreadNotifications,
   };
 }
 

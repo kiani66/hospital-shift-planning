@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import type { ShellContext } from "@/application/workspace/queries";
 
-import { buildNavigation, homePath, MAX_PRIMARY } from "./navigation";
+import {
+  badgeLabel,
+  buildNavigation,
+  formatBadgeCount,
+  homePath,
+  MAX_PRIMARY,
+} from "./navigation";
 
 const ICU = { id: "d1", code: "icu", name: "ICU" };
 const ER = { id: "d2", code: "er", name: "ER" };
 
-type Ctx = Pick<ShellContext, "memberships" | "supervised">;
+type Ctx = Pick<ShellContext, "memberships" | "supervised"> &
+  Partial<Pick<ShellContext, "unreadNotifications">>;
 const nurse: Ctx = {
   memberships: [{ department: ICU, role: "NURSE" }],
   supervised: [],
@@ -141,5 +148,59 @@ describe("buildNavigation", () => {
     expect(allItems(ctx).map((i) => i.href)).toContain(
       "/departments/a%20b/schedule",
     );
+  });
+});
+
+describe("unread badge", () => {
+  const badges = (items: readonly { id: string; badge?: number }[]) =>
+    items.filter((i) => i.badge !== undefined).map((i) => [i.id, i.badge]);
+
+  it("adds no badge at zero or without a count", () => {
+    for (const unread of [0, undefined]) {
+      const nav = buildNavigation({ ...nurse, unreadNotifications: unread });
+      expect(badges(nav.primary)).toEqual([]);
+      expect(badges(nav.sections.flatMap((s) => s.items))).toEqual([]);
+    }
+  });
+
+  it("puts the count on the notifications item (sidebar and bottom bar)", () => {
+    const nav = buildNavigation({ ...nurse, unreadNotifications: 3 });
+    expect(badges(nav.primary)).toEqual([["notifications", 3]]);
+    expect(badges(nav.sections.flatMap((s) => s.items))).toEqual([
+      ["notifications", 3],
+    ]);
+  });
+
+  it("puts it on 'more' when notifications do not fit the bottom bar", () => {
+    const nav = buildNavigation({ ...headNurse, unreadNotifications: 2 });
+    expect(nav.primary.some((i) => i.id === "notifications")).toBe(false);
+    expect(badges(nav.primary)).toEqual([["more", 2]]);
+    expect(badges(nav.sections.flatMap((s) => s.items))).toEqual([
+      ["notifications", 2],
+    ]);
+  });
+
+  it("marks the supervisor's notifications item", () => {
+    const nav = buildNavigation({ ...supervisor, unreadNotifications: 1 });
+    expect(badges(nav.primary)).toEqual([["notifications", 1]]);
+  });
+});
+
+describe("formatBadgeCount", () => {
+  it.each<[number, string | null]>([
+    [0, null],
+    [-1, null],
+    [Number.NaN, null],
+    [1, "۱"],
+    [42, "۴۲"],
+    [99, "۹۹"],
+    [100, "۹۹+"],
+    [12345, "۹۹+"],
+  ])("%d → %s", (count, text) => {
+    expect(formatBadgeCount(count)).toBe(text);
+  });
+
+  it("describes the count for screen readers", () => {
+    expect(badgeLabel(1234)).toBe("۱٬۲۳۴ اعلان خوانده‌نشده");
   });
 });

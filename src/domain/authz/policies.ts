@@ -56,6 +56,12 @@ export interface ActionResources extends Record<
   "changeRequest.withdraw": DepartmentResource & {
     readonly requesterId: string;
   };
+  /**
+   * The actor's own in-app notifications (list, count, mark read). Not tied
+   * to a department: ownership is the only rule, so a former member keeps
+   * their notifications (D16) and nobody else ever sees them.
+   */
+  "notification.access": { readonly recipientId: string };
 }
 
 export type Action = keyof ActionResources;
@@ -64,6 +70,7 @@ export type AuthzDenial =
   | "ACTOR_INACTIVE"
   | "NOT_HEAD_NURSE_OF_DEPARTMENT"
   | "NOT_MEMBER_OF_DEPARTMENT"
+  | "NOT_RECIPIENT"
   | "NOT_REQUESTER"
   | "NOT_SUPERVISOR_OF_DEPARTMENT"
   | "NO_DEPARTMENT_ACCESS"
@@ -92,7 +99,11 @@ export function decide<A extends Action>(
   resource: ActionResources[A],
 ): Decision<AuthzDenial> {
   if (!actor.isActive) return deny("ACTOR_INACTIVE");
-  const { departmentId } = resource;
+  if (action === "notification.access") {
+    const { recipientId } = resource as ActionResources["notification.access"];
+    return recipientId === actor.userId ? allow : deny("NOT_RECIPIENT");
+  }
+  const { departmentId } = resource as DepartmentResource;
   const headNurse = isHeadNurseOf(actor, departmentId);
   const supervisor = isSupervisorOf(actor, departmentId);
 
@@ -100,8 +111,12 @@ export function decide<A extends Action>(
     return headNurse ? allow : deny("NOT_HEAD_NURSE_OF_DEPARTMENT");
 
   // Narrow the resource by action for the remaining, resource-specific rules.
-  const r = resource as ActionResources[Exclude<Action, HeadNurseAction>];
-  switch (action as Exclude<Action, HeadNurseAction>) {
+  type DepartmentAction = Exclude<
+    Action,
+    HeadNurseAction | "notification.access"
+  >;
+  const r = resource as ActionResources[DepartmentAction];
+  switch (action as DepartmentAction) {
     case "schedule.viewDepartment": {
       if (headNurse) return allow;
       if (!supervisor) return deny("NO_DEPARTMENT_ACCESS");

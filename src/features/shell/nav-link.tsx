@@ -6,10 +6,36 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 import { NavIcon } from "./nav-icon";
-import type { NavItem } from "./navigation";
+import { badgeLabel, formatBadgeCount, type NavItem } from "./navigation";
 
 const isCurrent = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
+
+/**
+ * The unread badge. The visible count is decorative (aria-hidden); the link
+ * name gets the full text after the label, e.g. "اعلان‌ها، ۳ اعلان خوانده‌نشده".
+ */
+function Badge({ count, className }: { count?: number; className?: string }) {
+  const text = count === undefined ? null : formatBadgeCount(count);
+  if (!text) return null;
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="nav-badge"
+      className={cn(
+        "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[0.7rem] leading-none font-bold text-white tabular-nums",
+        className,
+      )}
+    >
+      {text}
+    </span>
+  );
+}
+
+function BadgeText({ count }: { count?: number }) {
+  if (count === undefined || !formatBadgeCount(count)) return null;
+  return <span className="sr-only">، {badgeLabel(count)}</span>;
+}
 
 /** Sidebar link (desktop and the "more" page). */
 export function SidebarLink({ item }: { item: NavItem }) {
@@ -28,6 +54,8 @@ export function SidebarLink({ item }: { item: NavItem }) {
     >
       <NavIcon name={item.icon} className="size-5 shrink-0" />
       <span className="truncate">{item.label}</span>
+      <BadgeText count={item.badge} />
+      <Badge count={item.badge} className="ms-auto" />
     </Link>
   );
 }
@@ -49,15 +77,20 @@ export function BottomNavLink({ item }: { item: NavItem }) {
     >
       <span
         className={cn(
-          "flex h-7 w-12 items-center justify-center rounded-full",
+          "relative flex h-7 w-12 items-center justify-center rounded-full",
           current && "bg-primary text-primary-foreground",
         )}
       >
         <NavIcon name={item.icon} className="size-5" />
+        <Badge
+          count={item.badge}
+          className="absolute -end-1 -top-1.5 ring-2 ring-background"
+        />
       </span>
       <span className="line-clamp-2 max-w-full text-center leading-tight">
         {item.label}
       </span>
+      <BadgeText count={item.badge} />
     </Link>
   );
 }

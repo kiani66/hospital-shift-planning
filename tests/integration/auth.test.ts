@@ -284,6 +284,7 @@ describe("shell and page queries", () => {
         },
       ],
       supervised: [],
+      unreadNotifications: 0,
     });
   });
 

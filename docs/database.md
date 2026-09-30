@@ -29,7 +29,7 @@ TypeScript schema.
 | Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                    |
 | Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                           |
 | Change requests     | `shift_change_requests`, `shift_change_request_items`                                                                                      |
-| Messaging and audit | `notifications`, `audit_events` (append-only)                                                                                              |
+| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                     |
 | Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                              |
 
 ## Where each rule is enforced

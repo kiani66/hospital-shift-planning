@@ -25,6 +25,8 @@ export interface NavItem {
   readonly href: Route;
   readonly label: string;
   readonly icon: NavIcon;
+  /** Unread notifications shown on the item; absent when there are none. */
+  readonly badge?: number;
 }
 
 export interface NavSection {
@@ -45,7 +47,8 @@ export interface Navigation {
 
 export const MAX_PRIMARY = 5;
 
-type Capabilities = Pick<ShellContext, "memberships" | "supervised">;
+type Capabilities = Pick<ShellContext, "memberships" | "supervised"> &
+  Partial<Pick<ShellContext, "unreadNotifications">>;
 
 const departmentPath = (code: string, page: "schedule" | "history") =>
   `/departments/${encodeURIComponent(code)}/${page}` as Route;
@@ -188,5 +191,38 @@ export function buildNavigation(ctx: Capabilities): Navigation {
     ? [...unique.slice(0, MAX_PRIMARY - 1), ITEMS.more]
     : unique;
 
-  return { home, sections, primary };
+  return withUnreadBadge({ home, sections, primary }, ctx.unreadNotifications);
+}
+
+/**
+ * Puts the unread count on every notifications item. On the mobile bar, when
+ * notifications did not fit, "more" carries it so it is never hidden. Zero
+ * (or no count) adds no badge at all.
+ */
+function withUnreadBadge(nav: Navigation, unread = 0): Navigation {
+  if (unread <= 0) return nav;
+  const mark = (item: NavItem): NavItem =>
+    item.id === ITEMS.notifications.id ? { ...item, badge: unread } : item;
+  const inPrimary = nav.primary.some((i) => i.id === ITEMS.notifications.id);
+  return {
+    home: nav.home,
+    sections: nav.sections.map((s) => ({ ...s, items: s.items.map(mark) })),
+    primary: nav.primary.map((item) =>
+      !inPrimary && item.id === ITEMS.more.id
+        ? { ...item, badge: unread }
+        : mark(item),
+    ),
+  };
+}
+
+/** Compact badge text: Persian digits, capped at "۹۹+"; null hides the badge. */
+export function formatBadgeCount(count: number): string | null {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const digits = new Intl.NumberFormat("fa-IR", { useGrouping: false });
+  return count > 99 ? `${digits.format(99)}+` : digits.format(count);
+}
+
+/** What a screen reader hears for a badge, e.g. "۳ اعلان خوانده‌نشده". */
+export function badgeLabel(count: number): string {
+  return `${new Intl.NumberFormat("fa-IR").format(count)} اعلان خوانده‌نشده`;
 }
