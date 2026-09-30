@@ -339,8 +339,8 @@ applicable rule attributed to the day) or `VALID` (assignments and no finding), 
 **`VALID` means: "no violation was found among the currently implemented and applicable
 validators."** It does not mean the day is fully staffed or fully correct: staffing minimum /
 maximum requirements are not defined yet (D44), so nothing about staffing is checked. The wording
-is therefore neutral, «بدون ایراد», and the explanatory text says that staffing is not checked yet
-(«در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.»). No text may
+is therefore neutral, «بدون مغایرت» (amended by D51; Phase 7a used «بدون ایراد»), and the
+explanatory text says that staffing is not checked yet. No text may
 imply fully staffed, complete, approved or ready for finalization; a unit test guards the label
 and description. When staffing validators are added, `VALID` includes them without any change to
 the meaning.
@@ -503,3 +503,191 @@ Enforced in `application/schedules/edit-assignments.ts` and
   error and no connection. No browser alerts.
 
 Enforced in `features/schedule-editing/` and `domain/preferences/preference-fit.ts`.
+
+## Schedule UI refinement decisions
+
+Phase 7c. Paths are relative to `src/`. Presentation only: no schema change, no migration, and no
+change to the domain, application or infrastructure layers; every business rule above (D39–D50)
+is unchanged.
+
+### D51 · VALID wording (amends D40's words, not its meaning)
+
+«بدون ایراد» reads as "flawless", a quality of the day, which leans towards "correct". VALID is
+now worded as the result of a check: «بدون مغایرت» in compact places (cell accessible name,
+badges, legend, month totals) and «مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده
+نشد. تأمین نفرات هنوز بررسی نمی‌شود.» in the day detail. The legend carries the caveat once for
+the month. The meaning stays D40's exactly: no violation among the implemented, applicable
+validators; nothing about staffing. The unit test that guards D40 now pins the new words and also
+rejects «ایراد», «درست» and «صحیح».
+Enforced in `features/schedule-review/presentation.ts`.
+
+### D52 · Schedule page hierarchy
+
+- One schedule header replaces the page title, the summary card and the calendar's own heading.
+  Its `h1` names the department (a quiet first line) and the month (the focal line), between the
+  previous / next calendar-month links (D39's only month navigation). Beside it: the period range,
+  the lifecycle status, the preference-window state («ترجیحات: …») and the editing mode («ویرایش
+  شیفت‌ها» / «فقط مشاهده»).
+- The header holds the single next action of the month (open or close preference collection).
+  Creating another month is a quiet secondary control, shown only when `canCreate`; months that
+  already have a schedule stay disabled in its dialog (D18, D30).
+- A month without a schedule keeps the same header («بدون برنامه») and its body says
+  «برای این ماه هنوز برنامه‌ای ایجاد نشده است.», what creating does, and either the create
+  action (preselected to that month) or who may create it.
+- Lifecycle badges have one icon shape per status; only APPROVED uses a check (and the valid
+  tone), RETURNED uses the attention tone. An open preference window uses the new
+  `status-active` token, never the health-valid one: "open" is not "correct".
+- Preferences and roster follow the calendar as two plain sections. The roster counts the Head
+  Nurse with everyone («۴ نفر», «۳ پرستار، ۱ سرپرستار»); the Head Nurse remains a schedulable
+  roster member everywhere (D48).
+- No route `loading.tsx`: it streams the page, so a denied or unknown department would answer 200
+  instead of 404 (D26, D46), and a `?day=` step could swap the open day for a skeleton. Pending
+  feedback is per link instead (`useLinkStatus` on day cells and previous / next day). A route
+  `error.tsx` says in Persian that loading failed, with retry, and never shows the error.
+
+Enforced in `features/schedule/schedule-header.tsx`, `features/schedule/status-presentation.ts`
+and `app/(app)/departments/[code]/schedule/`.
+
+### D53 · Calendar emphasis and density
+
+- Quiet by default, loud on exceptions. A VALID cell has no tint and no colored edge, only a small
+  check. A NEEDS_ATTENTION cell is tinted, outlined and carries an icon + count badge. An
+  UNPLANNED cell is muted («بدون شیفت» from `md` up). Every state still has its own icon shape and
+  is part of the cell's accessible name (D40).
+- The cell's content is coverage per period (M, E, N; ME counted in M and E, D42), shown from `md`
+  up as the code (text color only) over the count. No nurse names (D47).
+- Hairline grid; inert neighbouring-month days are muted cells so every week row stays whole
+  (D39). The open day has a selection ring; today keeps `aria-current="date"` and a filled day
+  number.
+- Above the calendar, one summary row: days per state (attention first) and a link to every day
+  that needs attention (the same aggregates; no extra query). On phones this answers "which days
+  need me" without scanning the grid, where cells show only the day number and a health mark.
+- The legend is one line plus the VALID caveat. Its holiday entry appears only when the month has
+  a holiday; nothing implies holiday data exists while none is connected (D41).
+
+Enforced in `features/schedule-review/month-calendar.tsx` and `presentation.ts`.
+
+### D54 · Day surface layout and findings
+
+- Desktop (`lg`+): a side column (the lock reason, findings, related findings, coverage) next to
+  the main column (the 7b editing list, or the read-only shifts). Phones: the same order stacked,
+  full screen (D45). The dialog opens with focus on its title (the date), not on a header button;
+  previous / next day and close stay in the sticky header (D50).
+- Only a day with findings shows the «نیاز به بررسی» heading. A VALID or UNPLANNED day shows one
+  quiet line with its D40 / D51 description.
+- Each finding reads: rule and severity, who (in the editor, each name links to that nurse's
+  row), when and which shift (e.g. N on the night → M the next day, with shift chips), the full
+  Persian sentence (D43), and how to resolve it. Resolution wording is exhaustive over rule codes
+  (`findingResolution`), like titles and messages. A nurse involved in a finding has an accented
+  row and the text «نیاز به بررسی».
+- Coverage shows once per day (three periods, "from long shift" counts) with the staffing status
+  once when it is the same for every period (D44).
+- Editing behavior (D48–D50: one-step controls, keyboard, range, undo, conflict and failure
+  messages) is unchanged; only its presentation is refined (segmented shift controls that fill
+  the row on phones, a horizontally scrolling filter row on phones, shift dots on filters).
+
+Enforced in `features/schedule-review/day-detail.tsx` and `features/schedule-editing/day-editor.tsx`.
+
+### D55 · Shared schedule UI primitives
+
+`components/ui/badge.tsx` (semantic tones on tokens only), `section-header.tsx`,
+`empty-state.tsx`, `metadata.tsx`; `features/shifts/shift-chip.tsx` (code text always rendered,
+`dir="ltr"`, solid or soft); `HealthBadge` / `HealthIcon`; `ScheduleStatusBadge` /
+`PreferenceStateBadge`. Shift colors stay in the `shift-*` tokens and `features/shifts/catalog.ts`
+(D42), which now also names each shift's text-only (`accentClass`) and marker (`dotClass`)
+classes. The only new token is `status-active` (light and dark). Motion: a 150 ms fade on dialog
+open under `motion-safe`, nothing else.
+
+### D56 · Color system and visual tone
+
+The UI had read as black, white and gray: a near-black primary, a gray shell, and gray status
+badges. The palette is now a small token set in `globals.css`, with one job per color. Components
+use only these names; no component uses literal palette colors.
+
+- **Identity.**
+  - Navy `--sidebar*` is the navigation surface: the desktop sidebar and the phone header.
+  - Brand blue `--primary` / `--ring` marks what is interactive, selected or current: primary
+    buttons, the active navigation item, the open day, today, the active editor filter, focus.
+  - `--brand-soft*` / `--accent` are blue tints for hover, icon wells, the schedule header panel
+    and the calendar's weekday row.
+  - The work area is a cool `--canvas` behind white cards, which get a subtle `shadow-xs`.
+  - Neutrals (`--foreground`, `--muted*`, `--border`, `--input`) are tinted toward the same hue.
+- **Lifecycle status** (`--status-info|review|success|warning|active`) is kept apart from the
+  day-review health hues. Every status has its own tone and icon, and the unit tests pin both:
+
+  | Status    | Tone             |
+  | --------- | ---------------- |
+  | DRAFT     | muted            |
+  | PLANNING  | info blue        |
+  | FINALIZED | solid brand blue |
+  | SUBMITTED | review violet    |
+  | RETURNED  | warning orange   |
+  | APPROVED  | success green    |
+  | REVISING  | attention amber  |
+
+  Only APPROVED is green. An open preference window is `active` (cyan), not success.
+
+- **Calendar** keeps D53's emphasis rule:
+  - VALID stays quiet: a small, lighter green check and no fill.
+  - NEEDS_ATTENTION stays the only warm, tinted, outlined and counted cell.
+  - UNPLANNED is a cool gray wash.
+  - The open day is outlined in brand blue.
+- **Shifts** are one cool family, so a busy day reads calm and no shift borrows the attention
+  amber that marks findings:
+
+  | Shift | Color    |
+  | ----- | -------- |
+  | M     | sky blue |
+  | E     | teal     |
+  | N     | indigo   |
+  | ME    | plum     |
+
+  Codes are always shown (D42). The catalog adds `softClass`, a light wash used for the coverage
+  tiles.
+
+- **Editor states**:
+  - A selected shift is a filled chip with a ring.
+  - "No shift" selected is a dashed gray control.
+  - A matching preference is green text with a ✓; a differing one is orange text with a ≠.
+  - A flagged row keeps the amber start edge and tint.
+  - The row with focus gets a blue start edge and tint.
+  - The disabled range control is dashed and gray.
+- **Buttons** form one hierarchy: `default` (brand blue), `secondary` (tint), `outline`, `ghost`,
+  and `destructive`, which is now a variant rather than a class override.
+- **Primitives**:
+  - `IconWell`: the one place section headings get color, with brand, attention, danger or
+    muted tones.
+  - `Callout`: info, attention and muted notes.
+  - `EmptyState` gets a soft brand tint, or a danger tint for the load error.
+- **Checks.** Text tokens meet 4.5:1 on their surfaces, in light and dark; the ratios are
+  computed from the token values. axe-core finds no contrast issues on the schedule, day, empty
+  and home screens, with one exception: the inert, `aria-hidden` neighbouring-month day numbers,
+  which stay deliberately subdued (D39). No structure, route, rule, permission or wording
+  changed.
+
+### D57 · Login identity, shell cohesion and final schedule finish
+
+- **Login** is a split layout from `lg`: the navy brand panel (the sidebar surface with two soft
+  blue glows and a faint dot grid) at the inline start, the form card on the canvas beside it.
+  The panel carries the shared `BrandMark`, the product name, «ویژه کادر پرستاری بیمارستان»,
+  three factual lines on what the product does, and the four shift codes in their colors. It has
+  no links and no calls to action, and its text is plain paragraphs, so the form's `h1` stays the
+  page's only heading. Phones get a compact band (mark, name, one line) with the card overlapping
+  its lower edge. No hospital name is stored anywhere, so none is invented; there is no image
+  asset, so none is added. The card has a brand top edge, an icon well, a one-line instruction,
+  48px fields and CTA, an icon on the error, and the help text as its footer. Auth is unchanged.
+- **Shell.** The sidebar's brand row and the desktop top bar share one height (64px) and one
+  divider line. The top bar is a light brand tint over a canvas whose top picks up the same
+  tint (`bg-canvas-wash`), so the navy sidebar sits next to one light brand zone rather than a
+  plain white page. The bar shows today (Tehran) at the start and the signed-in user (initials,
+  name, roles) with sign-out at the end, padded to the content's gutter. The user card moved
+  from the sidebar foot to the bar, so identity appears once. Phones keep the navy header.
+- **Schedule finish.**
+  - The header is a white panel whose status line sits in a brand-tinted strip below a divider.
+    A hairline separates the primary action from the secondary one.
+  - Calendar: an ordinary day's hover is a blue tint and hairline. An attention day deepens its
+    own amber instead. The open day keeps the blue ring and tint and its number turns blue.
+    Neighbouring-month days are faintly hatched (`bg-inert-hatch`). The grid gets a soft
+    shadow.
+  - VALID stays quiet and NEEDS_ATTENTION stays the loudest state.
+- Presentation only: no route, rule, permission, query or wording used by the workflow changed.

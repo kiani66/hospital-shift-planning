@@ -1,45 +1,34 @@
 import { CalendarPlus } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { MonthHeader, type MonthLink } from "./month-calendar";
+import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * A calendar month that has no schedule. Navigation still works from here
- * (Previous / Next are calendar months, not schedule records); `action` is
- * the create-month control, given only when the Head Nurse may create.
+ * A calendar month that has no schedule. It stays the selected month (the
+ * header above still navigates by calendar month, D39); `action` is the
+ * create-month control, preselected to this month, given only when the Head
+ * Nurse may create. Without it the state still says why nothing is shown.
  */
 export function EmptyMonth({
   label,
-  previous,
-  next,
   action,
 }: {
   label: string;
-  previous: MonthLink | null;
-  next: MonthLink | null;
   action: ReactNode | null;
 }) {
   return (
-    <section
-      aria-labelledby="month-calendar-heading"
-      className="flex flex-col gap-4 rounded-lg border bg-card p-3 sm:p-5"
-    >
-      <MonthHeader
-        label={label}
-        headingId="month-calendar-heading"
-        previous={previous}
-        next={next}
+    <section aria-label={`برنامه ${label}`}>
+      <EmptyState
+        icon={<CalendarPlus aria-hidden="true" />}
+        headingLevel={2}
+        title="برای این ماه هنوز برنامه‌ای ایجاد نشده است."
+        description={
+          action
+            ? `با ایجاد برنامه ${label}، فهرست پرسنل همین ماه ثبت می‌شود و می‌توانید ترجیحات را جمع کنید و شیفت‌ها را بچینید. هر بخش برای هر ماه فقط یک برنامه دارد.`
+            : "ایجاد برنامه ماهانه فقط برای سرپرستار بخش ممکن است."
+        }
+        action={action}
       />
-      <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed px-6 py-12 text-center">
-        <CalendarPlus
-          aria-hidden="true"
-          className="size-10 text-muted-foreground"
-        />
-        <p className="text-lg font-semibold">
-          برای این ماه هنوز برنامه‌ای ایجاد نشده است.
-        </p>
-        {action}
-      </div>
     </section>
   );
 }

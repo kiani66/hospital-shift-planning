@@ -69,7 +69,7 @@ test.describe("Head Nurse schedule editing", () => {
     await page.goto(monthUrl(department));
     // 6 Aban is unplanned: open it from the calendar.
     await page
-      .getByRole("region", { name: "مرور ماهانه" })
+      .getByRole("region", { name: "تقویم ماه" })
       .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، برنامه‌ریزی‌نشده/ })
       .click();
     const dialog = dayDialog(page);
@@ -126,7 +126,7 @@ test.describe("Head Nurse schedule editing", () => {
     // The calendar behind reflects the edits once the day is closed.
     await dialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
     await expect(
-      page.getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، بدون ایراد/ }),
+      page.getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، بدون مغایرت/ }),
     ).toBeVisible();
 
     // Persisted: a reload shows the same.
@@ -274,7 +274,7 @@ test.describe("Head Nurse schedule editing", () => {
     const nurse2 = department.nurseNames[1]!;
     await page.goto(monthUrl(department));
     await page
-      .getByRole("region", { name: "مرور ماهانه" })
+      .getByRole("region", { name: "تقویم ماه" })
       .getByRole("link", { name: /^شنبه ۲ آبان ۱۴۰۵/ })
       .click();
     const dialog = dayDialog(page);

@@ -19,11 +19,15 @@ const expectNoHorizontalOverflow = async (page: Page, step: string) => {
   expect(overflow, step).toBeLessThanOrEqual(0);
 };
 
+const main = (page: Page) => page.locator("main");
 const calendar = (page: Page) =>
-  page.getByRole("region", { name: "مرور ماهانه" });
+  page.getByRole("region", { name: "تقویم ماه" });
 const dayLink = (page: Page, name: RegExp | string) =>
   calendar(page).getByRole("link", { name });
 const dayDialog = (page: Page) => page.getByRole("dialog");
+/** The page heading names the department and, as its focal line, the month. */
+const monthHeading = (page: Page, label: string) =>
+  main(page).getByRole("heading", { level: 1, name: new RegExp(`${label}$`) });
 
 test.describe("Head Nurse monthly review (read-only)", () => {
   let department: ReviewDepartment;
@@ -41,7 +45,10 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await page.goto(pageOf(department));
     const region = calendar(page);
     await expect(region).toBeVisible();
-    await expect(region.getByText("آبان ۱۴۰۵", { exact: true })).toBeVisible();
+    await expect(monthHeading(page, "آبان ۱۴۰۵")).toBeVisible();
+    await expect(monthHeading(page, "آبان ۱۴۰۵")).toContainText(
+      department.name,
+    );
 
     // Aban 1405 starts on a Friday: six weeks of seven columns.
     const rows = region.locator("tbody tr");
@@ -57,10 +64,9 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(rows.first().locator("td a")).toHaveCount(1);
 
     // Health is in the accessible name (text, not color).
-    await expect(dayLink(page, "شنبه ۲ آبان ۱۴۰۵، بدون ایراد")).toHaveAttribute(
-      "data-health",
-      "VALID",
-    );
+    await expect(
+      dayLink(page, "شنبه ۲ آبان ۱۴۰۵، بدون مغایرت"),
+    ).toHaveAttribute("data-health", "VALID");
     await expect(
       dayLink(page, "دوشنبه ۴ آبان ۱۴۰۵، نیاز به بررسی (۱ مورد)"),
     ).toHaveAttribute("data-health", "NEEDS_ATTENTION");
@@ -68,12 +74,45 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       dayLink(page, "جمعه ۱ آبان ۱۴۰۵، برنامه‌ریزی‌نشده"),
     ).toHaveAttribute("data-health", "UNPLANNED");
 
-    const totals = region.getByRole("list", {
+    const totals = main(page).getByRole("list", {
       name: "خلاصه وضعیت روزهای ماه",
     });
-    await expect(totals).toContainText("بدون ایراد: ۲ روز");
+    await expect(totals).toContainText("بدون مغایرت: ۲ روز");
     await expect(totals).toContainText("نیاز به بررسی: ۱ روز");
     await expect(totals).toContainText("برنامه‌ریزی‌نشده: ۲۷ روز");
+
+    // Quiet by default, loud on exceptions: a VALID day is not tinted or
+    // outlined; the day needing attention is (its count is in its name).
+    const style = (name: string) =>
+      dayLink(page, new RegExp(`^${name}`)).evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { background: s.backgroundColor, shadow: s.boxShadow };
+      });
+    const valid = await style("شنبه ۲ آبان ۱۴۰۵");
+    const attention = await style("دوشنبه ۴ آبان ۱۴۰۵");
+    expect(valid.background).toBe("rgba(0, 0, 0, 0)");
+    expect(valid.shadow).toBe("none");
+    expect(attention.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(attention.shadow).not.toBe("none");
+
+    // "Which days need me": one link per attention day, to that day.
+    const attentionDays = main(page).getByRole("navigation", {
+      name: "روزهای نیازمند بررسی",
+    });
+    await expect(attentionDays.getByRole("link")).toHaveCount(1);
+    await expect(attentionDays.getByRole("link")).toHaveAttribute(
+      "href",
+      /day=2026-10-26$/,
+    );
+
+    // The header: lifecycle status, preference window, editing mode.
+    const header = main(page).getByRole("region", { name: /آبان ۱۴۰۵$/ });
+    await expect(header).toContainText("پیش‌نویس");
+    await expect(header).toContainText("ترجیحات:باز نشده");
+    await expect(header).toContainText("ویرایش شیفت‌ها");
+    await expect(
+      header.getByRole("button", { name: "باز کردن ثبت ترجیحات" }),
+    ).toBeVisible();
 
     // No nurse names in the month overview; Jalali only.
     for (const name of department.nurseNames)
@@ -92,10 +131,28 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     const dialog = dayDialog(page);
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveAccessibleName("دوشنبه ۴ آبان ۱۴۰۵");
+    // Focus starts on the date (the dialog's name), not on a header button.
+    await expect(
+      dialog.getByRole("heading", { name: "دوشنبه ۴ آبان ۱۴۰۵" }),
+    ).toBeFocused();
     await expect(dialog.getByText("نیاز به بررسی").first()).toBeVisible();
     await expect(dialog.getByText("مانع نهایی‌سازی")).toBeVisible();
     await expect(dialog).toContainText(
       `«${department.nurseNames[0]}» در یکشنبه ۳ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (دوشنبه ۴ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`,
+    );
+    // Actionable: how to resolve it, and who, linked to their row.
+    await expect(dialog).toContainText(
+      "برای رفع: شیفت صبح روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.",
+    );
+    const flaggedRow = dialog.locator("li[data-nurse-row][data-flagged]");
+    await expect(flaggedRow).toHaveCount(1);
+    await expect(flaggedRow).toContainText(department.nurseNames[0]!);
+    const who = dialog
+      .getByRole("region", { name: /نیاز به بررسی/ })
+      .getByRole("link", { name: department.nurseNames[0]! });
+    await expect(who).toHaveAttribute(
+      "href",
+      `#${await flaggedRow.getAttribute("id")}`,
     );
     // The four shifts, each a way to list who works it (Phase 7b editor).
     const shifts = dialog.getByRole("group", { name: "نمایش پرسنل" });
@@ -154,16 +211,21 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(nurse2).toContainText("ترجیح: شب");
     await expect(nurse2).toContainText("متفاوت با ترجیح");
     // ME counts toward Morning coverage; staffing numbers are not invented.
-    await expect(dialog).toContainText(
-      "پوشش صبح: ۲ نفر (۱ نفر از شیفت طولانی)",
+    const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
+    await expect(coverage.locator('[data-period="M"]')).toHaveText(
+      /پوشش صبح\s*۲\s*نفر\s*۱ نفر از شیفت طولانی/,
     );
     await expect(
-      dialog.getByText("حداقل و حداکثر نفرات تعریف نشده است").first(),
-    ).toBeVisible();
-    // VALID is cautious: no violation found, staffing is not checked yet.
+      dialog.getByText("حداقل و حداکثر نفرات تعریف نشده است"),
+    ).toHaveCount(1);
+    // VALID is cautious: no violation found, staffing is not checked yet,
+    // and a day without findings never opens under "needs attention".
     await expect(dialog).toContainText(
-      "در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.",
+      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تأمین نفرات هنوز بررسی نمی‌شود.",
     );
+    await expect(
+      dialog.getByRole("heading", { name: /نیاز به بررسی/ }),
+    ).toHaveCount(0);
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
@@ -222,11 +284,11 @@ test.describe("Head Nurse monthly review (read-only)", () => {
   }) => {
     // Only Aban and Azar 1405 have schedules; Mehr and Dey do not.
     await page.goto(pageOf(department));
-    const region = calendar(page);
+    const region = main(page);
     const empty = region.getByText(
       "برای این ماه هنوز برنامه‌ای ایجاد نشده است.",
     );
-    const month = (label: string) => region.getByText(label, { exact: true });
+    const month = (label: string) => monthHeading(page, label);
 
     // Previous of Aban is Mehr: an empty month, not "no previous schedule".
     await region.getByRole("link", { name: "ماه قبل: مهر ۱۴۰۵" }).click();
@@ -277,10 +339,10 @@ test.describe("Head Nurse monthly review (read-only)", () => {
 
   test("crosses the Jalali year in both directions", async ({ page }) => {
     await page.goto(`/departments/${department.code}/schedule?month=1405-01`);
-    const region = calendar(page);
+    const region = main(page);
     await region.getByRole("link", { name: "ماه قبل: اسفند ۱۴۰۴" }).click();
     await expect(page).toHaveURL(/[?&]month=1404-12$/);
-    await expect(region.getByText("اسفند ۱۴۰۴", { exact: true })).toBeVisible();
+    await expect(monthHeading(page, "اسفند ۱۴۰۴")).toBeVisible();
     await region.getByRole("link", { name: "ماه بعد: فروردین ۱۴۰۵" }).click();
     await expect(page).toHaveURL(/[?&]month=1405-01$/);
   });
@@ -289,7 +351,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     page,
   }) => {
     await page.goto(`/departments/${department.code}/schedule?month=1405-10`);
-    const region = calendar(page);
+    const region = main(page);
     await region.getByRole("button", { name: "ایجاد برنامه ماهانه" }).click();
     const dialog = page.getByRole("dialog", { name: "ایجاد برنامه ماهانه" });
     // Preselected: the month on screen, not the usual "next month" suggestion.
@@ -303,11 +365,15 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(
       region.getByText("برای این ماه هنوز برنامه‌ای ایجاد نشده است."),
     ).toHaveCount(0);
-    await expect(region.getByText("دی ۱۴۰۵", { exact: true })).toBeVisible();
+    await expect(monthHeading(page, "دی ۱۴۰۵")).toBeVisible();
     await expect(
       region.getByRole("list", { name: "خلاصه وضعیت روزهای ماه" }),
     ).toContainText("برنامه‌ریزی‌نشده: ۳۰ روز");
     await expect(region.locator("tbody a")).toHaveCount(30);
+    // A schedule with no assignment yet says so, and how to start.
+    await expect(region.getByRole("note")).toContainText(
+      "هنوز شیفتی در این برنامه ثبت نشده است",
+    );
   });
 
   test("keeps a day open and closes back to the month URL it came from", async ({
@@ -334,9 +400,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await page.goto(
       `/departments/${department.code}/schedule?month=1405-13&schedule=${department.abanId}`,
     );
-    await expect(
-      calendar(page).getByText("آبان ۱۴۰۵", { exact: true }),
-    ).toBeVisible();
+    await expect(monthHeading(page, "آبان ۱۴۰۵")).toBeVisible();
     await expect(calendar(page).locator("tbody a")).toHaveCount(30);
   });
 });

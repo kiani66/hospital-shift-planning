@@ -4,103 +4,174 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens (shadcn/ui "neutral" base + project tokens).
+ * Design tokens (shadcn/ui base, re-tinted to the product palette, D56).
  * RTL: the document is dir="rtl". Use logical utilities only
  * (ms-/me-, ps-/pe-, start-/end-, text-start/end, border-s/e, rounded-s/e);
  * physical ones (ml-, pr-, left-, text-right, ...) are rejected by ESLint.
+ *
+ * Palette, one job per color (components use these names, never literal
+ * palette colors):
+ *   navy        --sidebar*: the product's identity surface (navigation).
+ *   blue        --primary / --ring: what is interactive, selected or current.
+ *   blue tint   --brand-soft*, --accent: tinted surfaces, hover, icon wells.
+ *   cool gray   --canvas, --muted*, --border: the calm work area.
+ *   semantic    --status-* (lifecycle), --health-* (day review), --holiday,
+ *               --destructive, each always paired with an icon and text.
+ *   shifts      --shift-*: one related cool family, always with the code.
  */
 :root {
   --radius: 0.625rem;
+  /* The page behind cards; cards, inputs and dialogs stay --background. */
+  --canvas: oklch(0.975 0.006 255);
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.22 0.03 264);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.22 0.03 264);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.22 0.03 264);
+  --primary: oklch(0.49 0.17 262);
+  --primary-foreground: oklch(0.99 0.005 255);
+  --secondary: oklch(0.95 0.025 258);
+  --secondary-foreground: oklch(0.36 0.12 263);
+  --muted: oklch(0.962 0.008 256);
+  --muted-foreground: oklch(0.48 0.028 260);
+  --accent: oklch(0.955 0.02 258);
+  --accent-foreground: oklch(0.3 0.08 263);
+  --destructive: oklch(0.56 0.21 25);
+  --border: oklch(0.905 0.014 257);
+  --input: oklch(0.8 0.025 258);
+  --ring: oklch(0.58 0.16 260);
 
-  /* Shift types. Always paired with the shift code text; never color alone. */
-  --shift-m: oklch(0.93 0.08 85);
-  --shift-m-foreground: oklch(0.38 0.09 70);
-  --shift-e: oklch(0.92 0.06 235);
-  --shift-e-foreground: oklch(0.38 0.1 245);
-  --shift-n: oklch(0.88 0.06 280);
-  --shift-n-foreground: oklch(0.33 0.12 280);
-  --shift-me: oklch(0.91 0.07 175);
-  --shift-me-foreground: oklch(0.36 0.07 180);
-  --shift-off: oklch(0.96 0 0);
-  --shift-off-foreground: oklch(0.45 0 0);
+  /* Brand tint: icon wells, the page header, selected surfaces. */
+  --brand-soft: oklch(0.955 0.024 258);
+  --brand-soft-foreground: oklch(0.4 0.14 263);
+
+  /* Navigation (the navy identity surface). */
+  --sidebar: oklch(0.27 0.065 264);
+  --sidebar-foreground: oklch(0.95 0.012 258);
+  --sidebar-muted-foreground: oklch(0.77 0.035 260);
+  --sidebar-primary: oklch(0.54 0.17 260);
+  --sidebar-primary-foreground: oklch(0.995 0 0);
+  --sidebar-accent: oklch(0.34 0.07 264);
+  --sidebar-border: oklch(0.38 0.06 264);
+  --sidebar-ring: oklch(0.78 0.11 250);
+
+  /*
+   * Shift types: one cool family (blue, teal, indigo, plum), so a busy day
+   * reads calm and no shift borrows the attention amber. Always paired with
+   * the shift code text; never color alone.
+   */
+  --shift-m: oklch(0.925 0.045 238);
+  --shift-m-foreground: oklch(0.43 0.13 245);
+  --shift-e: oklch(0.925 0.05 185);
+  --shift-e-foreground: oklch(0.42 0.075 192);
+  --shift-n: oklch(0.87 0.07 285);
+  --shift-n-foreground: oklch(0.37 0.16 285);
+  --shift-me: oklch(0.92 0.045 330);
+  --shift-me-foreground: oklch(0.43 0.12 335);
+  --shift-off: oklch(0.96 0.005 256);
+  --shift-off-foreground: oklch(0.45 0.02 260);
 
   /* Schedule rule violations (e.g. night-rest). */
-  --violation: oklch(0.577 0.245 27.325);
+  --violation: oklch(0.56 0.21 25);
 
   /*
    * Day review health (DayHealth) and official holidays. Semantic names: the
    * review maps states to these tokens, so a color changes here only. Always
    * paired with an icon and text; never color alone.
    */
-  --health-valid: oklch(0.6 0.13 160);
-  --health-valid-foreground: oklch(0.4 0.09 160);
-  --health-attention: oklch(0.72 0.16 65);
-  --health-attention-foreground: oklch(0.42 0.11 55);
-  --health-unplanned: oklch(0.7 0 0);
-  --health-unplanned-foreground: oklch(0.45 0 0);
-  --holiday: oklch(0.6 0.17 350);
-  --holiday-foreground: oklch(0.45 0.15 350);
+  --health-valid: oklch(0.62 0.12 162);
+  --health-valid-foreground: oklch(0.43 0.09 162);
+  --health-attention: oklch(0.72 0.16 60);
+  --health-attention-foreground: oklch(0.47 0.13 52);
+  --health-unplanned: oklch(0.7 0.02 258);
+  --health-unplanned-foreground: oklch(0.47 0.025 260);
+  --holiday: oklch(0.62 0.17 355);
+  --holiday-foreground: oklch(0.47 0.16 355);
+
+  /*
+   * Schedule lifecycle and process states (badges). Deliberately apart from
+   * the health hues: a status says where the month is in its workflow, not
+   * whether its shifts are correct. Only APPROVED is success green.
+   *   active: a process that is running and accepts input (preferences open).
+   */
+  --status-info: oklch(0.6 0.13 250);
+  --status-info-foreground: oklch(0.44 0.13 255);
+  --status-review: oklch(0.58 0.16 300);
+  --status-review-foreground: oklch(0.45 0.16 300);
+  --status-success: oklch(0.62 0.13 152);
+  --status-success-foreground: oklch(0.42 0.1 152);
+  --status-warning: oklch(0.68 0.16 45);
+  --status-warning-foreground: oklch(0.49 0.15 40);
+  --status-active: oklch(0.64 0.1 205);
+  --status-active-foreground: oklch(0.43 0.08 212);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --canvas: oklch(0.16 0.02 264);
+  --background: oklch(0.2 0.025 264);
+  --foreground: oklch(0.96 0.01 258);
+  --card: oklch(0.22 0.028 264);
+  --card-foreground: oklch(0.96 0.01 258);
+  --popover: oklch(0.22 0.028 264);
+  --popover-foreground: oklch(0.96 0.01 258);
+  --primary: oklch(0.68 0.14 258);
+  --primary-foreground: oklch(0.18 0.04 264);
+  --secondary: oklch(0.3 0.05 262);
+  --secondary-foreground: oklch(0.92 0.03 258);
+  --muted: oklch(0.27 0.025 262);
+  --muted-foreground: oklch(0.74 0.03 258);
+  --accent: oklch(0.3 0.045 262);
+  --accent-foreground: oklch(0.96 0.01 258);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 17%);
+  --ring: oklch(0.7 0.13 255);
 
-  --shift-m: oklch(0.4 0.08 75);
-  --shift-m-foreground: oklch(0.95 0.05 85);
-  --shift-e: oklch(0.38 0.08 240);
-  --shift-e-foreground: oklch(0.94 0.04 235);
-  --shift-n: oklch(0.35 0.1 280);
-  --shift-n-foreground: oklch(0.93 0.04 280);
-  --shift-me: oklch(0.38 0.07 178);
-  --shift-me-foreground: oklch(0.94 0.05 175);
-  --shift-off: oklch(0.27 0 0);
-  --shift-off-foreground: oklch(0.75 0 0);
+  --brand-soft: oklch(0.3 0.06 262);
+  --brand-soft-foreground: oklch(0.88 0.06 258);
 
-  --violation: oklch(0.704 0.191 22.216);
+  --sidebar: oklch(0.19 0.045 264);
+  --sidebar-foreground: oklch(0.95 0.012 258);
+  --sidebar-muted-foreground: oklch(0.74 0.035 260);
+  --sidebar-primary: oklch(0.55 0.16 260);
+  --sidebar-primary-foreground: oklch(0.995 0 0);
+  --sidebar-accent: oklch(0.27 0.055 264);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.78 0.11 250);
 
-  --health-valid: oklch(0.7 0.13 160);
-  --health-valid-foreground: oklch(0.85 0.09 160);
-  --health-attention: oklch(0.78 0.15 70);
-  --health-attention-foreground: oklch(0.88 0.1 75);
-  --health-unplanned: oklch(0.6 0 0);
-  --health-unplanned-foreground: oklch(0.78 0 0);
-  --holiday: oklch(0.72 0.15 350);
-  --holiday-foreground: oklch(0.85 0.09 350);
+  --shift-m: oklch(0.36 0.08 242);
+  --shift-m-foreground: oklch(0.9 0.06 238);
+  --shift-e: oklch(0.36 0.06 190);
+  --shift-e-foreground: oklch(0.9 0.06 185);
+  --shift-n: oklch(0.34 0.1 282);
+  --shift-n-foreground: oklch(0.9 0.05 282);
+  --shift-me: oklch(0.36 0.07 332);
+  --shift-me-foreground: oklch(0.9 0.05 330);
+  --shift-off: oklch(0.27 0.02 262);
+  --shift-off-foreground: oklch(0.75 0.02 258);
+
+  --violation: oklch(0.7 0.19 22);
+
+  --health-valid: oklch(0.7 0.12 162);
+  --health-valid-foreground: oklch(0.85 0.09 162);
+  --health-attention: oklch(0.78 0.15 68);
+  --health-attention-foreground: oklch(0.88 0.1 72);
+  --health-unplanned: oklch(0.6 0.02 258);
+  --health-unplanned-foreground: oklch(0.78 0.02 258);
+  --holiday: oklch(0.72 0.15 355);
+  --holiday-foreground: oklch(0.85 0.09 355);
+
+  --status-info: oklch(0.7 0.12 250);
+  --status-info-foreground: oklch(0.86 0.07 250);
+  --status-review: oklch(0.7 0.13 300);
+  --status-review-foreground: oklch(0.87 0.07 300);
+  --status-success: oklch(0.72 0.13 152);
+  --status-success-foreground: oklch(0.86 0.09 152);
+  --status-warning: oklch(0.76 0.14 50);
+  --status-warning-foreground: oklch(0.88 0.09 55);
+  --status-active: oklch(0.72 0.1 205);
+  --status-active-foreground: oklch(0.87 0.06 205);
 }
 
 @theme inline {
@@ -149,6 +220,80 @@
   --color-health-unplanned-foreground: var(--health-unplanned-foreground);
   --color-holiday: var(--holiday);
   --color-holiday-foreground: var(--holiday-foreground);
+  --color-status-active: var(--status-active);
+  --color-status-active-foreground: var(--status-active-foreground);
+  --color-status-info: var(--status-info);
+  --color-status-info-foreground: var(--status-info-foreground);
+  --color-status-review: var(--status-review);
+  --color-status-review-foreground: var(--status-review-foreground);
+  --color-status-success: var(--status-success);
+  --color-status-success-foreground: var(--status-success-foreground);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+
+  --color-canvas: var(--canvas);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-foreground: var(--brand-soft-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/*
+ * The navy identity surface with depth: the sidebar color lit by two soft
+ * brand-blue glows (login brand panel). Direction-neutral decoration.
+ */
+@utility bg-brand-panel {
+  background:
+    radial-gradient(
+      60rem 36rem at 85% -10%,
+      color-mix(in oklch, var(--sidebar-primary) 38%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      40rem 30rem at 0% 110%,
+      color-mix(in oklch, var(--sidebar-primary) 22%, transparent),
+      transparent 60%
+    ),
+    var(--sidebar);
+}
+
+/* A faint dot grid on the navy surface; pair with a mask to fade it out. */
+@utility bg-brand-dots {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--sidebar-foreground) 11%, transparent) 1px,
+    transparent 1.5px
+  );
+  background-size: 22px 22px;
+}
+
+/*
+ * The work area's light brand wash: the top of the canvas picks up the
+ * brand tint next to the navy sidebar, then settles into the calm canvas.
+ */
+@utility bg-canvas-wash {
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--brand-soft) 70%, var(--canvas)),
+      var(--canvas) 18rem
+    ),
+    var(--canvas);
+}
+
+/* Days outside the period: an inert, faintly hatched cell. */
+@utility bg-inert-hatch {
+  background-color: var(--muted);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--border) 0 1px,
+    transparent 1px 7px
+  );
 }
 
 @layer base {
@@ -156,6 +301,6 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background font-sans text-foreground antialiased;
+    @apply bg-canvas font-sans text-foreground antialiased;
   }
 }

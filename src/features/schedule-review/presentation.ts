@@ -3,7 +3,7 @@ import type { RuleCode } from "@/domain/rules/diagnostic";
 import type { StaffingBounds, StaffingStatus } from "@/domain/rules/staffing";
 import type { DayHealth } from "@/domain/schedule/day-health";
 import type { IsoDate } from "@/domain/shared/dates";
-import type { PreferenceValue } from "@/domain/shifts/shift-type";
+import type { PreferenceValue, ShiftCode } from "@/domain/shifts/shift-type";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 
@@ -16,20 +16,25 @@ import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
  */
 
 export interface HealthPresentation {
-  /** Short label for the cell and the legend. */
+  /** Short label for the cell's accessible name, badges and the legend. */
   readonly label: string;
   /** Sentence for the day detail. */
   readonly description: string;
-  /** Token classes for the badge / legend chip. */
-  readonly badgeClass: string;
-  /** Token classes for the month cell (tint and start border). */
+  /** Badge tone (semantic `health-*` tokens through `Badge`). */
+  readonly tone: "unplanned" | "valid" | "attention";
+  /**
+   * Token classes for the month cell. Quiet by default, loud on exceptions:
+   * VALID adds nothing (no tint, no colored edge), UNPLANNED is muted, and
+   * only NEEDS_ATTENTION gets a tint and an outline.
+   */
   readonly cellClass: string;
 }
 
 /**
- * VALID is worded neutrally («بدون ایراد»): it only says that no violation was
- * found among the implemented, applicable rules. Staffing requirements are
- * not defined yet, so nothing here may imply a fully staffed, complete,
+ * VALID is worded as the result of a check («بدون مغایرت», «مغایرتی یافت
+ * نشد»; D51), not as a quality of the day: it only says that no violation
+ * was found among the implemented, applicable rules. Staffing requirements
+ * are not defined yet, so nothing here may imply a fully staffed, complete,
  * approved or finalization-ready day.
  */
 export const HEALTH_PRESENTATION: Readonly<
@@ -38,26 +43,27 @@ export const HEALTH_PRESENTATION: Readonly<
   UNPLANNED: {
     label: "برنامه‌ریزی‌نشده",
     description: "برای این روز هنوز شیفتی ثبت نشده است.",
-    badgeClass:
-      "border-health-unplanned/40 bg-health-unplanned/10 text-health-unplanned-foreground",
-    cellClass: "border-s-health-unplanned/60",
+    tone: "unplanned",
+    cellClass: "bg-health-unplanned/5",
   },
   VALID: {
-    label: "بدون ایراد",
+    label: "بدون مغایرت",
     description:
-      "در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.",
-    badgeClass:
-      "border-health-valid/40 bg-health-valid/10 text-health-valid-foreground",
-    cellClass: "border-s-health-valid bg-health-valid/5",
+      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تأمین نفرات هنوز بررسی نمی‌شود.",
+    tone: "valid",
+    cellClass: "",
   },
   NEEDS_ATTENTION: {
     label: "نیاز به بررسی",
     description: "در این روز موردی هست که باید بررسی شود.",
-    badgeClass:
-      "border-health-attention/50 bg-health-attention/10 text-health-attention-foreground",
-    cellClass: "border-s-health-attention bg-health-attention/10",
+    tone: "attention",
+    cellClass:
+      "bg-health-attention/10 shadow-[inset_0_0_0_1.5px_var(--color-health-attention)]",
   },
 };
+
+/** What VALID does and does not mean, once for the whole month (legend). */
+export const VALID_CAVEAT = `«${HEALTH_PRESENTATION.VALID.label}» یعنی در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.`;
 
 export const HOLIDAY_LABEL = "تعطیل رسمی";
 
@@ -108,6 +114,70 @@ export function findingMessage(finding: ReviewFinding): string {
 /** What the finding means for the workflow. */
 export const findingSeverityLabel = (finding: ReviewFinding) =>
   finding.blocking ? "مانع نهایی‌سازی" : "هشدار";
+
+/** One dated shift a finding is about: "شب · چهارشنبه ۶ آبان ۱۴۰۵". */
+export interface FindingFact {
+  readonly role: string;
+  readonly date: IsoDate;
+  readonly dateLabel: string;
+  readonly shift: ShiftCode | null;
+}
+
+/**
+ * The finding's when / which shift, as separate facts for a scannable line
+ * (the full sentence of `findingMessage` stays available). Exhaustive over
+ * rule codes.
+ */
+export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
+  const v = finding.violation;
+  switch (v.rule) {
+    case "NIGHT_REST":
+      return [
+        {
+          role: "شب",
+          date: v.nightDate,
+          dateLabel: day(v.nightDate),
+          shift: "N",
+        },
+        {
+          role: "روز بعد",
+          date: v.date,
+          dateLabel: day(v.date),
+          shift: v.shift,
+        },
+      ];
+    case "DUPLICATE_ASSIGNMENT":
+    case "OUTSIDE_PERIOD":
+      return [
+        {
+          role: "روز",
+          date: v.date,
+          dateLabel: day(v.date),
+          shift: finding.shift,
+        },
+      ];
+    default:
+      return v satisfies never;
+  }
+}
+
+/**
+ * How the Head Nurse can resolve a finding, in operational words. Exhaustive
+ * over rule codes: a new rule does not compile until it says how to fix it.
+ */
+export function findingResolution(finding: ReviewFinding): string {
+  const v = finding.violation;
+  switch (v.rule) {
+    case "NIGHT_REST":
+      return `برای رفع: شیفت ${SHIFT_PRESENTATION[v.shift].name} روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.`;
+    case "DUPLICATE_ASSIGNMENT":
+      return "برای رفع: فقط یک شیفت برای این روز نگه دارید.";
+    case "OUTSIDE_PERIOD":
+      return "برای رفع: شیفت خارج از دوره را پاک کنید.";
+    default:
+      return v satisfies never;
+  }
+}
 
 /** Staffing status of a coverage period, in words; no number is ever assumed. */
 export function staffingStatusLabel(

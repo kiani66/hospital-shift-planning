@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/dialog";
  * to the day's calendar cell. Large modal on desktop, full screen on phones.
  * The header (date, previous / next day, close) stays visible while the day
  * scrolls. It stays open across previous / next day, so focus is kept.
+ * Opening focuses the title (the date), not the first header button.
  */
 export function DayDetailDialog({
   title,
@@ -42,7 +43,8 @@ export function DayDetailDialog({
       closeLabel="بستن جزئیات روز"
       headerActions={navigation}
       stickyHeader
-      className="max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 sm:w-[min(calc(100vw-4rem),64rem)]"
+      focusTitle
+      className="max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 sm:w-[min(calc(100vw-4rem),76rem)]"
     >
       {children}
     </Dialog>

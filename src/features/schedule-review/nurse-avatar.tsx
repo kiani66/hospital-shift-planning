@@ -18,13 +18,13 @@ export function NurseAvatar({
       <img
         src={imageUrl}
         alt=""
-        className="size-8 shrink-0 rounded-full object-cover"
+        className="size-6 shrink-0 rounded-full object-cover"
       />
     );
   return (
     <span
       aria-hidden="true"
-      className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[0.625rem] font-semibold text-muted-foreground"
     >
       {initials(displayName)}
     </span>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { IconWell } from "@/components/ui/icon-well";
+
 import { describeRoles } from "@/features/shell/app-shell";
 import { NavIcon } from "@/features/shell/nav-icon";
 import { buildNavigation } from "@/features/shell/navigation";
@@ -27,7 +29,7 @@ export default async function HomePage() {
             <section
               key={section.id}
               aria-labelledby={`home-${section.id}`}
-              className="rounded-lg border bg-card p-4"
+              className="rounded-xl border bg-card p-4 shadow-xs"
             >
               <h2 id={`home-${section.id}`} className="mb-3 font-semibold">
                 {section.title}
@@ -37,9 +39,11 @@ export default async function HomePage() {
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      className="flex min-h-11 items-center gap-3 rounded-md px-2 text-sm hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+                      className="flex min-h-11 items-center gap-3 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
                     >
-                      <NavIcon name={item.icon} className="size-5" />
+                      <IconWell>
+                        <NavIcon name={item.icon} />
+                      </IconWell>
                       {item.label}
                     </Link>
                   </li>

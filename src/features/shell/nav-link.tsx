@@ -37,19 +37,42 @@ function BadgeText({ count }: { count?: number }) {
   return <span className="sr-only">، {badgeLabel(count)}</span>;
 }
 
-/** Sidebar link (desktop and the "more" page). */
-export function SidebarLink({ item }: { item: NavItem }) {
+export type NavSurface = "sidebar" | "page";
+
+const SIDEBAR_LINK: Record<NavSurface, { current: string; idle: string }> = {
+  sidebar: {
+    current:
+      "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm focus-visible:ring-sidebar-ring",
+    idle: "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring",
+  },
+  page: {
+    current:
+      "bg-primary font-semibold text-primary-foreground shadow-sm focus-visible:ring-ring",
+    idle: "text-foreground hover:bg-accent focus-visible:ring-ring",
+  },
+};
+
+/**
+ * Sidebar link: on the navy sidebar (desktop) or on the page (the "more"
+ * page on phones), with the blue pill for the current page on both.
+ */
+export function SidebarLink({
+  item,
+  surface = "sidebar",
+}: {
+  item: NavItem;
+  surface?: NavSurface;
+}) {
   const current = isCurrent(usePathname(), item.href);
+  const tone = SIDEBAR_LINK[surface];
   return (
     <Link
       href={item.href}
       aria-current={current ? "page" : undefined}
       className={cn(
         "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
-        "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none",
-        current
-          ? "bg-primary text-primary-foreground"
-          : "text-foreground hover:bg-accent",
+        "focus-visible:ring-3 focus-visible:outline-none",
+        current ? tone.current : tone.idle,
       )}
     >
       <NavIcon name={item.icon} className="size-5 shrink-0" />
@@ -71,7 +94,7 @@ export function BottomNavLink({ item }: { item: NavItem }) {
         "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-xs transition-colors",
         "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none",
         current
-          ? "font-bold text-foreground"
+          ? "font-bold text-primary"
           : "text-muted-foreground hover:text-foreground",
       )}
     >

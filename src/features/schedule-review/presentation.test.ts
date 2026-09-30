@@ -9,8 +9,11 @@ import { isoDate } from "@/domain/shared/dates";
 import {
   HEALTH_PRESENTATION,
   RULE_TITLES,
+  VALID_CAVEAT,
   dayCellLabel,
+  findingFacts,
   findingMessage,
+  findingResolution,
   findingSeverityLabel,
   initials,
   preferenceLabel,
@@ -36,34 +39,52 @@ const reviewDay = (overrides: Partial<ReviewDay> = {}): ReviewDay => ({
 });
 
 describe("health presentation", () => {
-  it("has a label, a description and health-* tokens for every state", () => {
+  it("has a label, a description and a health tone for every state", () => {
     for (const state of DAY_HEALTH_STATES) {
       const p = HEALTH_PRESENTATION[state];
       expect(p.label).toMatch(/^[؀-ۿ]/);
       expect(p.description).toMatch(/^[؀-ۿ]/);
       // Semantic tokens, never a literal palette color.
-      expect(`${p.badgeClass} ${p.cellClass}`).toMatch(/health-/);
-      expect(`${p.badgeClass} ${p.cellClass}`).not.toMatch(
+      expect(p.cellClass).not.toMatch(
         /(red|green|amber|emerald|yellow|blue|orange)-\d/,
       );
     }
+    expect(HEALTH_PRESENTATION.VALID.tone).toBe("valid");
+    expect(HEALTH_PRESENTATION.NEEDS_ATTENTION.cellClass).toMatch(
+      /health-attention/,
+    );
   });
 
-  it("words VALID cautiously: no violation found, staffing not checked", () => {
+  it("keeps VALID quiet in the calendar: only attention is tinted (D53)", () => {
+    expect(HEALTH_PRESENTATION.VALID.cellClass).toBe("");
+    expect(HEALTH_PRESENTATION.UNPLANNED.cellClass).not.toMatch(/shadow|ring/);
+    expect(HEALTH_PRESENTATION.NEEDS_ATTENTION.cellClass).toMatch(/shadow/);
+  });
+
+  it("words VALID as the result of a check, not a quality of the day (D51)", () => {
     const valid = HEALTH_PRESENTATION.VALID;
-    expect(valid.label).toBe("بدون ایراد");
-    // Nothing implying a fully staffed, complete, approved or ready day.
-    for (const text of [valid.label, valid.description]) {
+    expect(valid.label).toBe("بدون مغایرت");
+    // Nothing implying a fully staffed, complete, approved, flawless or ready day.
+    for (const text of [valid.label, valid.description, VALID_CAVEAT]) {
       expect(text).not.toMatch(
-        /کامل|تکمیل|تأیید|تایید|آماده|نهایی|مناسب|تأمین‌شده|پر شده/,
+        /کامل|تکمیل|تأیید|تایید|آماده|نهایی|مناسب|تأمین‌شده|پر شده|ایراد|درست|صحیح/,
       );
     }
-    expect(valid.description).toContain("موردی یافت نشد");
+    expect(valid.description).toMatch(/^مغایرتی یافت نشد/);
+    expect(valid.description).toContain("قوانین پیاده‌سازی‌شده فعلی");
     expect(valid.description).toContain("تأمین نفرات هنوز بررسی نمی‌شود");
+    expect(VALID_CAVEAT).toContain("تأمین نفرات هنوز بررسی نمی‌شود");
+  });
+
+  it("never words a day without findings as needing attention", () => {
+    for (const state of ["VALID", "UNPLANNED"] as const)
+      expect(HEALTH_PRESENTATION[state].description).not.toContain(
+        "نیاز به بررسی",
+      );
   });
 
   it("names a day cell with its date, health, findings and holiday", () => {
-    expect(dayCellLabel(reviewDay())).toBe("یکشنبه ۳ آبان ۱۴۰۵، بدون ایراد");
+    expect(dayCellLabel(reviewDay())).toBe("یکشنبه ۳ آبان ۱۴۰۵، بدون مغایرت");
     expect(
       dayCellLabel(
         reviewDay({
@@ -109,6 +130,50 @@ describe("finding messages", () => {
     expect(findingMessage(f)).not.toMatch(ISO_OR_CODE);
     expect(RULE_TITLES[rule]).toMatch(/^[؀-ۿ]/);
   });
+
+  it("splits a night-rest finding into the night and the next day's shift", () => {
+    const f = finding({
+      rule: "NIGHT_REST",
+      severity: "error",
+      nurseId: "u1",
+      nightDate: isoDate("2026-10-24"),
+      date: isoDate("2026-10-25"),
+      shift: "ME",
+    });
+    expect(findingFacts(f)).toEqual([
+      {
+        role: "شب",
+        date: "2026-10-24",
+        dateLabel: "شنبه ۲ آبان ۱۴۰۵",
+        shift: "N",
+      },
+      {
+        role: "روز بعد",
+        date: "2026-10-25",
+        dateLabel: "یکشنبه ۳ آبان ۱۴۰۵",
+        shift: "ME",
+      },
+    ]);
+    expect(findingResolution(f)).toBe(
+      "برای رفع: شیفت طولانی روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.",
+    );
+  });
+
+  it.each(["DUPLICATE_ASSIGNMENT", "OUTSIDE_PERIOD"] as const)(
+    "gives %s one fact and a resolution, without codes or ISO dates",
+    (rule) => {
+      const f = finding({
+        rule,
+        severity: "error",
+        nurseId: "u1",
+        date: isoDate("2026-10-25"),
+      });
+      expect(findingFacts(f)).toHaveLength(1);
+      expect(findingFacts(f)[0]!.dateLabel).toBe("یکشنبه ۳ آبان ۱۴۰۵");
+      expect(findingResolution(f)).toMatch(/^برای رفع: /);
+      expect(findingResolution(f)).not.toMatch(ISO_OR_CODE);
+    },
+  );
 
   it("labels non-blocking findings as warnings", () => {
     const f = {

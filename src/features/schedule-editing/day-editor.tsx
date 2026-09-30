@@ -23,6 +23,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import type { MembershipRole } from "@/domain/authz/actor";
 import { preferenceFit } from "@/domain/preferences/preference-fit";
 import {
@@ -46,6 +47,7 @@ import type { DayOption } from "./range-form";
 import { setAssignmentsAction, type AssignmentEditResult } from "./actions";
 import {
   NETWORK_FAILURE,
+  nurseRowId,
   preferenceFitLabel,
   savedMessage,
   type EditFailureKind,
@@ -366,12 +368,13 @@ export function DayEditor({
     }
   }
 
-  const filters: readonly { value: Filter; label: string }[] = [
+  const filters: readonly { value: Filter; label: string; dot?: string }[] = [
     { value: "ALL", label: "همه" },
     { value: "UNASSIGNED", label: "بدون شیفت" },
     ...SHIFT_CODES.map((code) => ({
       value: code,
       label: `${SHIFT_PRESENTATION[code].name} (${code})`,
+      dot: SHIFT_PRESENTATION[code].dotClass,
     })),
   ];
 
@@ -385,21 +388,21 @@ export function DayEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`${ids.list}-heading`} className="font-semibold">
           شیفت‌های پرسنل در این روز
-          <span className="ms-2 text-sm font-normal text-muted-foreground">
+          <span className="ms-2 text-sm font-normal text-muted-foreground tabular-nums">
             ({faNumber(nurses.length)} نفر)
           </span>
         </h3>
-        <details className="text-sm">
+        <details className="text-sm max-sm:hidden">
           <summary
             className={cn(
-              "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground hover:bg-accent pointer-coarse:min-h-11",
+              "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11",
               focusRing,
             )}
           >
             <Keyboard aria-hidden="true" className="size-4" />
             میان‌برهای صفحه‌کلید
           </summary>
-          <div className="mt-2 rounded-md border p-3">
+          <div className="mt-2 rounded-lg border bg-background p-3 shadow-sm">
             <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
               وقتی یکی از دکمه‌های شیفت یک پرستار انتخاب (فوکوس) شده است:
             </p>
@@ -417,11 +420,11 @@ export function DayEditor({
         </details>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
         <div
           role="group"
           aria-label="نمایش پرسنل"
-          className="flex flex-wrap gap-1"
+          className="-mx-1 flex [scrollbar-width:none] gap-1 overflow-x-auto px-1 pb-0.5 md:flex-wrap md:overflow-visible"
         >
           {filters.map((f) => (
             <button
@@ -430,19 +433,27 @@ export function DayEditor({
               aria-pressed={filter === f.value}
               onClick={() => chooseFilter(f.value)}
               className={cn(
-                "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-xs pointer-coarse:min-h-11",
+                "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap pointer-coarse:min-h-11",
                 focusRing,
                 filter === f.value
-                  ? "border-foreground bg-foreground text-background"
-                  : "bg-background hover:bg-accent",
+                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                  : "border-input bg-background hover:border-primary/35 hover:bg-accent",
               )}
             >
+              {f.dot && (
+                <span
+                  aria-hidden="true"
+                  className={cn("size-2 rounded-full", f.dot)}
+                />
+              )}
               {f.label}
-              <span className="font-semibold">{faNumber(count(f.value))}</span>
+              <span className="font-semibold tabular-nums">
+                {faNumber(count(f.value))}
+              </span>
             </button>
           ))}
         </div>
-        <label className="relative sm:ms-auto sm:w-56">
+        <label className="relative md:ms-auto md:w-56 md:shrink-0">
           <span className="sr-only">جستجوی نام</span>
           <Search
             aria-hidden="true"
@@ -467,7 +478,7 @@ export function DayEditor({
       />
 
       {visible.length === 0 ? (
-        <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed bg-muted/50 p-4 text-center text-sm text-muted-foreground">
           {nurses.length === 0
             ? "فهرست پرسنل این برنامه خالی است."
             : "هیچ پرستاری با این فیلتر یا جستجو پیدا نشد."}
@@ -478,7 +489,7 @@ export function DayEditor({
           aria-label="پرسنل برنامه در این روز"
           aria-describedby={ids.status}
           aria-busy={pending || undefined}
-          className="divide-y rounded-lg border"
+          className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs"
         >
           {visible.map((n) => (
             <NurseRow
@@ -524,7 +535,7 @@ function EditStatus({
   onUndo: () => void;
 }) {
   return (
-    <div id={id} className="min-h-9 text-sm">
+    <div id={id} className="-my-1.5 text-sm">
       <div role="status" className="flex flex-wrap items-center gap-2">
         {pending ? (
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -539,7 +550,7 @@ function EditStatus({
             <span className="inline-flex items-start gap-1.5">
               <Check
                 aria-hidden="true"
-                className="mt-0.5 size-4 shrink-0 text-health-valid-foreground"
+                className="mt-0.5 size-4 shrink-0 text-status-success-foreground"
               />
               {status.message}
             </span>
@@ -548,7 +559,7 @@ function EditStatus({
                 type="button"
                 onClick={onUndo}
                 className={cn(
-                  "inline-flex min-h-8 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent pointer-coarse:min-h-11",
+                  "inline-flex min-h-8 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-medium text-primary hover:bg-accent pointer-coarse:min-h-11",
                   focusRing,
                 )}
               >
@@ -623,27 +634,34 @@ function NurseRow({
     onFocus: () => onFocusCell(col),
   });
   const control = cn(
-    "inline-flex size-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold transition-colors md:size-8 pointer-coarse:size-11",
+    "inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-sm font-bold transition-colors max-sm:flex-1 md:h-8 md:min-w-8 pointer-coarse:h-11 pointer-coarse:min-w-11",
     focusRing,
   );
 
   return (
     <li
+      id={nurseRowId(nurse.userId)}
       data-nurse-row={nurse.userId}
       data-shift={shift ?? "NONE"}
       data-pending={pending || undefined}
-      className="px-3 py-2"
+      data-flagged={nurse.flagged || undefined}
+      className={cn(
+        "scroll-mt-40 border-s-3 px-3 py-2 transition-colors target:bg-brand-soft",
+        nurse.flagged
+          ? "border-s-health-attention bg-health-attention/8 focus-within:bg-health-attention/14"
+          : "border-s-transparent focus-within:border-s-primary focus-within:bg-brand-soft/60 hover:bg-muted/50",
+      )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-1 basis-44 flex-col gap-0.5">
-          <p className="flex min-w-0 items-center gap-1.5">
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span className="truncate text-sm font-medium">
               {nurse.displayName}
             </span>
             {nurse.role === "HEAD_NURSE" && (
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <Badge tone="brand-soft" size="sm">
                 {ROLE_LABELS.HEAD_NURSE}
-              </span>
+              </Badge>
             )}
             {nurse.flagged && (
               <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-health-attention-foreground">
@@ -661,12 +679,22 @@ function NurseRow({
           </p>
           {nurse.preference && (
             <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="rounded border px-1.5">
+              <span className="rounded border border-primary/15 bg-brand-soft/70 px-1.5 text-brand-soft-foreground">
                 {preferenceLabel(nurse.preference)}
               </span>
               {fitLabel && (
-                <span data-fit={fit}>
-                  {fit === "DIFFERS" ? "≠ " : "✓ "}
+                <span
+                  data-fit={fit}
+                  className={cn(
+                    "font-medium",
+                    fit === "MATCHES"
+                      ? "text-status-success-foreground"
+                      : "text-status-warning-foreground",
+                  )}
+                >
+                  <span aria-hidden="true">
+                    {fit === "DIFFERS" ? "≠ " : "✓ "}
+                  </span>
                   {fitLabel}
                 </span>
               )}
@@ -677,7 +705,7 @@ function NurseRow({
         <div
           role="group"
           aria-label={`شیفت ${nurse.displayName}`}
-          className="flex items-center gap-1"
+          className="flex items-center gap-1 max-sm:w-full"
         >
           {SHIFT_CODES.map((code, col) => {
             const selected = shift === code;
@@ -692,8 +720,11 @@ function NurseRow({
                 className={cn(
                   control,
                   selected
-                    ? cn(SHIFT_PRESENTATION[code].tokenClass, "border-current")
-                    : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                    ? cn(
+                        SHIFT_PRESENTATION[code].tokenClass,
+                        "border-current shadow-sm ring-1 ring-current/25",
+                      )
+                    : "border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
                   selected && pending && "opacity-70",
                 )}
               >
@@ -710,8 +741,8 @@ function NurseRow({
             className={cn(
               control,
               shift === null
-                ? "border-foreground/60 bg-muted text-foreground"
-                : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                ? "border-dashed border-muted-foreground bg-muted text-foreground shadow-sm"
+                : "border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
             )}
           >
             <Eraser aria-hidden="true" className="size-4" />
@@ -726,8 +757,8 @@ function NurseRow({
             onClick={onToggleRange}
             className={cn(
               control,
-              "ms-1 bg-background text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40",
-              rangeOpen && "bg-accent text-foreground",
+              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted",
+              rangeOpen && "border-primary bg-brand-soft text-primary",
             )}
           >
             <CalendarRange aria-hidden="true" className="size-4" />

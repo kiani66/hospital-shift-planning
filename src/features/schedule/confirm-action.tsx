@@ -5,7 +5,6 @@ import { useActionState, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 
 import type { ScheduleFormState } from "./actions";
 
@@ -96,10 +95,7 @@ export function ConfirmScheduleAction({
             <Button
               type="submit"
               disabled={pending}
-              className={cn(
-                destructive &&
-                  "bg-destructive text-white hover:bg-destructive/90 disabled:bg-destructive/70",
-              )}
+              variant={destructive ? "destructive" : "default"}
             >
               {pending ? "در حال انجام…" : confirmLabel}
             </Button>

@@ -20,6 +20,12 @@ export interface ShiftPresentation {
   readonly fullName: string;
   /** Background + text token classes (literal, so Tailwind generates them). */
   readonly tokenClass: string;
+  /** Text color only: for a code or count on a neutral surface (calm, dense views). */
+  readonly accentClass: string;
+  /** A small marker in the shift's color, always next to the code text. */
+  readonly dotClass: string;
+  /** A faint wash of the shift's color, for a tile that also shows the code. */
+  readonly softClass: string;
 }
 
 export const SHIFT_PRESENTATION: Readonly<
@@ -30,24 +36,36 @@ export const SHIFT_PRESENTATION: Readonly<
     name: "صبح",
     fullName: "صبح",
     tokenClass: "bg-shift-m text-shift-m-foreground",
+    accentClass: "text-shift-m-foreground",
+    dotClass: "bg-shift-m-foreground",
+    softClass: "bg-shift-m/45",
   },
   E: {
     code: "E",
     name: "عصر",
     fullName: "عصر",
     tokenClass: "bg-shift-e text-shift-e-foreground",
+    accentClass: "text-shift-e-foreground",
+    dotClass: "bg-shift-e-foreground",
+    softClass: "bg-shift-e/45",
   },
   N: {
     code: "N",
     name: "شب",
     fullName: "شب",
     tokenClass: "bg-shift-n text-shift-n-foreground",
+    accentClass: "text-shift-n-foreground",
+    dotClass: "bg-shift-n-foreground",
+    softClass: "bg-shift-n/45",
   },
   ME: {
     code: "ME",
     name: "طولانی",
     fullName: "طولانی (صبح + عصر)",
     tokenClass: "bg-shift-me text-shift-me-foreground",
+    accentClass: "text-shift-me-foreground",
+    dotClass: "bg-shift-me-foreground",
+    softClass: "bg-shift-me/45",
   },
 };
 

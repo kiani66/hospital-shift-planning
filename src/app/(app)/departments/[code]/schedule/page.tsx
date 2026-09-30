@@ -1,8 +1,10 @@
+import { Info } from "lucide-react";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
+import { Callout } from "@/components/ui/callout";
 import {
   getScheduleReview,
   type DayReview,
@@ -12,7 +14,9 @@ import { isInPeriod, type DatePeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
 import {
   adjacentJalaliMonth,
+  faNumber,
   formatJalaliDate,
+  formatJalaliRange,
   jalaliMonthLabel,
   jalaliMonthOptions,
   jalaliMonthParam,
@@ -22,16 +26,25 @@ import {
   type JalaliMonth,
 } from "@/features/calendar/jalali";
 import { CreateScheduleDialog } from "@/features/schedule/create-schedule-dialog";
+import { ScheduleHeader } from "@/features/schedule/schedule-header";
 import {
   EmptySchedules,
-  ScheduleOverviewView,
+  PreferenceAction,
+  ScheduleDetails,
 } from "@/features/schedule/schedule-overview";
 import { DayEditor } from "@/features/schedule-editing/day-editor";
-import { DayBadges, DayDetail } from "@/features/schedule-review/day-detail";
+import {
+  DayBadges,
+  DayDetail,
+  flaggedNurses,
+} from "@/features/schedule-review/day-detail";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
 import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
 import { EmptyMonth } from "@/features/schedule-review/empty-month";
-import { MonthCalendar } from "@/features/schedule-review/month-calendar";
+import {
+  MonthCalendar,
+  MonthSummary,
+} from "@/features/schedule-review/month-calendar";
 import { requireDepartmentPage } from "@/features/shell/department-page";
 import { PageHeader } from "@/features/shell/page-header";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
@@ -47,9 +60,7 @@ function dayEditor(
   links: { previous: DayLink | null; next: DayLink | null },
 ) {
   if (!day.edit.allowed) return undefined;
-  const flagged = new Set(
-    [...day.findings, ...day.relatedFindings].flatMap((f) => f.nurseIds),
-  );
+  const flagged = flaggedNurses(day);
   const rangeEnds =
     day.date < schedule.period.end
       ? eachDay(addDays(day.date, 1), schedule.period.end).map((date) => ({
@@ -120,22 +131,13 @@ export default async function DepartmentSchedulePage({
     `/departments/${department.code}/schedule?month=${jalaliMonthParam(target)}${date ? `&day=${date}` : ""}` as Route;
   const scheduleHref = (id: string, date?: string) =>
     `/departments/${department.code}/schedule?schedule=${id}${date ? `&day=${date}` : ""}` as Route;
-  const header = (
-    <PageHeader
-      title={`برنامه بخش — ${department.name}`}
-      description={
-        data.selected || requestedMonth
-          ? "مرور ماهانه برنامه، فهرست پرسنل و مدیریت ثبت ترجیحات پرستاران."
-          : "ایجاد برنامه ماهانه، فهرست پرسنل و مدیریت ثبت ترجیحات پرستاران."
-      }
-    />
-  );
 
+  // A department with no schedule at all: the one first step (D39).
   if (!data.selected && !requestedMonth)
     return (
       <>
-        {header}
-        <EmptySchedules action={createDialog(true)} />
+        <PageHeader title={`برنامه بخش — ${department.name}`} />
+        <EmptySchedules action={data.canCreate ? createDialog(true) : null} />
       </>
     );
 
@@ -154,14 +156,21 @@ export default async function DepartmentSchedulePage({
   const previous = neighbour("previous");
   const next = neighbour("next");
 
+  const monthLabel = jalaliMonthLabel(current);
+
+  // A month without a schedule stays the selected month (D39).
   if (!data.selected)
     return (
       <>
-        {header}
-        <EmptyMonth
-          label={jalaliMonthLabel(current)}
+        <ScheduleHeader
+          departmentName={department.name}
+          monthLabel={monthLabel}
           previous={previous}
           next={next}
+          schedule={null}
+        />
+        <EmptyMonth
+          label={monthLabel}
           action={data.canCreate ? createDialog(true, current) : null}
         />
       </>
@@ -187,23 +196,44 @@ export default async function DepartmentSchedulePage({
     next: dayLink(addDays(review.day.date, 1)),
   };
 
+  const noAssignments =
+    review.month.totals.UNPLANNED === review.month.days.length;
+
   return (
     <>
-      {header}
-      <div className="flex flex-col gap-4">
-        <div className="flex justify-end">{createDialog(false)}</div>
-        <ScheduleOverviewView
-          schedule={selected}
-          calendar={
-            <MonthCalendar
-              month={review.month}
-              today={today}
-              dayHref={here}
-              previous={previous}
-              next={next}
-            />
-          }
+      <ScheduleHeader
+        departmentName={department.name}
+        monthLabel={monthLabel}
+        previous={previous}
+        next={next}
+        schedule={{
+          range: `${formatJalaliRange(selected.period.start, selected.period.end)} · ${faNumber(selected.dayCount)} روز`,
+          status: selected.status,
+          preferences: selected.preferences.state,
+          editable: review.month.editable,
+        }}
+        primaryAction={<PreferenceAction schedule={selected} />}
+        secondaryAction={data.canCreate ? createDialog(false) : null}
+      />
+      <div className="flex flex-col gap-3">
+        <MonthSummary month={review.month} dayHref={here} />
+        {noAssignments && (
+          <Callout role="note" tone="info" icon={Info}>
+            هنوز شیفتی در این برنامه ثبت نشده است؛ همه روزها
+            برنامه‌ریزی‌نشده‌اند.
+            {review.month.editable &&
+              " برای چیدن شیفت‌ها، روزی را در تقویم انتخاب کنید."}
+          </Callout>
+        )}
+        <MonthCalendar
+          month={review.month}
+          today={today}
+          dayHref={here}
+          selected={review.day?.date ?? null}
         />
+      </div>
+      <div className="mt-6">
+        <ScheduleDetails schedule={selected} />
       </div>
       {review.day && dayLinks && (
         // Not keyed by date: it stays open (and keeps focus) across days.
