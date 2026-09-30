@@ -10,6 +10,7 @@ import {
   jalaliWeekday,
   toJalali,
 } from "@/features/calendar/jalali";
+import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 
 /**
  * Persian wording and calendar layout of the nurse's preference page. Dates
@@ -43,28 +44,28 @@ export const PREFERENCE_OPTIONS: readonly PreferenceOption[] = [
     code: "M",
     short: "صبح",
     label: "صبح",
-    className: "bg-shift-m text-shift-m-foreground",
+    className: SHIFT_PRESENTATION.M.tokenClass,
   },
   {
     value: "E",
     code: "E",
     short: "عصر",
     label: "عصر",
-    className: "bg-shift-e text-shift-e-foreground",
+    className: SHIFT_PRESENTATION.E.tokenClass,
   },
   {
     value: "N",
     code: "N",
     short: "شب",
     label: "شب",
-    className: "bg-shift-n text-shift-n-foreground",
+    className: SHIFT_PRESENTATION.N.tokenClass,
   },
   {
     value: "ME",
     code: "ME",
     short: "طولانی",
     label: "صبح + عصر (طولانی)",
-    className: "bg-shift-me text-shift-me-foreground",
+    className: SHIFT_PRESENTATION.ME.tokenClass,
   },
   {
     value: "OFF",

@@ -44,6 +44,20 @@
 
   /* Schedule rule violations (e.g. night-rest). */
   --violation: oklch(0.577 0.245 27.325);
+
+  /*
+   * Day review health (DayHealth) and official holidays. Semantic names: the
+   * review maps states to these tokens, so a color changes here only. Always
+   * paired with an icon and text; never color alone.
+   */
+  --health-valid: oklch(0.6 0.13 160);
+  --health-valid-foreground: oklch(0.4 0.09 160);
+  --health-attention: oklch(0.72 0.16 65);
+  --health-attention-foreground: oklch(0.42 0.11 55);
+  --health-unplanned: oklch(0.7 0 0);
+  --health-unplanned-foreground: oklch(0.45 0 0);
+  --holiday: oklch(0.6 0.17 350);
+  --holiday-foreground: oklch(0.45 0.15 350);
 }
 
 .dark {
@@ -78,6 +92,15 @@
   --shift-off-foreground: oklch(0.75 0 0);
 
   --violation: oklch(0.704 0.191 22.216);
+
+  --health-valid: oklch(0.7 0.13 160);
+  --health-valid-foreground: oklch(0.85 0.09 160);
+  --health-attention: oklch(0.78 0.15 70);
+  --health-attention-foreground: oklch(0.88 0.1 75);
+  --health-unplanned: oklch(0.6 0 0);
+  --health-unplanned-foreground: oklch(0.78 0 0);
+  --holiday: oklch(0.72 0.15 350);
+  --holiday-foreground: oklch(0.85 0.09 350);
 }
 
 @theme inline {
@@ -118,6 +141,14 @@
   --color-shift-off: var(--shift-off);
   --color-shift-off-foreground: var(--shift-off-foreground);
   --color-violation: var(--violation);
+  --color-health-valid: var(--health-valid);
+  --color-health-valid-foreground: var(--health-valid-foreground);
+  --color-health-attention: var(--health-attention);
+  --color-health-attention-foreground: var(--health-attention-foreground);
+  --color-health-unplanned: var(--health-unplanned);
+  --color-health-unplanned-foreground: var(--health-unplanned-foreground);
+  --color-holiday: var(--holiday);
+  --color-holiday-foreground: var(--holiday-foreground);
 }
 
 @layer base {

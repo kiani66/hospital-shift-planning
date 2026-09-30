@@ -296,3 +296,100 @@ Repeating the stored state is a no-op. Real changes are audited as `preference.c
 `preference.changed` or `preference.cleared` with `{ date, before, after }`, committed or rolled
 back with the change. The UI saves on tap with an optimistic value that falls back to the server's
 on failure.
+
+## Head Nurse monthly review decisions
+
+Phase 7a (read-only). Paths are relative to `src/`. No schema change and no migration.
+
+### D39 · Calendar-first review
+
+The department schedule page leads with a month calendar: 7 Saturday-first columns and as many
+week rows as the period needs (5 or 6 for a Jalali month; never a fixed 35 cells). Hierarchy:
+month → day → shift → nurse / finding. Days outside the period only complete the first and last
+week: dimmed, not links. Month navigation is only the Previous / Next controls in the calendar
+header; they move to the department's previous / next schedule (by period) and name the target
+month; a missing neighbour is a disabled control. The old schedule link list is gone. The Phase 4
+summary, preference and roster cards stay below the calendar.
+Enforced in `features/calendar/month-grid.ts` and `features/schedule-review/month-calendar.tsx`.
+
+### D40 · Day health is semantic
+
+`DayHealth` is `UNPLANNED` (no assignment that day), `NEEDS_ATTENTION` (at least one finding of an
+applicable rule attributed to the day) or `VALID` (assignments and no finding), in that precedence.
+Only rules that exist are applied: until staffing rules exist (D44), `VALID` means "no current rule
+is broken", worded «بدون ایراد», not "fully staffed". Colors are the `health-*` tokens in
+`globals.css`, mapped in the presentation layer only; every state also has its own icon shape and
+text (and is part of the cell's accessible name).
+Enforced in `domain/schedule/day-health.ts` and `features/schedule-review/presentation.ts`.
+
+### D41 · Holiday is a separate dimension
+
+A day is an official holiday or not, independently of its health. Holidays come from a
+`HolidayCalendar` port (ISO date + Persian name); the intended source is a maintained master
+calendar covering several years. Until one is connected the source has no data
+(`NO_HOLIDAY_DATA`), so no holiday is shown. No weekday (Thursday / Friday) is treated as a holiday.
+Enforced in `application/calendar/holidays.ts`.
+
+### D42 · Shift catalog and coverage
+
+Shift hours are business defaults in the domain catalog `SHIFT_TYPES`: M 07:00–14:00,
+E 14:00–19:00, N 19:00–07:00 (next day), ME 07:00–19:00. Crossing midnight and duration are
+derived from the hours. Display names and color tokens live in one presentation catalog
+(`features/shifts/catalog.ts`, typed by `ShiftCode`), used by the legend, preferences and review.
+Assignment type (M, E, N, ME) is distinct from operational coverage (periods M, E, N): an ME
+assignment counts toward both M and E coverage (`covers`, D23). Staffing is always counted per
+coverage period, never per code. A unit test keeps each shift's hours equal to the union of the
+periods it covers.
+Enforced in `domain/shifts/shift-type.ts` and `domain/shifts/coverage.ts`.
+
+### D43 · Findings (diagnostics)
+
+Every rule violation is presented as a `Diagnostic`: stable code, scope (`DAY`, `SHIFT`, `NURSE`,
+`ASSIGNMENT`), severity and blocking flag, the day it is reported on, every day and nurse involved,
+and the rule's data. A finding belongs to the day of the offending assignment (night-rest: the day
+after the Night); a pair across the schedule boundary belongs to the day inside the period; an
+assignment outside the period belongs to no day and is counted once for the month. The UI shows a
+Persian title and an operational message built from the data, never the raw code; message and
+scope maps are exhaustive, so a new rule does not compile until it has both. Existing rules
+surfaced: night-rest (D7, D20, across schedule boundaries), duplicate assignment (D15), outside
+period; all blocking.
+Enforced in `domain/rules/diagnostic.ts` and `features/schedule-review/presentation.ts`.
+
+### D44 · Staffing capacity boundary (numbers not defined)
+
+No minimum or maximum staffing number exists or is assumed. The boundary is explicit:
+`StaffingBounds` / `StaffingRequirement` per coverage period, a `StaffingRequirementsSource` port
+(per department and day) whose only implementation configures nothing, and `staffingStatus`, which
+reads `NOT_CONFIGURED` until bounds exist. The day detail shows the status per period
+(«حداقل و حداکثر نفرات تعریف نشده است»). Still to decide before staffing validators are added:
+where requirements are stored (per department, weekday, holiday), the values, and whether falling
+short blocks FINALIZE / SUBMIT (Phase 1 anticipated non-blocking `warning` severity).
+Enforced in `domain/rules/staffing.ts` and `application/schedules/staffing-requirements.ts`.
+
+### D45 · Day detail
+
+Selecting a day sets `?day=<ISO date>` (deep-linkable, server-rendered); a date that is invalid or
+outside the period is ignored. The dialog shows findings first, then four sections M, E, N, ME
+(hours, count, operational coverage and staffing status, nurses), then rostered nurses without a
+shift. Each nurse's own preference for the day is shown as context («ترجیح: …»), never as an
+assignment. Desktop: a large modal; phones: full screen. Closing (button, Escape, backdrop) removes
+`?day=` and returns focus to the day's cell. Avatars: no profile image exists in the schema, so an
+initials monogram is shown; the component accepts an image URL for later.
+
+### D46 · Read-only, working copy, authorization
+
+Phase 7a writes nothing: no assignment editing, prefill, drag and drop, undo or workflow action. It
+reads the working copy (`shift_assignments`) in every status. `getScheduleReview` authorizes
+`schedule.viewDepartment` (Head Nurse of the department always; supervisor from FINALIZED, D12);
+the page stays guarded by `department.manage` (D27). Another department's schedule, an unknown or
+malformed id and a denied one are the same NotFoundError (404).
+Enforced in `application/schedules/review.ts`.
+
+### D47 · Aggregates first, detail on demand
+
+The month overview is per-day aggregates (health, assignment counts per type, coverage per
+period, finding counts, holiday); it never carries nurse names. Assignments are loaded once and
+validated in memory with the adjacent schedules' boundary days: three queries for the month, two
+more (roster, that day's preferences) for a selected day, independent of department size (tested
+with 60 nurses × 31 days). Future reports (working hours from `shiftDurationMinutes`, staffing
+and coverage summaries) derive from the same assignments and catalog.
