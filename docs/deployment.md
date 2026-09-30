@@ -49,9 +49,69 @@ Never prefix secrets with `NEXT_PUBLIC_`. Local values go in `.env.local` (gitig
    and **Preview**, each a different value from `openssl rand -base64 32`. Redeploy.
 2. Check `/api/health`: `checks.auth` must be `"ok"` (it reports `"misconfigured"`, and HTTP
    503, while the secret is missing or shorter than 32 characters).
-3. Production has no accounts until they are provisioned; the demo seed never runs there. To
+3. Production has no accounts until they are provisioned (see
+   [Provisioning the first production user](#provisioning-the-first-production-user)); the demo
+   seed never runs there. To
    try a preview, seed its Neon branch by hand: `DATABASE_URL_UNPOOLED=<preview branch URL>
 pnpm db:seed` (resets that branch to demo data).
+
+## Provisioning the first production user
+
+`pnpm db:provision-user` creates or updates one real user and their department membership
+without manual SQL. It is **production-safe** and is not the demo seed:
+
+|              | `db:provision-user`                                  | `db:seed`                                |
+| ------------ | ---------------------------------------------------- | ---------------------------------------- |
+| Purpose      | One real user + membership                           | Reset to fictional demo data             |
+| Data effect  | Inserts/updates only the rows it names; never resets | Truncates every application table        |
+| Production   | Allowed                                              | Refused (`assertSeedAllowed`), unchanged |
+| When it runs | Only when you invoke it; never during a deploy/build | Only when invoked, dev/preview only      |
+
+It never creates departments: the department must already exist and be active.
+
+Inputs (environment variables; nothing is hard-coded or committed):
+
+| Variable                    | Required | Notes                                                                                 |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `PROVISION_EMAIL`           | yes      | Normalized like sign-in (trim, lowercase)                                             |
+| `PROVISION_PASSWORD`        | yes      | 12 to 256 characters; hashed with the same Argon2id function as the login path        |
+| `PROVISION_DEPARTMENT_CODE` | yes      | `departments.code` (exact match, else a unique case-insensitive match)                |
+| `PROVISION_ROLE`            | yes      | `HEAD_NURSE` or `NURSE`                                                               |
+| `PROVISION_DISPLAY_NAME`    | no       | Used only when the user is created; defaults to the part of the e-mail before the `@` |
+
+The database is `DATABASE_URL_UNPOOLED`, falling back to `DATABASE_URL` (same as `db:migrate`),
+e.g. from the Neon production connection string. PowerShell (placeholders only):
+
+```powershell
+$env:DATABASE_URL_UNPOOLED="<production direct connection string>"
+$env:PROVISION_EMAIL="head@example.com"
+$env:PROVISION_PASSWORD="<strong-password>"
+$env:PROVISION_DEPARTMENT_CODE="ICU"
+$env:PROVISION_ROLE="HEAD_NURSE"
+
+pnpm db:provision-user
+
+# Clear the secrets from the session afterwards.
+Remove-Item Env:PROVISION_PASSWORD, Env:DATABASE_URL_UNPOOLED
+```
+
+Behavior:
+
+- **Transaction:** everything happens in one transaction; any failure leaves no user, membership
+  or password change behind. Input is validated before the database is contacted.
+- **New user:** created active, with a generated id and the normalized e-mail.
+- **Existing user** (matched on `lower(email)`, like sign-in): the password hash is replaced and
+  `is_active` set to true; the e-mail spelling, display name and all other data are kept.
+- **Membership** (effective today in Tehran: `started_on <= today` and `ended_on` null or `>= today`):
+  - none: an open-ended membership starting today is created;
+  - current one with the same role: left unchanged;
+  - current one with another role, or one starting in the future: the command stops with a
+    conflict error and changes nothing (it never rewrites history; end the old membership
+    deliberately first). Ended memberships are kept and a new one is added.
+- **Idempotent:** re-running with the same values adds no user or membership. It only refreshes
+  the password hash (new salt) and `is_active`, so a repeat run also resets the password.
+- **Output:** e-mail, department code, role and status only. The password, its hash and the
+  connection string are never printed; only the database host and name are.
 
 ## Before real hospital use
 
