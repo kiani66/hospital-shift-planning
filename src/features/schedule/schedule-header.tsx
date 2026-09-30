@@ -36,12 +36,17 @@ export function ScheduleHeader({
 }: {
   departmentName: string;
   monthLabel: string;
-  previous: MonthLink | null;
-  next: MonthLink | null;
+  /**
+   * Previous / next calendar month (D39). Omitted (undefined) where the page
+   * shows one schedule, not a month (the Supervisor's review).
+   */
+  previous?: MonthLink | null;
+  next?: MonthLink | null;
   schedule: {
     readonly range: string;
     readonly status: ScheduleStatus;
-    readonly preferences: PreferenceCollectionState;
+    /** Preference collection; omitted where it is not the viewer's concern. */
+    readonly preferences?: PreferenceCollectionState;
     /** The Head Nurse may change assignments of this schedule now. */
     readonly editable: boolean;
   } | null;
@@ -61,7 +66,9 @@ export function ScheduleHeader({
           >
             <CalendarRange />
           </IconWell>
-          <MonthNavLink direction="previous" target={previous} />
+          {previous !== undefined && (
+            <MonthNavLink direction="previous" target={previous} />
+          )}
           <h1
             id={SCHEDULE_HEADING_ID}
             className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
@@ -74,7 +81,9 @@ export function ScheduleHeader({
               {monthLabel}
             </span>
           </h1>
-          <MonthNavLink direction="next" target={next} />
+          {next !== undefined && (
+            <MonthNavLink direction="next" target={next} />
+          )}
         </div>
         {(primaryAction || secondaryAction) && (
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end max-sm:[&>button:last-child]:self-center">
@@ -102,7 +111,9 @@ export function ScheduleHeader({
             />
             <span className="sr-only">وضعیت برنامه:</span>
             <ScheduleStatusBadge status={schedule.status} />
-            <PreferenceStateBadge state={schedule.preferences} withPrefix />
+            {schedule.preferences && (
+              <PreferenceStateBadge state={schedule.preferences} withPrefix />
+            )}
             {schedule.editable ? (
               <Badge tone="brand-soft" icon={Pencil}>
                 ویرایش شیفت‌ها

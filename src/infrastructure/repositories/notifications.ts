@@ -72,6 +72,7 @@ export interface NotificationListRow extends NotificationRecord {
   readonly schedule: {
     readonly label: string;
     readonly departmentName: string;
+    readonly departmentCode: string;
   } | null;
 }
 
@@ -101,6 +102,7 @@ export async function listNotificationPage(
       exactCreatedAt,
       scheduleLabel: schedules.label,
       departmentName: departments.name,
+      departmentCode: departments.code,
     })
     .from(notifications)
     .leftJoin(schedules, eq(schedules.id, notifications.scheduleId))
@@ -117,12 +119,20 @@ export async function listNotificationPage(
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(options.limit);
   return rows.map(
-    ({ exactCreatedAt: exact, scheduleLabel, departmentName, ...row }) => ({
+    ({
+      exactCreatedAt: exact,
+      scheduleLabel,
+      departmentName,
+      departmentCode,
+      ...row
+    }) => ({
       ...row,
       key: { createdAt: exact, id: row.id },
       schedule:
-        scheduleLabel !== null && departmentName !== null
-          ? { label: scheduleLabel, departmentName }
+        scheduleLabel !== null &&
+        departmentName !== null &&
+        departmentCode !== null
+          ? { label: scheduleLabel, departmentName, departmentCode }
           : null,
     }),
   );

@@ -22,10 +22,12 @@ export interface NotificationItem {
   readonly read: boolean;
   /** The schedule it refers to, if any (as its creator wrote it). */
   readonly scheduleId: string | null;
-  /** Current schedule label and department name, when the schedule exists. */
+  /** Current schedule label and department, when the schedule exists. */
   readonly context: {
     readonly scheduleLabel: string;
     readonly departmentName: string;
+    /** Addresses the department's pages (a destination, never an authorization). */
+    readonly departmentCode: string;
   } | null;
   /** Structured payload written with the notification; rendered by the UI. */
   readonly data: Readonly<Record<string, unknown>>;
@@ -90,6 +92,7 @@ export async function listNotifications(
       context: row.schedule && {
         scheduleLabel: row.schedule.label,
         departmentName: row.schedule.departmentName,
+        departmentCode: row.schedule.departmentCode,
       },
       data: row.data,
     })),

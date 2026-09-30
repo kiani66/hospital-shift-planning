@@ -9,6 +9,7 @@ import {
 import type { Violation } from "../rules/violation";
 import {
   eventsFrom,
+  PREFERENCE_WINDOW_OPEN,
   transition,
   TRANSITIONS,
   type ScheduleCommand,
@@ -178,7 +179,29 @@ describe("guards", () => {
       activePreferenceWindows: 1,
     });
     expect(!result.ok && result.error).toBeInstanceOf(InvalidStateError);
+    expect(!result.ok && (result.error as InvalidStateError).attempted).toBe(
+      PREFERENCE_WINDOW_OPEN,
+    );
   });
+
+  it("SUBMIT reports blocking violations before an open preference window", () => {
+    const result = transition("FINALIZED", {
+      type: "SUBMIT",
+      violations: [nightRest],
+      activePreferenceWindows: 1,
+    });
+    expect(!result.ok && result.error).toBeInstanceOf(RuleViolationError);
+  });
+
+  it.each(SCHEDULE_STATUSES.filter((s) => s !== "SUBMITTED"))(
+    "an invalid transition names the refused event (%s --APPROVE-->)",
+    (status) => {
+      const result = transition(status, passing.APPROVE);
+      expect(!result.ok && (result.error as InvalidStateError).attempted).toBe(
+        "APPROVE",
+      );
+    },
+  );
 
   it.each(["", "   ", "\n"])("RETURN requires a comment (%j)", (comment) => {
     const result = transition("SUBMITTED", { type: "RETURN", comment });

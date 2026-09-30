@@ -691,3 +691,130 @@ use only these names; no component uses literal palette colors.
     shadow.
   - VALID stays quiet and NEEDS_ATTENTION stays the loudest state.
 - Presentation only: no route, rule, permission, query or wording used by the workflow changed.
+
+## Approval workflow decisions
+
+Phase 8. Paths are relative to `src/`. No schema change and no migration: `schedule_submissions`
+(decision on the row, one pending per schedule), `schedule_versions` /
+`schedule_version_assignments` (immutable snapshots, D17), `schedules.current_version_id`,
+`audit_events` and the `SCHEDULE_SUBMITTED` / `SCHEDULE_APPROVED` / `SCHEDULE_RETURNED`
+notification types already carry it. The lifecycle is the Phase 1 state machine, unchanged; the only
+domain change is a stable reason code for the open-window guard (`PREFERENCE_WINDOW_OPEN`).
+
+### D58 · Lifecycle commands, validation and concurrency
+
+- Five commands: `finalizeSchedule` (PLANNING → FINALIZED), `submitSchedule` (FINALIZED or RETURNED
+  → SUBMITTED), `withdrawSubmission` (SUBMITTED → FINALIZED, D10), `approveSchedule` and
+  `returnSchedule` (SUBMITTED → APPROVED / RETURNED). Each is one `defineCommand` transaction: lock
+  the schedule row `FOR UPDATE`, authorize, check the caller's revision (after authorizing, so an
+  outsider gets FORBIDDEN, never CONFLICT), let `transition()` decide, persist, audit, notify.
+  Every edit, preference open/close and lifecycle command of a schedule is serialized on that row
+  lock, so of two racing transitions (approve / return / withdraw, a double click, two tabs)
+  exactly one wins and the other gets CONFLICT; nothing is written twice.
+- The revision is also what a decision is about: the Supervisor approves or returns the revision
+  the page showed. A withdraw and resubmit in between makes that approval CONFLICT, so nobody
+  approves content they have not seen.
+- FINALIZE and SUBMIT are gated by the one validation path the review uses
+  (`validateWorkingCopy`: working copy plus the neighbouring schedules' boundary days, D7, D20,
+  inside the transaction after the lock). "Valid" keeps D40's meaning: no finding of the
+  implemented validators; no staffing or completeness rule is added (D44). A refusal is
+  `RULE_VIOLATION` with the violations, which the UI turns into the days to fix.
+- As the state machine already says: FINALIZE exists only from PLANNING (a DRAFT schedule gets
+  there by opening preference collection; `START_PLANNING` has no use case yet), a returned
+  schedule is resubmitted directly (RETURNED → SUBMITTED, no re-finalize), and FINALIZE is allowed
+  while a preference window is open. Only SUBMIT requires every window closed
+  (`INVALID_STATE` / `PREFERENCE_WINDOW_OPEN`), and no command closes a window implicitly: the
+  Head Nurse closes it explicitly (D30).
+- Lifecycle commands never change assignments, the roster or preferences. What may be edited in
+  each status stays D48's rule (FINALIZED and a first-cycle RETURNED: the whole period;
+  SUBMITTED and APPROVED: nothing).
+- The screens' actions and blockers come from `describeWorkflow`, which only combines
+  `eventsFrom` / `transition` (the guards) and `decide` (the policies); it is guidance for the UI,
+  never the gate.
+
+Enforced in `application/schedules/lifecycle.ts`, `working-copy-validation.ts` and `workflow.ts`.
+
+### D59 · Submissions, versions and history
+
+- Each SUBMIT inserts a `schedule_submissions` row (submitter, time, and the open revision when a
+  post-approval revision is submitted). Its decision is recorded on the same row, exactly once:
+  `APPROVED` or `RETURNED` by the Supervisor, `WITHDRAWN` by the Head Nurse. Rows are never
+  deleted, so every submit, withdrawal, return and approval of a schedule stays listed in order.
+- The working copy is locked from SUBMIT to the decision, so approving snapshots it with
+  `createVersionFromWorkingCopy` (version 1, 2, …, tied to its submission, immutable, D17) and sets
+  `schedules.current_version_id`: nurses see that version from then on (D11). No copy of the
+  assignments is stored at submission; instead the `schedule.submitted` and `schedule.approved`
+  audit events both carry `assignmentsFingerprint` (SHA-256 of the sorted nurse/day/shift cells)
+  and `assignmentCount`, and equal fingerprints show the version is exactly what was submitted.
+- Approval does not start a revision; APPROVED → REVISING and re-approval are Phase 11.
+
+### D60 · Supervisor authority and self-approval
+
+`schedule.approve` and `schedule.return` (Phase 1 policy, unchanged) need a current supervisor
+assignment of the department (D19) and deny the Supervisor who made the pending submission
+(`SELF_APPROVAL`). The command reads the submitter from the persisted pending submission, never
+from the request or the actor's current roles: a Supervisor who is also the department's Head
+Nurse may submit, but that submission must be decided by another Supervisor; one who became Head
+Nurse after someone else submitted may decide it. The UI does not offer those actions and says
+why; the server refuses them regardless.
+
+### D61 · Supervisor review list and read-only review
+
+- `/review` lists, for the departments the actor supervises today, the schedules from FINALIZED
+  on (D12): first those waiting for a decision (SUBMITTED, longest waiting first, each with its
+  submitter and time and one action), then the others (finalized, returned, approved; the most
+  recent 24 periods) with their latest decision. One query (`listSchedulesForReview`: latest
+  submission by `DISTINCT ON`, names joined), whatever the number of rows; findings are not
+  computed per row (the review page shows them).
+- `/review/<scheduleId>` shows one schedule with the Phase 7a month calendar, summary and day
+  detail, never the editor, whatever other role the viewer has; approve (primary) and return are
+  in the header only in SUBMITTED. Anyone but a current Supervisor of the department, a schedule
+  before FINALIZED, and an unknown id get the same 404 (D26, D46). Supervisors still cannot open
+  the Head Nurse's `/departments/<code>/schedule` (D27).
+
+Enforced in `application/schedules/supervisor-review.ts` and `app/(app)/review/`.
+
+### D62 · Return comment
+
+Returning requires a comment: trimmed, 1 to 1000 characters of plain text (missing, empty or
+whitespace-only is `VALIDATION` on `comment`); no categories. It is stored once on the submission
+(`decision_comment`) and as the `schedule.returned` audit event's `reason`, never in the
+notification. The Head Nurse sees it, with who returned it and when, at the top of the schedule
+page while the schedule is RETURNED, and fixes and resubmits from there.
+
+### D63 · Workflow audit, notifications and destinations
+
+- Audit events, one per successful transition, with actor, department, schedule and
+  `{ from, to }`: `schedule.finalized` (entity `schedule`), `schedule.submitted`,
+  `schedule.withdrawn`, `schedule.approved`, `schedule.returned` (entity `submission`, with
+  `submissionId`; approval adds `versionId`, `versionNo`, `submittedBy`). Refused attempts write
+  nothing.
+- In-app notifications (Phase 5, in the same transaction): SUBMIT → the department's current
+  Supervisors (`SCHEDULE_SUBMITTED`); APPROVE / RETURN → its current Head Nurses
+  (`SCHEDULE_APPROVED` / `SCHEDULE_RETURNED`); never the actor; deactivated accounts and ended
+  relations excluded. Not notified: FINALIZE (no nurse schedule page exists yet to point to),
+  WITHDRAW (no type exists; the review page shows the current state), and assignment edits after
+  FINALIZED (closes D48's open question: no notification).
+- Destinations (amends D33): `SCHEDULE_SUBMITTED` opens `/review/<id>`; `SCHEDULE_APPROVED` and
+  `SCHEDULE_RETURNED` open `/departments/<code>/schedule?schedule=<id>`, the code read on the
+  server from the stored schedule. The pages authorize on their own.
+- D47's query count for the review grows by the workflow's two queries (preference windows,
+  submissions; a third for names once submitted), still independent of department size.
+
+Enforced in `application/schedules/lifecycle.ts` and `features/notifications/presentation.ts`.
+
+### D64 · Workflow presentation
+
+- The schedule header keeps D52's single next step: open or close preference collection, then
+  finalize, submit (or "submit again" after a return) or withdraw, never two lifecycle steps at
+  once. A blocked step stays visible but disabled, described by a blocker panel under the header
+  (findings with links to their days, or the open preference window). SUBMITTED says it waits for
+  the Supervisor; RETURNED shows the comment; APPROVED says so, with no action.
+- Every transition goes through a confirmation that states its consequence in Persian;
+  returning collects the comment in the same dialog. Errors are worded from the stable codes
+  (`CONFLICT`, `PREFERENCE_WINDOW_OPEN`, `SELF_APPROVAL`, …), never shown raw; after a CONFLICT or
+  INVALID_STATE the page re-reads, so the other side's decision is visible.
+- Colors stay D56's: the review violet for SUBMITTED, the warning orange for the return comment,
+  green only for APPROVED (new `review` and `success` Callout tones on the existing tokens).
+
+Enforced in `features/schedule-workflow/`.

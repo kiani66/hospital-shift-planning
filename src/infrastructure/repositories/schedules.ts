@@ -110,6 +110,19 @@ export async function lockScheduleForShare(
   return row ? toRecord(row) : null;
 }
 
+/** The code of the schedule's department (for building links), or null. */
+export async function findScheduleDepartmentCode(
+  db: DbExecutor,
+  scheduleId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ code: departments.code })
+    .from(schedules)
+    .innerJoin(departments, eq(departments.id, schedules.departmentId))
+    .where(eq(schedules.id, scheduleId));
+  return row?.code ?? null;
+}
+
 export interface RosteredScheduleRecord extends ScheduleRecord {
   readonly departmentName: string;
 }
