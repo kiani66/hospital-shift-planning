@@ -132,10 +132,12 @@ export function formatJalaliDate(
 ): string {
   const j = toJalali(date);
   const text = `${faDigits(j.day)} ${JALALI_MONTHS[j.month - 1]} ${faDigits(j.year)}`;
-  return options.weekday
-    ? `${weekdayFormat.format(utcMidnight(date))} ${text}`
-    : text;
+  return options.weekday ? `${jalaliWeekday(date)} ${text}` : text;
 }
+
+/** The Persian weekday name, e.g. "شنبه". */
+export const jalaliWeekday = (date: IsoDate): string =>
+  weekdayFormat.format(utcMidnight(date));
 
 /** "۱ تا ۳۰ آبان ۱۴۰۵" within one month, otherwise both dates in full. */
 export function formatJalaliRange(from: IsoDate, to: IsoDate): string {

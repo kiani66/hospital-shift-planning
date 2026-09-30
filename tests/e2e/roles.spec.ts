@@ -50,7 +50,7 @@ test.describe("nurse", () => {
   test("shows placeholders clearly marked as not implemented", async ({
     page,
   }) => {
-    await page.goto("/preferences");
+    await page.goto("/requests");
     await expect(
       page.getByRole("note", { name: "هنوز پیاده‌سازی نشده" }),
     ).toBeVisible();

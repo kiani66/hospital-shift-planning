@@ -236,8 +236,8 @@ Enforced in `domain/authz/policies.ts` and `application/notifications/`.
 
 ### D33 · Destinations
 
-`PREFERENCES_OPENED` (and `DATES_REOPENED`) open `/preferences?schedule=<id>`; the page is a
-placeholder until Phase 6 and must authorize the schedule itself. Types not created yet have
+`PREFERENCES_OPENED` (and `DATES_REOPENED`) open `/preferences?schedule=<id>`; the page
+authorizes the schedule itself (D37). Types not created yet have
 Persian wording but no destination; the phase that creates them defines where they lead.
 Enforced in `features/notifications/presentation.ts`.
 
@@ -251,3 +251,48 @@ Enforced in `features/notifications/presentation.ts`.
   the badge moves to "بیشتر".
 - No real-time delivery: the count refreshes on navigation and after the user's own actions
   (`revalidatePath('/', 'layout')`). No polling, WebSockets or SSE.
+
+## Nurse preference entry decisions
+
+Phase 6. Paths are relative to `src/`. No schema change: `nurse_preferences` (primary key
+`(schedule_id, user_id, date)`, foreign key to the roster) already fits.
+
+### D35 · Preference values
+
+A nurse picks at most one value per day from the persisted `preference_value` enum: `M`, `E`, `N`,
+`ME` and `OFF`. `OFF` already existed in the domain and database as "leave / unavailable" and is
+offered as a rest request (استراحت). "No preference" is the absence of a row: clearing deletes it;
+no code stands for null. Preferences are wishes, not assignments: the night-rest rule (D7) and
+coverage rules are not applied to them, and the UI never words them as assigned or confirmed.
+
+### D36 · Who may edit, and when
+
+Only the signed-in actor's own preference (the target is always `actor.userId`; unknown request
+fields, a user id included, are dropped). Editing a day needs: an active account, a current
+membership of the department (`preference.editOwn`; a Head Nurse is a member), a roster entry, and
+an active window covering that day and nurse in a status that accepts windows
+(`canEditPreference`). Supervisor status grants nothing. A read-only day carries its reason
+(`WINDOW_CLOSED`, `DATE_NOT_IN_WINDOW`, `SCHEDULE_NOT_ACCEPTING_PREFERENCES`, `NOT_MEMBER`), which
+the page shows; a rejected write is `FORBIDDEN` with that reason. Saved preferences stay visible
+read-only after the window closes. Writes are not notified and do not bump the schedule revision
+(the Head Nurse's stale-tab check is about the schedule, not nurses' wishes).
+Enforced in `domain/preferences/my-preferences.ts` and `application/preferences/commands.ts`.
+
+### D37 · Visible schedules and `?schedule=`
+
+A schedule appears on `/preferences` when the actor is on its roster and at least one of its
+windows (open or closed) includes them, and it has not ended or is still open. The default is the
+first open one, else the current or next. `?schedule=<id>` only selects: an unknown, foreign or
+out-of-scope id gets the same "not found or not available" notice and the default schedule.
+Enforced in `application/preferences/queries.ts`.
+
+### D38 · Concurrency and audit
+
+Each write runs in one `defineCommand` transaction: the schedule row is locked `FOR SHARE` (so a
+close, which locks it `FOR UPDATE`, and a save are serialized and no save commits after a close),
+then the actor's roster row is locked (one nurse's tabs apply writes one at a time; other nurses
+are not blocked), then windows are read and checked. The primary key stays the final guard.
+Repeating the stored state is a no-op. Real changes are audited as `preference.created`,
+`preference.changed` or `preference.cleared` with `{ date, before, after }`, committed or rolled
+back with the change. The UI saves on tap with an optimistic value that falls back to the server's
+on failure.

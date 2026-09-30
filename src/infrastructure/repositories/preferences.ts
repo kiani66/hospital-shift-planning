@@ -52,6 +52,24 @@ export async function clearPreference(
   return rows.length > 0;
 }
 
+/** The stored preference of one nurse for one day, or null. */
+export async function findPreference(
+  db: DbExecutor,
+  input: { scheduleId: string; userId: string; date: IsoDate },
+): Promise<PreferenceValue | null> {
+  const [row] = await db
+    .select({ value: nursePreferences.value })
+    .from(nursePreferences)
+    .where(
+      and(
+        eq(nursePreferences.scheduleId, input.scheduleId),
+        eq(nursePreferences.userId, input.userId),
+        eq(nursePreferences.date, input.date),
+      ),
+    );
+  return row?.value ?? null;
+}
+
 export async function listPreferences(
   db: DbExecutor,
   scheduleId: string,

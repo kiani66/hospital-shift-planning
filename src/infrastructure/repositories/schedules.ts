@@ -3,7 +3,7 @@ import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import type { DatePeriod } from "../../domain/shared/period";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { DbExecutor, Transaction } from "../db/database";
-import { schedules } from "../db/schema";
+import { departments, scheduleRoster, schedules } from "../db/schema";
 import { asIsoDate } from "./mappers";
 
 export interface ScheduleRecord {
@@ -90,6 +90,51 @@ export async function lockScheduleForUpdate(
     .where(eq(schedules.id, id))
     .for("update");
   return row ? toRecord(row) : null;
+}
+
+/**
+ * Loads the schedule with `SELECT … FOR SHARE`: many readers (e.g. nurses
+ * saving preferences) may hold it together, but a writer taking
+ * `FOR UPDATE` (closing preference collection, a status change) waits for
+ * them, and they wait for it. Reads made after it see that writer's commit.
+ */
+export async function lockScheduleForShare(
+  tx: Transaction,
+  id: string,
+): Promise<ScheduleRecord | null> {
+  const [row] = await tx
+    .select(columns)
+    .from(schedules)
+    .where(eq(schedules.id, id))
+    .for("share");
+  return row ? toRecord(row) : null;
+}
+
+export interface RosteredScheduleRecord extends ScheduleRecord {
+  readonly departmentName: string;
+}
+
+/** Every schedule the user is on the roster of, with its department name, oldest period first. */
+export async function listSchedulesOnRoster(
+  db: DbExecutor,
+  userId: string,
+): Promise<RosteredScheduleRecord[]> {
+  const rows = await db
+    .select({ ...columns, departmentName: departments.name })
+    .from(schedules)
+    .innerJoin(
+      scheduleRoster,
+      and(
+        eq(scheduleRoster.scheduleId, schedules.id),
+        eq(scheduleRoster.userId, userId),
+      ),
+    )
+    .innerJoin(departments, eq(departments.id, schedules.departmentId))
+    .orderBy(asc(schedules.periodStart), asc(schedules.id));
+  return rows.map(({ departmentName, ...row }) => ({
+    ...toRecord(row),
+    departmentName,
+  }));
 }
 
 export async function listSchedulesForDepartment(
