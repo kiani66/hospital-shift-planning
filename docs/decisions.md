@@ -664,3 +664,30 @@ use only these names; no component uses literal palette colors.
   and home screens, with one exception: the inert, `aria-hidden` neighbouring-month day numbers,
   which stay deliberately subdued (D39). No structure, route, rule, permission or wording
   changed.
+
+### D57 · Login identity, shell cohesion and final schedule finish
+
+- **Login** is a split layout from `lg`: the navy brand panel (the sidebar surface with two soft
+  blue glows and a faint dot grid) at the inline start, the form card on the canvas beside it.
+  The panel carries the shared `BrandMark`, the product name, «ویژه کادر پرستاری بیمارستان»,
+  three factual lines on what the product does, and the four shift codes in their colors. It has
+  no links and no calls to action, and its text is plain paragraphs, so the form's `h1` stays the
+  page's only heading. Phones get a compact band (mark, name, one line) with the card overlapping
+  its lower edge. No hospital name is stored anywhere, so none is invented; there is no image
+  asset, so none is added. The card has a brand top edge, an icon well, a one-line instruction,
+  48px fields and CTA, an icon on the error, and the help text as its footer. Auth is unchanged.
+- **Shell.** The sidebar's brand row and the desktop top bar share one height (64px) and one
+  divider line. The top bar is a light brand tint over a canvas whose top picks up the same
+  tint (`bg-canvas-wash`), so the navy sidebar sits next to one light brand zone rather than a
+  plain white page. The bar shows today (Tehran) at the start and the signed-in user (initials,
+  name, roles) with sign-out at the end, padded to the content's gutter. The user card moved
+  from the sidebar foot to the bar, so identity appears once. Phones keep the navy header.
+- **Schedule finish.**
+  - The header is a white panel whose status line sits in a brand-tinted strip below a divider.
+    A hairline separates the primary action from the secondary one.
+  - Calendar: an ordinary day's hover is a blue tint and hairline. An attention day deepens its
+    own amber instead. The open day keeps the blue ring and tint and its number turns blue.
+    Neighbouring-month days are faintly hatched (`bg-inert-hatch`). The grid gets a soft
+    shadow.
+  - VALID stays quiet and NEEDS_ATTENTION stays the loudest state.
+- Presentation only: no route, rule, permission, query or wording used by the workflow changed.

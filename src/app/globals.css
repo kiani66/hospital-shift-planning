@@ -244,6 +244,58 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/*
+ * The navy identity surface with depth: the sidebar color lit by two soft
+ * brand-blue glows (login brand panel). Direction-neutral decoration.
+ */
+@utility bg-brand-panel {
+  background:
+    radial-gradient(
+      60rem 36rem at 85% -10%,
+      color-mix(in oklch, var(--sidebar-primary) 38%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      40rem 30rem at 0% 110%,
+      color-mix(in oklch, var(--sidebar-primary) 22%, transparent),
+      transparent 60%
+    ),
+    var(--sidebar);
+}
+
+/* A faint dot grid on the navy surface; pair with a mask to fade it out. */
+@utility bg-brand-dots {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--sidebar-foreground) 11%, transparent) 1px,
+    transparent 1.5px
+  );
+  background-size: 22px 22px;
+}
+
+/*
+ * The work area's light brand wash: the top of the canvas picks up the
+ * brand tint next to the navy sidebar, then settles into the calm canvas.
+ */
+@utility bg-canvas-wash {
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--brand-soft) 70%, var(--canvas)),
+      var(--canvas) 18rem
+    ),
+    var(--canvas);
+}
+
+/* Days outside the period: an inert, faintly hatched cell. */
+@utility bg-inert-hatch {
+  background-color: var(--muted);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--border) 0 1px,
+    transparent 1px 7px
+  );
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleAlert, LoaderCircle, LogIn } from "lucide-react";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,10 +32,13 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         aria-live="assertive"
         className={
           error
-            ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm leading-relaxed text-destructive"
+            ? "flex items-start gap-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2.5 text-sm leading-relaxed text-destructive"
             : "sr-only"
         }
       >
+        {error && (
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        )}
         {error}
       </div>
 
@@ -53,7 +57,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           defaultValue={state.email}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
-          className="text-start"
+          className="min-h-12 text-start"
         />
       </div>
 
@@ -68,11 +72,24 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           required
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
-          className="text-start"
+          className="min-h-12 text-start"
         />
       </div>
 
-      <Button type="submit" disabled={pending} aria-disabled={pending}>
+      <Button
+        type="submit"
+        disabled={pending}
+        aria-disabled={pending}
+        className="mt-1 min-h-12 text-base font-semibold shadow-sm shadow-primary/25"
+      >
+        {pending ? (
+          <LoaderCircle
+            aria-hidden="true"
+            className="size-5 motion-safe:animate-spin"
+          />
+        ) : (
+          <LogIn aria-hidden="true" className="size-5 rtl:-scale-x-100" />
+        )}
         {pending ? "در حال ورود…" : "ورود"}
       </Button>
     </form>

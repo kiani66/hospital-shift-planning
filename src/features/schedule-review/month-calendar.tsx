@@ -178,9 +178,11 @@ export function MonthSummary({
 function CellTop({
   cell,
   today,
+  selected,
 }: {
   cell: { date: IsoDate; dayNumber: string; data: ReviewDay };
   today: IsoDate;
+  selected: boolean;
 }) {
   const day = cell.data;
   const findings = findingCount(day);
@@ -192,6 +194,7 @@ function CellTop({
             "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-sm leading-none font-semibold tabular-nums",
             day.health === "UNPLANNED" && "text-muted-foreground",
             day.holiday && "text-holiday-foreground",
+            selected && "text-primary",
             cell.date === today && "bg-primary text-primary-foreground",
           )}
         >
@@ -266,9 +269,14 @@ function CellCoverage({ day }: { day: ReviewDay }) {
   );
 }
 
+/**
+ * Hover: a quiet blue tint and hairline outline for ordinary days (the
+ * open day keeps its own outline); a day needing attention deepens its
+ * own warm tint instead of turning blue.
+ */
 const HOVER: Record<DayHealth, string> = {
-  UNPLANNED: "hover:bg-accent",
-  VALID: "hover:bg-accent",
+  UNPLANNED: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
+  VALID: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
   NEEDS_ATTENTION: "hover:bg-health-attention/18",
 };
 
@@ -309,7 +317,7 @@ export function MonthCalendar({
         </p>
       )}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm shadow-primary/5">
         <table className="w-full table-fixed border-separate border-spacing-0">
           <caption className="sr-only">
             تقویم {month.label}؛ برای دیدن و ویرایش شیفت‌ها و موارد نیازمند
@@ -340,7 +348,7 @@ export function MonthCalendar({
                     key={cell.date}
                     className={cn(
                       "h-14 border-e border-b p-0 align-top last:border-e-0 sm:h-16 md:h-[5.5rem] xl:h-24",
-                      !cell.data && "bg-muted/70",
+                      !cell.data && "bg-inert-hatch",
                     )}
                   >
                     {cell.data ? (
@@ -354,21 +362,23 @@ export function MonthCalendar({
                         data-health={cell.data.health}
                         data-selected={cell.date === selected || undefined}
                         className={cn(
-                          "relative flex h-full min-w-0 flex-col gap-1 p-1 transition-colors focus-visible:ring-inset sm:p-1.5",
+                          "relative flex h-full min-w-0 flex-col gap-1 p-1 transition-colors ring-inset focus-visible:ring-inset motion-reduce:transition-none sm:p-1.5",
                           focusRing,
                           HEALTH_PRESENTATION[cell.data.health].cellClass,
-                          HOVER[cell.data.health],
-                          cell.date === selected &&
-                            cn(
-                              "ring-2 ring-primary ring-inset",
-                              cell.data.health !== "NEEDS_ATTENTION" &&
-                                "bg-brand-soft",
-                            ),
+                          cell.date === selected
+                            ? cn(
+                                "ring-2 ring-primary",
+                                cell.data.health === "NEEDS_ATTENTION"
+                                  ? HOVER.NEEDS_ATTENTION
+                                  : "bg-brand-soft hover:bg-brand-soft",
+                              )
+                            : HOVER[cell.data.health],
                         )}
                       >
                         <CellTop
                           cell={{ ...cell, data: cell.data }}
                           today={today}
+                          selected={cell.date === selected}
                         />
                         <CellCoverage day={cell.data} />
                         <LinkPending />
