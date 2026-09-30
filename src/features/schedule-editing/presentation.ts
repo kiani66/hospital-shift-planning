@@ -71,6 +71,9 @@ export const NETWORK_FAILURE: EditFailure = {
   message: `ارتباط با سرور برقرار نشد. ${NOTHING_SAVED} دوباره تلاش کنید.`,
 };
 
+/** The id of a nurse's row in the day editor; findings link to it. */
+export const nurseRowId = (userId: string) => `nurse-${userId}`;
+
 /** "صبح (M)", or "بدون شیفت". */
 export const shiftWord = (shift: ShiftCode | null) =>
   shift === null ? "بدون شیفت" : `${SHIFT_PRESENTATION[shift].name} (${shift})`;

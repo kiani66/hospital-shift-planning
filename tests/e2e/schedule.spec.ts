@@ -72,19 +72,21 @@ test.describe("Head Nurse schedule management", () => {
     await expect(dialog).toBeHidden();
 
     // Summary: Jalali label, status and roster counts.
-    await expect(
-      main(page).getByRole("heading", { level: 2, name: label }),
-    ).toBeVisible();
+    const heading = main(page).getByRole("heading", { level: 1 });
+    await expect(heading).toContainText(label);
+    await expect(heading).toContainText(department.name);
     await expect(main(page).getByText("پیش‌نویس")).toBeVisible();
-    await expect(fact(roster(page), "تعداد پرسنل برنامه")).toHaveText("۴");
-    await expect(fact(roster(page), "پرستار")).toHaveText("۳");
-    await expect(fact(roster(page), "سرپرستار")).toHaveText("۱");
+    // The Head Nurse is part of the roster, counted with everyone.
+    await expect(fact(roster(page), "تعداد پرسنل برنامه")).toHaveText("۴ نفر");
+    await expect(fact(roster(page), "ترکیب")).toHaveText(
+      "۳ پرستار، ۱ سرپرستار",
+    );
     await expect(fact(preferences(page), "وضعیت")).toHaveText("باز نشده");
     expect(await main(page).innerText()).not.toMatch(ISO_DATE);
     await expectNoHorizontalOverflow(page, "created");
 
-    // Open preference collection (confirmed).
-    await preferences(page)
+    // Open preference collection (confirmed): the header's next action.
+    await main(page)
       .getByRole("button", { name: "باز کردن ثبت ترجیحات" })
       .click();
     const openDialog = page.getByRole("dialog", {
@@ -103,7 +105,7 @@ test.describe("Head Nurse schedule management", () => {
     await expectNoHorizontalOverflow(page, "open");
 
     // Closing needs confirmation; cancelling keeps it open.
-    const closeButton = preferences(page).getByRole("button", {
+    const closeButton = main(page).getByRole("button", {
       name: "بستن ثبت ترجیحات",
     });
     await closeButton.click();
@@ -123,7 +125,7 @@ test.describe("Head Nurse schedule management", () => {
     await expect(fact(preferences(page), "وضعیت")).toHaveText("بسته");
     await expect(fact(preferences(page), "بسته شده")).toBeVisible();
     await expect(
-      preferences(page).getByRole("button", { name: "بستن ثبت ترجیحات" }),
+      main(page).getByRole("button", { name: /ثبت ترجیحات$/ }),
     ).toHaveCount(0);
     await expectNoHorizontalOverflow(page, "closed");
 

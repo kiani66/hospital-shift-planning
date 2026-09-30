@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils";
  * With `closeLabel`, the header gets a close button (for content dialogs
  * that have no action buttons of their own); `headerActions` go beside it.
  * `stickyHeader` keeps the header (title and those controls) visible while
- * long content scrolls.
+ * long content scrolls. `focusTitle` starts focus on the title (announced
+ * as the dialog's name) instead of the first header control, so opening a
+ * content dialog does not land on, and ring, a navigation button.
  */
 export function Dialog({
   open,
@@ -24,6 +26,7 @@ export function Dialog({
   closeLabel,
   headerActions,
   stickyHeader = false,
+  focusTitle = false,
   children,
   className,
 }: {
@@ -34,19 +37,24 @@ export function Dialog({
   closeLabel?: string;
   headerActions?: ReactNode;
   stickyHeader?: boolean;
+  focusTitle?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      if (focusTitle) titleRef.current?.focus();
+    }
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+  }, [open, focusTitle]);
 
   return (
     <dialog
@@ -61,6 +69,7 @@ export function Dialog({
       className={cn(
         "m-auto w-[min(calc(100vw-2rem),32rem)] max-w-none rounded-lg border bg-background p-0 text-foreground shadow-xl",
         "backdrop:bg-black/40",
+        "motion-safe:open:animate-in motion-safe:open:duration-150 motion-safe:open:fade-in-0",
         className,
       )}
     >
@@ -73,7 +82,12 @@ export function Dialog({
           )}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <h2 id={titleId} className="text-lg leading-relaxed font-bold">
+            <h2
+              id={titleId}
+              ref={titleRef}
+              tabIndex={focusTitle ? -1 : undefined}
+              className="text-lg leading-relaxed font-bold focus:outline-none"
+            >
               {title}
             </h2>
             {description && (

@@ -339,8 +339,8 @@ applicable rule attributed to the day) or `VALID` (assignments and no finding), 
 **`VALID` means: "no violation was found among the currently implemented and applicable
 validators."** It does not mean the day is fully staffed or fully correct: staffing minimum /
 maximum requirements are not defined yet (D44), so nothing about staffing is checked. The wording
-is therefore neutral, «بدون ایراد», and the explanatory text says that staffing is not checked yet
-(«در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.»). No text may
+is therefore neutral, «بدون مغایرت» (amended by D51; Phase 7a used «بدون ایراد»), and the
+explanatory text says that staffing is not checked yet. No text may
 imply fully staffed, complete, approved or ready for finalization; a unit test guards the label
 and description. When staffing validators are added, `VALID` includes them without any change to
 the meaning.
@@ -503,3 +503,97 @@ Enforced in `application/schedules/edit-assignments.ts` and
   error and no connection. No browser alerts.
 
 Enforced in `features/schedule-editing/` and `domain/preferences/preference-fit.ts`.
+
+## Schedule UI refinement decisions
+
+Phase 7c. Paths are relative to `src/`. Presentation only: no schema change, no migration, and no
+change to the domain, application or infrastructure layers; every business rule above (D39–D50)
+is unchanged.
+
+### D51 · VALID wording (amends D40's words, not its meaning)
+
+«بدون ایراد» reads as "flawless", a quality of the day, which leans towards "correct". VALID is
+now worded as the result of a check: «بدون مغایرت» in compact places (cell accessible name,
+badges, legend, month totals) and «مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده
+نشد. تأمین نفرات هنوز بررسی نمی‌شود.» in the day detail. The legend carries the caveat once for
+the month. The meaning stays D40's exactly: no violation among the implemented, applicable
+validators; nothing about staffing. The unit test that guards D40 now pins the new words and also
+rejects «ایراد», «درست» and «صحیح».
+Enforced in `features/schedule-review/presentation.ts`.
+
+### D52 · Schedule page hierarchy
+
+- One schedule header replaces the page title, the summary card and the calendar's own heading.
+  Its `h1` names the department (a quiet first line) and the month (the focal line), between the
+  previous / next calendar-month links (D39's only month navigation). Beside it: the period range,
+  the lifecycle status, the preference-window state («ترجیحات: …») and the editing mode («ویرایش
+  شیفت‌ها» / «فقط مشاهده»).
+- The header holds the single next action of the month (open or close preference collection).
+  Creating another month is a quiet secondary control, shown only when `canCreate`; months that
+  already have a schedule stay disabled in its dialog (D18, D30).
+- A month without a schedule keeps the same header («بدون برنامه») and its body says
+  «برای این ماه هنوز برنامه‌ای ایجاد نشده است.», what creating does, and either the create
+  action (preselected to that month) or who may create it.
+- Lifecycle badges have one icon shape per status; only APPROVED uses a check (and the valid
+  tone), RETURNED uses the attention tone. An open preference window uses the new
+  `status-active` token, never the health-valid one: "open" is not "correct".
+- Preferences and roster follow the calendar as two plain sections. The roster counts the Head
+  Nurse with everyone («۴ نفر», «۳ پرستار، ۱ سرپرستار»); the Head Nurse remains a schedulable
+  roster member everywhere (D48).
+- No route `loading.tsx`: it streams the page, so a denied or unknown department would answer 200
+  instead of 404 (D26, D46), and a `?day=` step could swap the open day for a skeleton. Pending
+  feedback is per link instead (`useLinkStatus` on day cells and previous / next day). A route
+  `error.tsx` says in Persian that loading failed, with retry, and never shows the error.
+
+Enforced in `features/schedule/schedule-header.tsx`, `features/schedule/status-presentation.ts`
+and `app/(app)/departments/[code]/schedule/`.
+
+### D53 · Calendar emphasis and density
+
+- Quiet by default, loud on exceptions. A VALID cell has no tint and no colored edge, only a small
+  check. A NEEDS_ATTENTION cell is tinted, outlined and carries an icon + count badge. An
+  UNPLANNED cell is muted («بدون شیفت» from `md` up). Every state still has its own icon shape and
+  is part of the cell's accessible name (D40).
+- The cell's content is coverage per period (M, E, N; ME counted in M and E, D42), shown from `md`
+  up as the code (text color only) over the count. No nurse names (D47).
+- Hairline grid; inert neighbouring-month days are muted cells so every week row stays whole
+  (D39). The open day has a selection ring; today keeps `aria-current="date"` and a filled day
+  number.
+- Above the calendar, one summary row: days per state (attention first) and a link to every day
+  that needs attention (the same aggregates; no extra query). On phones this answers "which days
+  need me" without scanning the grid, where cells show only the day number and a health mark.
+- The legend is one line plus the VALID caveat. Its holiday entry appears only when the month has
+  a holiday; nothing implies holiday data exists while none is connected (D41).
+
+Enforced in `features/schedule-review/month-calendar.tsx` and `presentation.ts`.
+
+### D54 · Day surface layout and findings
+
+- Desktop (`lg`+): a side column (the lock reason, findings, related findings, coverage) next to
+  the main column (the 7b editing list, or the read-only shifts). Phones: the same order stacked,
+  full screen (D45). The dialog opens with focus on its title (the date), not on a header button;
+  previous / next day and close stay in the sticky header (D50).
+- Only a day with findings shows the «نیاز به بررسی» heading. A VALID or UNPLANNED day shows one
+  quiet line with its D40 / D51 description.
+- Each finding reads: rule and severity, who (in the editor, each name links to that nurse's
+  row), when and which shift (e.g. N on the night → M the next day, with shift chips), the full
+  Persian sentence (D43), and how to resolve it. Resolution wording is exhaustive over rule codes
+  (`findingResolution`), like titles and messages. A nurse involved in a finding has an accented
+  row and the text «نیاز به بررسی».
+- Coverage shows once per day (three periods, "from long shift" counts) with the staffing status
+  once when it is the same for every period (D44).
+- Editing behavior (D48–D50: one-step controls, keyboard, range, undo, conflict and failure
+  messages) is unchanged; only its presentation is refined (segmented shift controls that fill
+  the row on phones, a horizontally scrolling filter row on phones, shift dots on filters).
+
+Enforced in `features/schedule-review/day-detail.tsx` and `features/schedule-editing/day-editor.tsx`.
+
+### D55 · Shared schedule UI primitives
+
+`components/ui/badge.tsx` (semantic tones on tokens only), `section-header.tsx`,
+`empty-state.tsx`, `metadata.tsx`; `features/shifts/shift-chip.tsx` (code text always rendered,
+`dir="ltr"`, solid or soft); `HealthBadge` / `HealthIcon`; `ScheduleStatusBadge` /
+`PreferenceStateBadge`. Shift colors stay in the `shift-*` tokens and `features/shifts/catalog.ts`
+(D42), which now also names each shift's text-only (`accentClass`) and marker (`dotClass`)
+classes. The only new token is `status-active` (light and dark). Motion: a 150 ms fade on dialog
+open under `motion-safe`, nothing else.
