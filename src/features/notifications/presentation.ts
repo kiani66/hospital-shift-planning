@@ -44,9 +44,9 @@ function scheduleLabel(item: NotificationItem): string | null {
 }
 
 /**
- * Preference entry is Phase 6; until then `/preferences` is a placeholder.
- * The schedule id is kept (the project's `?schedule=` convention) so the
- * page can open the right schedule once it exists; that page authorizes it.
+ * The preference page (Phase 6) with the notification's schedule selected
+ * (the project's `?schedule=` convention). The page authorizes the schedule
+ * itself; the link grants nothing.
  */
 function preferencesPath(scheduleId: string | null): Route {
   return (

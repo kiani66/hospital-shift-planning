@@ -2,7 +2,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { MembershipRole } from "../../domain/authz/actor";
 import type { IsoDate } from "../../domain/shared/dates";
-import type { DbExecutor } from "../db/database";
+import type { DbExecutor, Transaction } from "../db/database";
 import {
   departmentMemberships,
   scheduleRoster,
@@ -104,6 +104,31 @@ export async function isOnRoster(
         eq(scheduleRoster.userId, userId),
       ),
     );
+  return row !== undefined;
+}
+
+/**
+ * Locks one roster entry (`FOR NO KEY UPDATE`) for the rest of the
+ * transaction and says whether it exists. Serializes one nurse's concurrent
+ * writes to their own rows of the schedule (two tabs, two devices) without
+ * blocking other nurses. Foreign-key checks (`FOR KEY SHARE`) do not conflict
+ * with it.
+ */
+export async function lockRosterEntry(
+  tx: Transaction,
+  scheduleId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({ userId: scheduleRoster.userId })
+    .from(scheduleRoster)
+    .where(
+      and(
+        eq(scheduleRoster.scheduleId, scheduleId),
+        eq(scheduleRoster.userId, userId),
+      ),
+    )
+    .for("no key update");
   return row !== undefined;
 }
 

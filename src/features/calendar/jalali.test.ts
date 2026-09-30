@@ -12,6 +12,7 @@ import {
   jalaliMonthLabel,
   jalaliMonthOptions,
   jalaliMonthPeriod,
+  jalaliWeekday,
   toJalali,
   wholeJalaliMonthOf,
 } from "./jalali";
@@ -79,6 +80,8 @@ describe("Persian labels", () => {
     expect(formatJalaliDate(d("2026-10-24"), { weekday: true })).toBe(
       "شنبه ۲ آبان ۱۴۰۵",
     );
+    expect(jalaliWeekday(d("2026-10-24"))).toBe("شنبه");
+    expect(jalaliWeekday(d("2026-10-30"))).toBe("جمعه");
     expect(formatJalaliRange(d("2026-10-23"), d("2026-11-21"))).toBe(
       "۱ تا ۳۰ آبان ۱۴۰۵",
     );
