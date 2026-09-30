@@ -17,6 +17,8 @@ import type {
   ReviewShift,
 } from "@/application/schedules/review";
 import { Badge } from "@/components/ui/badge";
+import { Callout } from "@/components/ui/callout";
+import { IconWell } from "@/components/ui/icon-well";
 import { preferenceFit } from "@/domain/preferences/preference-fit";
 import type { ShiftCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
@@ -138,7 +140,7 @@ function FindingItem({
   linked: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-1.5 rounded-md border bg-background p-3">
+    <li className="flex flex-col gap-1.5 rounded-lg border border-s-3 border-health-attention/30 border-s-health-attention bg-background p-3 shadow-xs">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
         {RULE_TITLES[finding.code]}
         <Badge tone="attention" size="sm">
@@ -155,7 +157,7 @@ function FindingItem({
       <p className="flex items-start gap-1.5 text-xs leading-relaxed font-medium">
         <Wrench
           aria-hidden="true"
-          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+          className="mt-0.5 size-3.5 shrink-0 text-primary"
         />
         {findingResolution(finding)}
       </p>
@@ -174,25 +176,29 @@ function Findings({ day, linked }: { day: DayReview; linked: boolean }) {
       <p
         role="note"
         data-health={day.health}
-        className="flex items-start gap-2 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
+        className={cn(
+          "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm leading-relaxed",
+          day.health === "VALID"
+            ? "border-health-valid/25 bg-health-valid/5"
+            : "bg-muted/60 text-muted-foreground",
+        )}
       >
-        <HealthIcon
-          health={day.health}
-          className="mt-0.5 text-muted-foreground"
-        />
+        <HealthIcon health={day.health} className="mt-0.5" />
         {HEALTH_PRESENTATION[day.health].description}
       </p>
     );
   return (
     <section
       aria-labelledby="day-findings"
-      className="flex flex-col gap-2 rounded-lg border border-health-attention/50 bg-health-attention/5 p-3"
+      className="flex flex-col gap-2 rounded-xl border border-health-attention/55 bg-health-attention/8 p-3"
     >
       <h3
         id="day-findings"
         className="flex items-center gap-2 text-sm font-semibold text-health-attention-foreground"
       >
-        <CircleAlert aria-hidden="true" className="size-4" />
+        <IconWell tone="attention">
+          <CircleAlert />
+        </IconWell>
         نیاز به بررسی
         <span className="font-normal tabular-nums">
           ({faNumber(day.findings.length)} مورد)
@@ -220,13 +226,15 @@ function RelatedFindings({ day, linked }: { day: DayReview; linked: boolean }) {
   return (
     <section
       aria-labelledby="day-related-findings"
-      className="flex flex-col gap-2 rounded-lg border border-dashed p-3"
+      className="flex flex-col gap-2 rounded-xl border border-dashed border-health-attention/45 bg-card p-3"
     >
       <h3
         id="day-related-findings"
         className="flex items-center gap-2 text-sm font-semibold"
       >
-        <Link2 aria-hidden="true" className="size-4 text-muted-foreground" />
+        <IconWell tone="muted">
+          <Link2 />
+        </IconWell>
         مرتبط با روز دیگر ({faNumber(day.relatedFindings.length)} مورد)
       </h3>
       <ul className="flex flex-col gap-2">
@@ -260,9 +268,15 @@ function CoverageSummary({ day }: { day: DayReview }) {
   return (
     <section
       aria-labelledby="day-coverage"
-      className="flex flex-col gap-2 rounded-lg border p-3"
+      className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-xs"
     >
-      <h3 id="day-coverage" className="text-sm font-semibold">
+      <h3
+        id="day-coverage"
+        className="flex items-center gap-2 text-sm font-semibold"
+      >
+        <IconWell>
+          <Users />
+        </IconWell>
         پوشش نفرات
       </h3>
       <ul className="grid grid-cols-3 gap-2">
@@ -274,7 +288,10 @@ function CoverageSummary({ day }: { day: DayReview }) {
             <li
               key={c.period}
               data-period={c.period}
-              className="flex min-w-0 flex-col gap-0.5 rounded-md bg-muted/40 px-2 py-1.5"
+              className={cn(
+                "flex min-w-0 flex-col gap-0.5 rounded-lg px-2 py-1.5",
+                SHIFT_PRESENTATION[c.period].softClass,
+              )}
             >
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span
@@ -344,7 +361,7 @@ function ReadOnlyNurseRow({
       )}
       {nurse.preference && (
         <span className="ms-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="rounded border px-1.5">
+          <span className="rounded border border-primary/15 bg-brand-soft/70 px-1.5 text-brand-soft-foreground">
             {preferenceLabel(nurse.preference)}
           </span>
           {shift && fitLabel && <span>{fitLabel}</span>}
@@ -366,7 +383,7 @@ function ShiftSection({
   return (
     <section
       aria-labelledby={id}
-      className="flex min-w-0 flex-col gap-1 rounded-lg border p-3"
+      className="flex min-w-0 flex-col gap-1 rounded-xl border bg-card p-3 shadow-xs"
     >
       <h3 id={id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <ShiftChip code={shift.code} size="md" />
@@ -422,10 +439,9 @@ export function DayDetail({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
       <div className="flex min-w-0 flex-col gap-3">
         {!day.edit.allowed && (
-          <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
-            <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <Callout tone="muted" icon={Lock}>
             {editDenialLabel(day.edit.reason)}
-          </p>
+          </Callout>
         )}
         <Findings day={day} linked={!!editor} />
         <RelatedFindings day={day} linked={!!editor} />
@@ -444,7 +460,7 @@ export function DayDetail({
                 />
               ))}
             </div>
-            <details className="rounded-lg border">
+            <details className="rounded-xl border bg-card shadow-xs">
               <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
                 <Users
                   aria-hidden="true"

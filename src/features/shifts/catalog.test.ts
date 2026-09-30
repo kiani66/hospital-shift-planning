@@ -22,6 +22,7 @@ describe("shift catalog", () => {
         `text-shift-${code.toLowerCase()}-foreground`,
       );
       expect(shift.dotClass).toBe(`bg-shift-${code.toLowerCase()}-foreground`);
+      expect(shift.softClass).toBe(`bg-shift-${code.toLowerCase()}/45`);
     }
     expect(SHIFT_PRESENTATION.ME.fullName).toContain("صبح + عصر");
     expect(Object.keys(COVERAGE_PERIOD_NAMES)).toEqual(["M", "E", "N"]);

@@ -13,7 +13,7 @@ export interface DayLink {
 }
 
 const base =
-  "inline-flex size-11 shrink-0 items-center justify-center rounded-md border focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none md:size-9 pointer-coarse:size-11";
+  "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-input focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none md:size-9 pointer-coarse:size-11";
 
 function Pending({ icon: Icon }: { icon: typeof ChevronLeft }) {
   const { pending } = useLinkStatus();
@@ -56,7 +56,10 @@ function DayNavLink({
       prefetch={false}
       aria-label={`${text}: ${target.label}`}
       title={target.label}
-      className={cn(base, "bg-background hover:bg-accent")}
+      className={cn(
+        base,
+        "bg-background shadow-xs transition-colors hover:border-primary/40 hover:bg-accent hover:text-accent-foreground",
+      )}
     >
       <Pending icon={Icon} />
     </Link>

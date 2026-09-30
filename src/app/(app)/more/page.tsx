@@ -14,7 +14,10 @@ export default async function MorePage() {
     <>
       <PageHeader title="همه بخش‌ها" />
       <nav aria-label="همه بخش‌ها" className="max-w-md">
-        <NavSections sections={buildNavigation(context).sections} />
+        <NavSections
+          sections={buildNavigation(context).sections}
+          surface="page"
+        />
       </nav>
     </>
   );

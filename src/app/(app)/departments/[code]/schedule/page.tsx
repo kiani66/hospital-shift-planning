@@ -1,8 +1,10 @@
+import { Info } from "lucide-react";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
+import { Callout } from "@/components/ui/callout";
 import {
   getScheduleReview,
   type DayReview,
@@ -216,15 +218,12 @@ export default async function DepartmentSchedulePage({
       <div className="flex flex-col gap-3">
         <MonthSummary month={review.month} dayHref={here} />
         {noAssignments && (
-          <p
-            role="note"
-            className="rounded-md border border-dashed px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
-          >
+          <Callout role="note" tone="info" icon={Info}>
             هنوز شیفتی در این برنامه ثبت نشده است؛ همه روزها
             برنامه‌ریزی‌نشده‌اند.
             {review.month.editable &&
               " برای چیدن شیفت‌ها، روزی را در تقویم انتخاب کنید."}
-          </p>
+          </Callout>
         )}
         <MonthCalendar
           month={review.month}

@@ -90,17 +90,12 @@ function PreferencesSection({ schedule }: { schedule: ScheduleOverview }) {
   return (
     <section
       aria-labelledby="preferences-heading"
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4"
+      className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs"
     >
       <SectionHeader
         id="preferences-heading"
         title="ثبت ترجیحات پرستاران"
-        icon={
-          <LockOpen
-            aria-hidden="true"
-            className="size-4 text-muted-foreground"
-          />
-        }
+        icon={<LockOpen aria-hidden="true" />}
       />
       <div aria-live="polite" className="flex flex-col gap-3">
         <MetadataList
@@ -146,14 +141,12 @@ function RosterSection({ schedule }: { schedule: ScheduleOverview }) {
   return (
     <section
       aria-labelledby="roster-heading"
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4"
+      className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs"
     >
       <SectionHeader
         id="roster-heading"
         title="پرسنل برنامه"
-        icon={
-          <Users aria-hidden="true" className="size-4 text-muted-foreground" />
-        }
+        icon={<Users aria-hidden="true" />}
       />
       <MetadataList
         items={[
@@ -170,12 +163,12 @@ function RosterSection({ schedule }: { schedule: ScheduleOverview }) {
         عضویت‌ها به‌طور خودکار تغییر نمی‌کند.
       </p>
       {roster.members.length === 0 ? (
-        <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+        <p className="rounded-md border border-dashed bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           فهرست پرسنل این برنامه خالی است.
         </p>
       ) : (
         <details className="group rounded-md border">
-          <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+          <summary className="flex min-h-11 cursor-pointer items-center rounded-md px-3 text-sm font-medium text-primary group-open:rounded-b-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
             مشاهده فهرست پرسنل
           </summary>
           <ul className="max-h-80 divide-y overflow-y-auto border-t text-sm">

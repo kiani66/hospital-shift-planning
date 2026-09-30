@@ -53,7 +53,7 @@ export function MonthNavLink({
   const Icon = direction === "previous" ? ChevronRight : ChevronLeft;
   const text = direction === "previous" ? "ماه قبل" : "ماه بعد";
   const base = cn(
-    "inline-flex size-11 shrink-0 items-center justify-center rounded-md border md:size-9 pointer-coarse:size-11",
+    "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-input md:size-9 pointer-coarse:size-11",
     focusRing,
   );
   if (!target)
@@ -72,7 +72,10 @@ export function MonthNavLink({
       href={target.href}
       aria-label={`${text}: ${target.label}`}
       title={target.label}
-      className={cn(base, "bg-background hover:bg-accent")}
+      className={cn(
+        base,
+        "bg-background text-foreground shadow-xs transition-colors hover:border-primary/40 hover:bg-accent hover:text-accent-foreground",
+      )}
     >
       <Icon aria-hidden="true" className="size-5" />
     </Link>
@@ -107,7 +110,7 @@ export function MonthSummary({
 }) {
   const attention = month.days.filter((d) => d.health === "NEEDS_ATTENTION");
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+    <div className="flex flex-col gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
       <ul
         aria-label="خلاصه وضعیت روزهای ماه"
         className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
@@ -126,10 +129,7 @@ export function MonthSummary({
                   : "text-muted-foreground",
               )}
             >
-              <HealthIcon
-                health={state}
-                className={cn(!loud && "text-muted-foreground")}
-              />
+              <HealthIcon health={state} />
               <span>{HEALTH_PRESENTATION[state].label}:</span>{" "}
               <span
                 className={cn(
@@ -157,13 +157,13 @@ export function MonthSummary({
               prefetch={false}
               aria-label={dayCellLabel(d)}
               className={cn(
-                "inline-flex min-h-8 items-center gap-1 rounded-full border border-health-attention/50 bg-health-attention/10 px-2.5 text-xs font-medium text-health-attention-foreground hover:bg-health-attention/20 pointer-coarse:min-h-10",
+                "inline-flex min-h-8 items-center gap-1 rounded-full border border-health-attention/55 bg-health-attention/12 px-2.5 text-xs font-medium text-health-attention-foreground transition-colors hover:bg-health-attention/22 pointer-coarse:min-h-10",
                 focusRing,
               )}
             >
               <CircleAlert aria-hidden="true" className="size-3.5" />
               {shortDay(d.date)}
-              <span className="tabular-nums opacity-80">
+              <span className="font-normal tabular-nums">
                 ({faNumber(findingCount(d))})
               </span>
             </Link>
@@ -217,8 +217,8 @@ function CellTop({
           className={cn(
             "mt-1 size-3.5",
             day.health === "VALID"
-              ? "text-health-valid-foreground/70"
-              : "text-muted-foreground/60",
+              ? "text-health-valid/80"
+              : "text-health-unplanned",
           )}
         />
       )}
@@ -269,7 +269,7 @@ function CellCoverage({ day }: { day: ReviewDay }) {
 const HOVER: Record<DayHealth, string> = {
   UNPLANNED: "hover:bg-accent",
   VALID: "hover:bg-accent",
-  NEEDS_ATTENTION: "hover:bg-health-attention/15",
+  NEEDS_ATTENTION: "hover:bg-health-attention/18",
 };
 
 /**
@@ -279,7 +279,8 @@ const HOVER: Record<DayHealth, string> = {
  * inert. A cell carries only aggregates (health, coverage counts, holiday),
  * never nurse data. Quiet by default, loud on exceptions: a VALID day adds
  * nothing but a small check, a day needing attention is tinted, outlined
- * and counted.
+ * and counted in the warm attention amber, an unplanned day is a cool gray
+ * wash; the open day is outlined in the brand blue (D53, D56).
  */
 export function MonthCalendar({
   month,
@@ -308,7 +309,7 @@ export function MonthCalendar({
         </p>
       )}
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
         <table className="w-full table-fixed border-separate border-spacing-0">
           <caption className="sr-only">
             تقویم {month.label}؛ برای دیدن و ویرایش شیفت‌ها و موارد نیازمند
@@ -321,7 +322,7 @@ export function MonthCalendar({
                   key={w.long}
                   scope="col"
                   abbr={w.long}
-                  className="border-b bg-muted/50 py-2 text-xs font-medium text-muted-foreground"
+                  className="border-b border-primary/10 bg-brand-soft/80 py-2 text-xs font-semibold text-brand-soft-foreground"
                 >
                   <span className="sm:hidden" aria-hidden="true">
                     {w.short}
@@ -339,7 +340,7 @@ export function MonthCalendar({
                     key={cell.date}
                     className={cn(
                       "h-14 border-e border-b p-0 align-top last:border-e-0 sm:h-16 md:h-[5.5rem] xl:h-24",
-                      !cell.data && "bg-muted/40",
+                      !cell.data && "bg-muted/70",
                     )}
                   >
                     {cell.data ? (
@@ -358,7 +359,11 @@ export function MonthCalendar({
                           HEALTH_PRESENTATION[cell.data.health].cellClass,
                           HOVER[cell.data.health],
                           cell.date === selected &&
-                            "ring-2 ring-foreground ring-inset",
+                            cn(
+                              "ring-2 ring-primary ring-inset",
+                              cell.data.health !== "NEEDS_ATTENTION" &&
+                                "bg-brand-soft",
+                            ),
                         )}
                       >
                         <CellTop
@@ -371,7 +376,7 @@ export function MonthCalendar({
                     ) : (
                       <span
                         aria-hidden="true"
-                        className="flex h-full p-1 text-sm text-muted-foreground/50 tabular-nums sm:p-1.5"
+                        className="flex h-full p-1 text-sm text-muted-foreground/55 tabular-nums sm:p-1.5"
                       >
                         <span className="inline-flex size-6 items-center justify-center">
                           {cell.dayNumber}

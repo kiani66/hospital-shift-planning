@@ -2,10 +2,13 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { IconWell, type ICON_WELL_TONES } from "./icon-well";
+
 /**
- * The heading row of a page section: an icon, the title (the section's
- * accessible name through `id`), optional quiet metadata and actions at the
- * end. One weight for every section, so titles never compete with data.
+ * The heading row of a page section: an icon in a tinted well, the title
+ * (the section's accessible name through `id`), optional quiet metadata and
+ * actions at the end. One weight for every section, so titles never compete
+ * with data; the well is the section's one touch of brand color.
  */
 export function SectionHeader({
   id,
@@ -14,6 +17,7 @@ export function SectionHeader({
   meta,
   actions,
   level = 2,
+  tone = "brand",
   className,
 }: {
   id: string;
@@ -22,6 +26,7 @@ export function SectionHeader({
   meta?: ReactNode;
   actions?: ReactNode;
   level?: 2 | 3;
+  tone?: keyof typeof ICON_WELL_TONES;
   className?: string;
 }) {
   const Heading = level === 2 ? "h2" : "h3";
@@ -33,7 +38,7 @@ export function SectionHeader({
         id={id}
         className="flex min-w-0 items-center gap-2 text-base font-semibold"
       >
-        {icon}
+        {icon && <IconWell tone={tone}>{icon}</IconWell>}
         {title}
       </Heading>
       {meta && (

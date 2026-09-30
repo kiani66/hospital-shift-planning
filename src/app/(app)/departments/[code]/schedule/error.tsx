@@ -28,6 +28,7 @@ export default function ScheduleError({
       <EmptyState
         icon={<TriangleAlert aria-hidden="true" />}
         headingLevel={1}
+        tone="danger"
         title="بارگذاری برنامه ممکن نشد"
         description="ارتباط با سرور یا خواندن برنامه با خطا روبه‌رو شد. تغییری از دست نرفته است؛ دوباره تلاش کنید."
         action={

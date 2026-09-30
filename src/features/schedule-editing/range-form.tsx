@@ -61,7 +61,7 @@ export function RangeForm({
         event.preventDefault();
         onApply(shift === "NONE" ? null : shift, dates);
       }}
-      className="mt-2 flex flex-col gap-3 rounded-md border bg-muted/40 p-3"
+      className="mt-2 flex flex-col gap-3 rounded-lg border border-primary/20 bg-brand-soft/50 p-3"
     >
       <fieldset className="flex flex-col gap-1.5">
         <legend className="mb-1 text-xs font-medium">شیفت</legend>
@@ -77,7 +77,7 @@ export function RangeForm({
                 value={o.value}
                 checked={shift === o.value}
                 onChange={() => setShift(o.value)}
-                className="size-4"
+                className="size-4 accent-primary"
               />
               {o.label}
             </label>
@@ -119,7 +119,7 @@ export function RangeForm({
           type="button"
           onClick={onCancel}
           className={cn(
-            "inline-flex min-h-9 items-center rounded-md border px-3 text-sm hover:bg-accent pointer-coarse:min-h-11",
+            "inline-flex min-h-9 items-center rounded-md border border-input bg-background px-3 text-sm hover:bg-accent pointer-coarse:min-h-11",
             focusRing,
           )}
         >

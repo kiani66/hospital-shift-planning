@@ -9,16 +9,27 @@ import { cn } from "@/lib/utils";
  */
 export const BADGE_TONES = {
   neutral: "border-border bg-background text-foreground",
-  muted: "border-transparent bg-muted text-muted-foreground",
+  muted: "border-border/70 bg-muted text-muted-foreground",
+  /** The brand at full strength: a settled, locked-in state. */
+  brand: "border-primary bg-primary text-primary-foreground",
+  /** Brand tint: an identity or mode marker, not a state. */
+  "brand-soft": "border-primary/20 bg-brand-soft text-brand-soft-foreground",
+  info: "border-status-info/35 bg-status-info/10 text-status-info-foreground",
+  review:
+    "border-status-review/35 bg-status-review/10 text-status-review-foreground",
+  success:
+    "border-status-success/40 bg-status-success/12 text-status-success-foreground",
+  warning:
+    "border-status-warning/45 bg-status-warning/12 text-status-warning-foreground",
   valid:
     "border-health-valid/40 bg-health-valid/10 text-health-valid-foreground",
   attention:
-    "border-health-attention/50 bg-health-attention/10 text-health-attention-foreground",
+    "border-health-attention/55 bg-health-attention/12 text-health-attention-foreground",
   unplanned:
     "border-health-unplanned/40 bg-health-unplanned/10 text-health-unplanned-foreground",
   holiday: "border-holiday/40 bg-holiday/10 text-holiday-foreground",
   active:
-    "border-status-active/40 bg-status-active/10 text-status-active-foreground",
+    "border-status-active/40 bg-status-active/12 text-status-active-foreground",
   destructive: "border-destructive/40 bg-destructive/5 text-destructive",
 } as const;
 

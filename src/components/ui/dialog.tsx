@@ -67,8 +67,8 @@ export function Dialog({
         if (event.target === event.currentTarget) event.currentTarget.close();
       }}
       className={cn(
-        "m-auto w-[min(calc(100vw-2rem),32rem)] max-w-none rounded-lg border bg-background p-0 text-foreground shadow-xl",
-        "backdrop:bg-black/40",
+        "m-auto w-[min(calc(100vw-2rem),32rem)] max-w-none rounded-xl border bg-background p-0 text-foreground shadow-xl",
+        "backdrop:bg-sidebar/55",
         "motion-safe:open:animate-in motion-safe:open:duration-150 motion-safe:open:fade-in-0",
         className,
       )}

@@ -26,9 +26,13 @@ export interface StatusPresentation {
 }
 
 /**
- * The schedule lifecycle as a badge. Only APPROVED gets a check: a check on
- * any earlier status would suggest the month is done. RETURNED is the one
- * status that asks the Head Nurse to act, so it uses the attention tone.
+ * The schedule lifecycle as a badge: every status its own icon and tone, so
+ * neighbouring states never look alike (D56). DRAFT is quiet, PLANNING an
+ * info blue, FINALIZED the solid brand blue (settled), SUBMITTED the review
+ * violet (with the supervisor), RETURNED the warning orange (asks the Head
+ * Nurse to act), REVISING amber (reopened work). Only APPROVED gets a check
+ * and success green: a check on any earlier status would suggest the month
+ * is done.
  */
 export const SCHEDULE_STATUS_PRESENTATION: Readonly<
   Record<ScheduleStatus, StatusPresentation>
@@ -41,34 +45,34 @@ export const SCHEDULE_STATUS_PRESENTATION: Readonly<
   PLANNING: {
     label: SCHEDULE_STATUS_LABELS.PLANNING,
     icon: PencilLine,
-    tone: "neutral",
+    tone: "info",
   },
   FINALIZED: {
     label: SCHEDULE_STATUS_LABELS.FINALIZED,
     icon: Lock,
-    tone: "neutral",
+    tone: "brand",
   },
   SUBMITTED: {
     label: SCHEDULE_STATUS_LABELS.SUBMITTED,
     icon: Send,
-    tone: "neutral",
+    tone: "review",
     mirrored: true,
   },
   RETURNED: {
     label: SCHEDULE_STATUS_LABELS.RETURNED,
     icon: Undo2,
-    tone: "attention",
+    tone: "warning",
     mirrored: true,
   },
   APPROVED: {
     label: SCHEDULE_STATUS_LABELS.APPROVED,
     icon: BadgeCheck,
-    tone: "valid",
+    tone: "success",
   },
   REVISING: {
     label: SCHEDULE_STATUS_LABELS.REVISING,
     icon: History,
-    tone: "neutral",
+    tone: "attention",
   },
 };
 

@@ -395,14 +395,14 @@ export function DayEditor({
         <details className="text-sm max-sm:hidden">
           <summary
             className={cn(
-              "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground hover:bg-accent pointer-coarse:min-h-11",
+              "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11",
               focusRing,
             )}
           >
             <Keyboard aria-hidden="true" className="size-4" />
             میان‌برهای صفحه‌کلید
           </summary>
-          <div className="mt-2 rounded-md border bg-background p-3">
+          <div className="mt-2 rounded-lg border bg-background p-3 shadow-sm">
             <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
               وقتی یکی از دکمه‌های شیفت یک پرستار انتخاب (فوکوس) شده است:
             </p>
@@ -436,8 +436,8 @@ export function DayEditor({
                 "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap pointer-coarse:min-h-11",
                 focusRing,
                 filter === f.value
-                  ? "border-foreground bg-foreground text-background"
-                  : "bg-background hover:bg-accent",
+                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                  : "border-input bg-background hover:border-primary/35 hover:bg-accent",
               )}
             >
               {f.dot && (
@@ -478,7 +478,7 @@ export function DayEditor({
       />
 
       {visible.length === 0 ? (
-        <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed bg-muted/50 p-4 text-center text-sm text-muted-foreground">
           {nurses.length === 0
             ? "فهرست پرسنل این برنامه خالی است."
             : "هیچ پرستاری با این فیلتر یا جستجو پیدا نشد."}
@@ -489,7 +489,7 @@ export function DayEditor({
           aria-label="پرسنل برنامه در این روز"
           aria-describedby={ids.status}
           aria-busy={pending || undefined}
-          className="divide-y overflow-hidden rounded-lg border"
+          className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs"
         >
           {visible.map((n) => (
             <NurseRow
@@ -550,7 +550,7 @@ function EditStatus({
             <span className="inline-flex items-start gap-1.5">
               <Check
                 aria-hidden="true"
-                className="mt-0.5 size-4 shrink-0 text-health-valid-foreground"
+                className="mt-0.5 size-4 shrink-0 text-status-success-foreground"
               />
               {status.message}
             </span>
@@ -559,7 +559,7 @@ function EditStatus({
                 type="button"
                 onClick={onUndo}
                 className={cn(
-                  "inline-flex min-h-8 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent pointer-coarse:min-h-11",
+                  "inline-flex min-h-8 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-medium text-primary hover:bg-accent pointer-coarse:min-h-11",
                   focusRing,
                 )}
               >
@@ -646,10 +646,10 @@ function NurseRow({
       data-pending={pending || undefined}
       data-flagged={nurse.flagged || undefined}
       className={cn(
-        "scroll-mt-40 border-s-3 px-3 py-2 target:bg-accent/60",
+        "scroll-mt-40 border-s-3 px-3 py-2 transition-colors target:bg-brand-soft",
         nurse.flagged
-          ? "border-s-health-attention bg-health-attention/5"
-          : "border-s-transparent",
+          ? "border-s-health-attention bg-health-attention/8 focus-within:bg-health-attention/14"
+          : "border-s-transparent focus-within:border-s-primary focus-within:bg-brand-soft/60 hover:bg-muted/50",
       )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -659,7 +659,7 @@ function NurseRow({
               {nurse.displayName}
             </span>
             {nurse.role === "HEAD_NURSE" && (
-              <Badge tone="muted" size="sm">
+              <Badge tone="brand-soft" size="sm">
                 {ROLE_LABELS.HEAD_NURSE}
               </Badge>
             )}
@@ -679,13 +679,18 @@ function NurseRow({
           </p>
           {nurse.preference && (
             <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="rounded border bg-background px-1.5">
+              <span className="rounded border border-primary/15 bg-brand-soft/70 px-1.5 text-brand-soft-foreground">
                 {preferenceLabel(nurse.preference)}
               </span>
               {fitLabel && (
                 <span
                   data-fit={fit}
-                  className={cn(fit === "MATCHES" && "text-foreground/80")}
+                  className={cn(
+                    "font-medium",
+                    fit === "MATCHES"
+                      ? "text-status-success-foreground"
+                      : "text-status-warning-foreground",
+                  )}
                 >
                   <span aria-hidden="true">
                     {fit === "DIFFERS" ? "≠ " : "✓ "}
@@ -717,9 +722,9 @@ function NurseRow({
                   selected
                     ? cn(
                         SHIFT_PRESENTATION[code].tokenClass,
-                        "border-current shadow-sm",
+                        "border-current shadow-sm ring-1 ring-current/25",
                       )
-                    : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                    : "border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
                   selected && pending && "opacity-70",
                 )}
               >
@@ -736,8 +741,8 @@ function NurseRow({
             className={cn(
               control,
               shift === null
-                ? "border-foreground/50 bg-muted text-foreground"
-                : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                ? "border-dashed border-muted-foreground bg-muted text-foreground shadow-sm"
+                : "border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
             )}
           >
             <Eraser aria-hidden="true" className="size-4" />
@@ -752,8 +757,8 @@ function NurseRow({
             onClick={onToggleRange}
             className={cn(
               control,
-              "ms-1 bg-background text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40",
-              rangeOpen && "bg-accent text-foreground",
+              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted",
+              rangeOpen && "border-primary bg-brand-soft text-primary",
             )}
           >
             <CalendarRange aria-hidden="true" className="size-4" />

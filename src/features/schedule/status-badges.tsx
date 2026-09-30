@@ -25,7 +25,7 @@ function StatusBadge({
         aria-hidden="true"
         className={cn("size-3.5 shrink-0", p.mirrored && "rtl:-scale-x-100")}
       />
-      {prefix && <span className="font-normal opacity-80">{prefix}</span>}
+      {prefix && <span className="font-normal">{prefix}</span>}
       {p.label}
     </Badge>
   );

@@ -1,7 +1,8 @@
-import { Eye, Pencil } from "lucide-react";
+import { CalendarRange, Eye, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { IconWell } from "@/components/ui/icon-well";
 import type { PreferenceCollectionState } from "@/domain/preferences/preference-window";
 import type { ScheduleStatus } from "@/domain/schedule/status";
 import {
@@ -20,7 +21,8 @@ export const SCHEDULE_HEADING_ID = "schedule-month-heading";
  * status, whether preference collection is open, whether the Head Nurse is
  * editing or only reviewing, and the single next action. Creating another
  * month is a quiet secondary control. A month without a schedule keeps the
- * same header with no status.
+ * same header with no status. A light brand-tinted panel (not a hero): the
+ * one place the page states its identity, so the calendar below stays calm.
  */
 export function ScheduleHeader({
   departmentName,
@@ -48,20 +50,26 @@ export function ScheduleHeader({
   return (
     <section
       aria-labelledby={SCHEDULE_HEADING_ID}
-      className="mb-4 flex flex-col gap-3 border-b pb-4"
+      className="mb-4 flex flex-col gap-3 rounded-xl border border-primary/15 bg-brand-soft/60 p-3 sm:p-4"
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <IconWell
+            size="md"
+            className="bg-primary text-primary-foreground shadow-sm max-sm:hidden"
+          >
+            <CalendarRange />
+          </IconWell>
           <MonthNavLink direction="previous" target={previous} />
           <h1
             id={SCHEDULE_HEADING_ID}
             className="flex min-w-0 flex-1 flex-col text-center sm:flex-none sm:text-start"
           >
-            <span className="truncate text-sm font-normal text-muted-foreground">
+            <span className="truncate text-sm font-medium text-brand-soft-foreground">
               برنامه بخش · {departmentName}
             </span>
             <span className="sr-only">، </span>
-            <span className="text-xl leading-snug font-bold sm:text-2xl">
+            <span className="text-xl leading-snug font-bold text-foreground sm:text-2xl">
               {monthLabel}
             </span>
           </h1>
@@ -81,14 +89,15 @@ export function ScheduleHeader({
             <span className="text-muted-foreground tabular-nums">
               {schedule.range}
             </span>
-            <span aria-hidden="true" className="text-border max-sm:hidden">
-              |
-            </span>
+            <span
+              aria-hidden="true"
+              className="h-4 w-px bg-primary/20 max-sm:hidden"
+            />
             <span className="sr-only">وضعیت برنامه:</span>
             <ScheduleStatusBadge status={schedule.status} />
             <PreferenceStateBadge state={schedule.preferences} withPrefix />
             {schedule.editable ? (
-              <Badge tone="neutral" icon={Pencil}>
+              <Badge tone="brand-soft" icon={Pencil}>
                 ویرایش شیفت‌ها
               </Badge>
             ) : (

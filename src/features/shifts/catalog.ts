@@ -24,6 +24,8 @@ export interface ShiftPresentation {
   readonly accentClass: string;
   /** A small marker in the shift's color, always next to the code text. */
   readonly dotClass: string;
+  /** A faint wash of the shift's color, for a tile that also shows the code. */
+  readonly softClass: string;
 }
 
 export const SHIFT_PRESENTATION: Readonly<
@@ -36,6 +38,7 @@ export const SHIFT_PRESENTATION: Readonly<
     tokenClass: "bg-shift-m text-shift-m-foreground",
     accentClass: "text-shift-m-foreground",
     dotClass: "bg-shift-m-foreground",
+    softClass: "bg-shift-m/45",
   },
   E: {
     code: "E",
@@ -44,6 +47,7 @@ export const SHIFT_PRESENTATION: Readonly<
     tokenClass: "bg-shift-e text-shift-e-foreground",
     accentClass: "text-shift-e-foreground",
     dotClass: "bg-shift-e-foreground",
+    softClass: "bg-shift-e/45",
   },
   N: {
     code: "N",
@@ -52,6 +56,7 @@ export const SHIFT_PRESENTATION: Readonly<
     tokenClass: "bg-shift-n text-shift-n-foreground",
     accentClass: "text-shift-n-foreground",
     dotClass: "bg-shift-n-foreground",
+    softClass: "bg-shift-n/45",
   },
   ME: {
     code: "ME",
@@ -60,6 +65,7 @@ export const SHIFT_PRESENTATION: Readonly<
     tokenClass: "bg-shift-me text-shift-me-foreground",
     accentClass: "text-shift-me-foreground",
     dotClass: "bg-shift-me-foreground",
+    softClass: "bg-shift-me/45",
   },
 };
 

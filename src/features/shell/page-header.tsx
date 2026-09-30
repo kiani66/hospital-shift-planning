@@ -27,11 +27,11 @@ export function NotYetImplemented({ plannedFor }: { plannedFor: string }) {
     <div
       role="note"
       aria-label="هنوز پیاده‌سازی نشده"
-      className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/40 p-5"
+      className="flex items-start gap-3 rounded-xl border border-dashed border-primary/25 bg-brand-soft/45 p-5"
     >
       <Construction
         aria-hidden="true"
-        className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+        className="mt-0.5 size-5 shrink-0 text-primary"
       />
       <div className="flex flex-col gap-1">
         <p className="font-semibold">هنوز پیاده‌سازی نشده است</p>

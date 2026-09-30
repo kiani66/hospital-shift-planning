@@ -597,3 +597,70 @@ Enforced in `features/schedule-review/day-detail.tsx` and `features/schedule-edi
 (D42), which now also names each shift's text-only (`accentClass`) and marker (`dotClass`)
 classes. The only new token is `status-active` (light and dark). Motion: a 150 ms fade on dialog
 open under `motion-safe`, nothing else.
+
+### D56 · Color system and visual tone
+
+The UI had read as black, white and gray: a near-black primary, a gray shell, and gray status
+badges. The palette is now a small token set in `globals.css`, with one job per color. Components
+use only these names; no component uses literal palette colors.
+
+- **Identity.**
+  - Navy `--sidebar*` is the navigation surface: the desktop sidebar and the phone header.
+  - Brand blue `--primary` / `--ring` marks what is interactive, selected or current: primary
+    buttons, the active navigation item, the open day, today, the active editor filter, focus.
+  - `--brand-soft*` / `--accent` are blue tints for hover, icon wells, the schedule header panel
+    and the calendar's weekday row.
+  - The work area is a cool `--canvas` behind white cards, which get a subtle `shadow-xs`.
+  - Neutrals (`--foreground`, `--muted*`, `--border`, `--input`) are tinted toward the same hue.
+- **Lifecycle status** (`--status-info|review|success|warning|active`) is kept apart from the
+  day-review health hues. Every status has its own tone and icon, and the unit tests pin both:
+
+  | Status    | Tone             |
+  | --------- | ---------------- |
+  | DRAFT     | muted            |
+  | PLANNING  | info blue        |
+  | FINALIZED | solid brand blue |
+  | SUBMITTED | review violet    |
+  | RETURNED  | warning orange   |
+  | APPROVED  | success green    |
+  | REVISING  | attention amber  |
+
+  Only APPROVED is green. An open preference window is `active` (cyan), not success.
+
+- **Calendar** keeps D53's emphasis rule:
+  - VALID stays quiet: a small, lighter green check and no fill.
+  - NEEDS_ATTENTION stays the only warm, tinted, outlined and counted cell.
+  - UNPLANNED is a cool gray wash.
+  - The open day is outlined in brand blue.
+- **Shifts** are one cool family, so a busy day reads calm and no shift borrows the attention
+  amber that marks findings:
+
+  | Shift | Color    |
+  | ----- | -------- |
+  | M     | sky blue |
+  | E     | teal     |
+  | N     | indigo   |
+  | ME    | plum     |
+
+  Codes are always shown (D42). The catalog adds `softClass`, a light wash used for the coverage
+  tiles.
+
+- **Editor states**:
+  - A selected shift is a filled chip with a ring.
+  - "No shift" selected is a dashed gray control.
+  - A matching preference is green text with a ✓; a differing one is orange text with a ≠.
+  - A flagged row keeps the amber start edge and tint.
+  - The row with focus gets a blue start edge and tint.
+  - The disabled range control is dashed and gray.
+- **Buttons** form one hierarchy: `default` (brand blue), `secondary` (tint), `outline`, `ghost`,
+  and `destructive`, which is now a variant rather than a class override.
+- **Primitives**:
+  - `IconWell`: the one place section headings get color, with brand, attention, danger or
+    muted tones.
+  - `Callout`: info, attention and muted notes.
+  - `EmptyState` gets a soft brand tint, or a danger tint for the load error.
+- **Checks.** Text tokens meet 4.5:1 on their surfaces, in light and dark; the ratios are
+  computed from the token values. axe-core finds no contrast issues on the schedule, day, empty
+  and home screens, with one exception: the inert, `aria-hidden` neighbouring-month day numbers,
+  which stay deliberately subdued (D39). No structure, route, rule, permission or wording
+  changed.
