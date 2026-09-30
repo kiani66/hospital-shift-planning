@@ -74,3 +74,20 @@ export async function listDisplayNames(
     .where(inArray(users.id, [...new Set(ids)]));
   return new Map(rows.map((r) => [r.id, r.displayName]));
 }
+
+/**
+ * Replaces the password hash and sets the active flag in one statement,
+ * leaving every other column untouched. False for an unknown id.
+ */
+export async function setUserCredentials(
+  db: DbExecutor,
+  id: string,
+  input: { passwordHash: string; isActive: boolean },
+): Promise<boolean> {
+  const rows = await db
+    .update(users)
+    .set({ ...input, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning({ id: users.id });
+  return rows.length > 0;
+}
