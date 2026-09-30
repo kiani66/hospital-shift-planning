@@ -27,7 +27,11 @@ export interface MonthLink {
   readonly label: string;
 }
 
-/** Previous / next month in the calendar header; the only month navigation. */
+/**
+ * Previous / next calendar month: the only month navigation. Purely
+ * temporal (a month without a schedule is still a destination); `target` is
+ * null only past the supported years, where the control is disabled.
+ */
 function MonthNavLink({
   direction,
   target,
@@ -47,7 +51,7 @@ function MonthNavLink({
       <button
         type="button"
         disabled
-        aria-label={`${text} (برنامه‌ای ایجاد نشده است)`}
+        aria-label={`${text} (خارج از بازه پشتیبانی‌شده)`}
         className={cn(base, "cursor-not-allowed opacity-40")}
       >
         <Icon aria-hidden="true" className="size-5" />
@@ -62,6 +66,36 @@ function MonthNavLink({
     >
       <Icon aria-hidden="true" className="size-5" />
     </Link>
+  );
+}
+
+/** The calendar header: previous month, the month's name, next month. */
+export function MonthHeader({
+  label,
+  headingId,
+  previous,
+  next,
+}: {
+  label: string;
+  headingId: string;
+  previous: MonthLink | null;
+  next: MonthLink | null;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <MonthNavLink direction="previous" target={previous} />
+      <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+        <h2
+          id={headingId}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+        >
+          <CalendarCheck2 aria-hidden="true" className="size-4 shrink-0" />
+          مرور ماهانه
+        </h2>
+        <p className="truncate text-lg font-bold">{label}</p>
+      </div>
+      <MonthNavLink direction="next" target={next} />
+    </div>
   );
 }
 
@@ -114,20 +148,12 @@ export function MonthCalendar({
       aria-labelledby="month-calendar-heading"
       className="flex flex-col gap-4 rounded-lg border bg-card p-3 sm:p-5"
     >
-      <div className="flex items-center gap-2">
-        <MonthNavLink direction="previous" target={previous} />
-        <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-          <h2
-            id="month-calendar-heading"
-            className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-          >
-            <CalendarCheck2 aria-hidden="true" className="size-4 shrink-0" />
-            مرور ماهانه
-          </h2>
-          <p className="truncate text-lg font-bold">{month.label}</p>
-        </div>
-        <MonthNavLink direction="next" target={next} />
-      </div>
+      <MonthHeader
+        label={month.label}
+        headingId="month-calendar-heading"
+        previous={previous}
+        next={next}
+      />
 
       <HealthTotals month={month} />
 
@@ -269,6 +295,10 @@ export function MonthCalendar({
         <span className="max-xl:hidden">
           اعداد M / E / N: تعداد نفرات در پوشش صبح، عصر و شب (شیفت طولانی در صبح
           و عصر شمرده می‌شود).
+        </span>
+        <span>
+          «{HEALTH_PRESENTATION.VALID.label}» فقط یعنی در قوانین پیاده‌سازی‌شده
+          فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.
         </span>
         <span>روزهای کم‌رنگ متعلق به ماه قبل یا بعد هستند.</span>
       </p>

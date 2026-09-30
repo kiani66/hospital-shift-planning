@@ -108,6 +108,40 @@ function firstDayOf({ year, month }: JalaliMonth): IsoDate {
 export const nextJalaliMonth = ({ year, month }: JalaliMonth): JalaliMonth =>
   month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 
+export const previousJalaliMonth = ({
+  year,
+  month,
+}: JalaliMonth): JalaliMonth =>
+  month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+
+/**
+ * The calendar month before or after `month`, or null past the supported
+ * years. Purely temporal: whether the month has a schedule is irrelevant.
+ */
+export function adjacentJalaliMonth(
+  month: JalaliMonth,
+  direction: "previous" | "next",
+): JalaliMonth | null {
+  const target =
+    direction === "previous"
+      ? previousJalaliMonth(month)
+      : nextJalaliMonth(month);
+  return isJalaliMonth(target) ? target : null;
+}
+
+/** "1405-08": a Jalali month as it appears in a URL (`?month=`). */
+export const jalaliMonthParam = ({ year, month }: JalaliMonth) =>
+  `${year}-${String(month).padStart(2, "0")}`;
+
+/** The month of a `?month=` value, or null when it is not a supported Jalali month. */
+export function parseJalaliMonthParam(value: unknown): JalaliMonth | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const month = { year: Number(match[1]), month: Number(match[2]) };
+  return isJalaliMonth(month) ? month : null;
+}
+
 /** The inclusive ISO period of a whole Jalali month (what a schedule stores). */
 export function jalaliMonthPeriod(month: JalaliMonth): {
   start: IsoDate;
@@ -186,14 +220,23 @@ export interface JalaliMonthOption extends JalaliMonth {
 /**
  * Months offered in the create form: every month of the current Jalali year
  * (in Tehran, from `today`) and the next, plus the suggested default (the
- * month after the current one, the usual planning horizon).
+ * month after the current one, the usual planning horizon). With `focus` (the
+ * month the Head Nurse is looking at), that month's year is offered too and
+ * the month itself is the suggestion.
  */
 export function jalaliMonthOptions(
   today: IsoDate,
   existing: readonly { start: IsoDate; end: IsoDate }[],
+  focus?: JalaliMonth,
 ): { years: number[]; options: JalaliMonthOption[]; suggested: JalaliMonth } {
   const current = toJalali(today);
-  const years = [current.year, current.year + 1];
+  const years = [
+    ...new Set([
+      current.year,
+      current.year + 1,
+      ...(focus ? [focus.year] : []),
+    ]),
+  ].sort((a, b) => a - b);
   const options = years.flatMap((year) =>
     JALALI_MONTHS.map((_, i) => {
       const month = { year, month: i + 1 };
@@ -214,11 +257,13 @@ export function jalaliMonthOptions(
   );
   const next = nextJalaliMonth(current);
   const suggested =
+    focus ??
     options.find(
       (o) =>
         !o.taken &&
         (o.year > next.year || (o.year === next.year && o.month >= next.month)),
-    ) ?? next;
+    ) ??
+    next;
   return {
     years,
     options,

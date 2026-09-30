@@ -26,6 +26,12 @@ export interface HealthPresentation {
   readonly cellClass: string;
 }
 
+/**
+ * VALID is worded neutrally («بدون ایراد»): it only says that no violation was
+ * found among the implemented, applicable rules. Staffing requirements are
+ * not defined yet, so nothing here may imply a fully staffed, complete,
+ * approved or finalization-ready day.
+ */
 export const HEALTH_PRESENTATION: Readonly<
   Record<DayHealth, HealthPresentation>
 > = {
@@ -39,7 +45,7 @@ export const HEALTH_PRESENTATION: Readonly<
   VALID: {
     label: "بدون ایراد",
     description:
-      "شیفت‌ها ثبت شده‌اند و هیچ‌یک از قوانین فعلی برنامه‌ریزی نقض نشده است.",
+      "در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.",
     badgeClass:
       "border-health-valid/40 bg-health-valid/10 text-health-valid-foreground",
     cellClass: "border-s-health-valid bg-health-valid/5",

@@ -143,8 +143,9 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(
       dialog.getByText("حداقل و حداکثر نفرات تعریف نشده است").first(),
     ).toBeVisible();
+    // VALID is cautious: no violation found, staffing is not checked yet.
     await expect(dialog).toContainText(
-      "شیفت‌ها ثبت شده‌اند و هیچ‌یک از قوانین فعلی برنامه‌ریزی نقض نشده است.",
+      "در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.",
     );
 
     // Read-only: the only control is closing (plus the collapsible list).
@@ -175,25 +176,127 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(day).toBeFocused();
   });
 
-  test("moves between months only with the previous / next controls", async ({
+  test("Previous / Next move by calendar month and never skip a month without a schedule", async ({
     page,
   }) => {
+    // Only Aban and Azar 1405 have schedules; Mehr and Dey do not.
     await page.goto(pageOf(department));
     const region = calendar(page);
+    const empty = region.getByText(
+      "برای این ماه هنوز برنامه‌ای ایجاد نشده است.",
+    );
+    const month = (label: string) => region.getByText(label, { exact: true });
+
+    // Previous of Aban is Mehr: an empty month, not "no previous schedule".
+    await region.getByRole("link", { name: "ماه قبل: مهر ۱۴۰۵" }).click();
+    await expect(page).toHaveURL(/[?&]month=1405-07$/);
+    await expect(month("مهر ۱۴۰۵")).toBeVisible();
+    await expect(empty).toBeVisible();
+    await expect(region.locator("table")).toHaveCount(0);
     await expect(
-      region.getByRole("button", { name: /^ماه قبل/ }),
-    ).toBeDisabled();
+      region.getByRole("button", { name: "ایجاد برنامه ماهانه" }),
+    ).toBeVisible();
+    await expectNoHorizontalOverflow(page, "empty month");
+
+    // And the month before that: still navigable, still empty.
+    await region.getByRole("link", { name: "ماه قبل: شهریور ۱۴۰۵" }).click();
+    await expect(page).toHaveURL(/[?&]month=1405-06$/);
+    await expect(month("شهریور ۱۴۰۵")).toBeVisible();
+    await expect(empty).toBeVisible();
+
+    // Forward again through Mehr to Aban, which shows its calendar.
+    await region.getByRole("link", { name: "ماه بعد: مهر ۱۴۰۵" }).click();
+    await expect(month("مهر ۱۴۰۵")).toBeVisible();
+    await expect(empty).toBeVisible();
+    await region.getByRole("link", { name: "ماه بعد: آبان ۱۴۰۵" }).click();
+    await expect(page).toHaveURL(/[?&]month=1405-08$/);
+    await expect(month("آبان ۱۴۰۵")).toBeVisible();
+    await expect(empty).toHaveCount(0);
+    await expect(region.locator("tbody tr")).toHaveCount(6);
+    await expect(region.locator("tbody a")).toHaveCount(30);
+
+    // Azar has a schedule; Dey after it does not.
     await region.getByRole("link", { name: "ماه بعد: آذر ۱۴۰۵" }).click();
-    await expect(page).toHaveURL(new RegExp(`schedule=${department.azarId}$`));
-    await expect(region.getByText("آذر ۱۴۰۵", { exact: true })).toBeVisible();
+    await expect(month("آذر ۱۴۰۵")).toBeVisible();
     // Azar 1405 starts on a Sunday and fits in five weeks.
     await expect(region.locator("tbody tr")).toHaveCount(5);
     await expect(region.locator("tbody a")).toHaveCount(30);
+    await region.getByRole("link", { name: "ماه بعد: دی ۱۴۰۵" }).click();
+    await expect(page).toHaveURL(/[?&]month=1405-10$/);
+    await expect(month("دی ۱۴۰۵")).toBeVisible();
+    await expect(empty).toBeVisible();
+
+    // The controls are ordinary links: keyboard operable.
+    const previous = region.getByRole("link", { name: "ماه قبل: آذر ۱۴۰۵" });
+    await previous.focus();
+    await page.keyboard.press("Enter");
+    await expect(month("آذر ۱۴۰۵")).toBeVisible();
+    await expect(region.locator("tbody tr")).toHaveCount(5);
+  });
+
+  test("crosses the Jalali year in both directions", async ({ page }) => {
+    await page.goto(`/departments/${department.code}/schedule?month=1405-01`);
+    const region = calendar(page);
+    await region.getByRole("link", { name: "ماه قبل: اسفند ۱۴۰۴" }).click();
+    await expect(page).toHaveURL(/[?&]month=1404-12$/);
+    await expect(region.getByText("اسفند ۱۴۰۴", { exact: true })).toBeVisible();
+    await region.getByRole("link", { name: "ماه بعد: فروردین ۱۴۰۵" }).click();
+    await expect(page).toHaveURL(/[?&]month=1405-01$/);
+  });
+
+  test("offers to create the month it shows, and lands on its calendar", async ({
+    page,
+  }) => {
+    await page.goto(`/departments/${department.code}/schedule?month=1405-10`);
+    const region = calendar(page);
+    await region.getByRole("button", { name: "ایجاد برنامه ماهانه" }).click();
+    const dialog = page.getByRole("dialog", { name: "ایجاد برنامه ماهانه" });
+    // Preselected: the month on screen, not the usual "next month" suggestion.
+    await expect(dialog.getByLabel("سال")).toHaveValue("1405");
+    await expect(dialog.getByLabel("ماه")).toHaveValue("10");
+    await expect(dialog.locator("p", { hasText: "دی ۱۴۰۵" })).toBeVisible();
+    await dialog.getByRole("button", { name: "ایجاد برنامه" }).click();
+
+    await expect(page).toHaveURL(/\?schedule=[0-9a-f-]{36}$/);
+    await expect(dialog).toBeHidden();
     await expect(
-      region.getByRole("button", { name: /^ماه بعد/ }),
-    ).toBeDisabled();
-    await region.getByRole("link", { name: "ماه قبل: آبان ۱۴۰۵" }).click();
-    await expect(page).toHaveURL(new RegExp(`schedule=${department.abanId}$`));
+      region.getByText("برای این ماه هنوز برنامه‌ای ایجاد نشده است."),
+    ).toHaveCount(0);
+    await expect(region.getByText("دی ۱۴۰۵", { exact: true })).toBeVisible();
+    await expect(
+      region.getByRole("list", { name: "خلاصه وضعیت روزهای ماه" }),
+    ).toContainText("برنامه‌ریزی‌نشده: ۳۰ روز");
+    await expect(region.locator("tbody a")).toHaveCount(30);
+  });
+
+  test("keeps a day open and closes back to the month URL it came from", async ({
+    page,
+  }) => {
+    await page.goto(
+      `/departments/${department.code}/schedule?month=1405-08&day=2026-10-26`,
+    );
+    const dialog = dayDialog(page);
+    await expect(dialog).toHaveAccessibleName("دوشنبه ۴ آبان ۱۴۰۵");
+    await dialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/[?&]month=1405-08$/);
+    // A day link keeps the month URL form.
+    await expect(dayLink(page, /^دوشنبه ۴ آبان ۱۴۰۵/)).toHaveAttribute(
+      "href",
+      /month=1405-08&day=2026-10-26$/,
+    );
+  });
+
+  test("ignores an invalid month parameter and shows the requested schedule", async ({
+    page,
+  }) => {
+    await page.goto(
+      `/departments/${department.code}/schedule?month=1405-13&schedule=${department.abanId}`,
+    );
+    await expect(
+      calendar(page).getByText("آبان ۱۴۰۵", { exact: true }),
+    ).toBeVisible();
+    await expect(calendar(page).locator("tbody a")).toHaveCount(30);
   });
 });
 
@@ -202,12 +305,22 @@ test.describe("monthly review access", () => {
     page,
   }) => {
     const department = await provisionReviewDepartment();
-    const url = `/departments/${department.code}/schedule?schedule=${department.abanId}&day=2026-10-26`;
+    const base = `/departments/${department.code}/schedule`;
+    const urls = [
+      `${base}?schedule=${department.abanId}&day=2026-10-26`,
+      // An empty month must not reveal the create action or the department.
+      `${base}?month=1405-07`,
+    ];
     for (const email of [department.nurseEmail, DEMO_USERS.supervisor.email]) {
       await signInAndWait(page, email);
-      const response = await page.goto(url);
-      expect(response?.status()).toBe(404);
-      await expect(page.getByRole("dialog")).toHaveCount(0);
+      for (const url of urls) {
+        const response = await page.goto(url);
+        expect(response?.status()).toBe(404);
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+        await expect(
+          page.getByRole("button", { name: "ایجاد برنامه ماهانه" }),
+        ).toHaveCount(0);
+      }
       await page.context().clearCookies();
     }
   });

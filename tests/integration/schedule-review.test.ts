@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HolidayCalendar } from "../../src/application/calendar/holidays";
 import { NotFoundError } from "../../src/application/errors";
+import { getDepartmentSchedules } from "../../src/application/schedules/queries";
 import { getScheduleReview } from "../../src/application/schedules/review";
 import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
@@ -353,6 +354,80 @@ describe("authorization", () => {
     await expectNotFound(review(actors.icuHead, { scheduleId: "not-a-uuid" }));
     // The schedule exists, but not in the department of the page.
     await expectNotFound(review(actors.icuHead, { departmentId: DEMO_ER.id }));
+  });
+});
+
+describe("month selection by calendar period", () => {
+  // Whole Jalali months of 1405; only Aban has a schedule (the demo seed).
+  const MEHR = { start: isoDate("2026-09-23"), end: isoDate("2026-10-22") };
+  const ABAN = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
+  const AZAR = { start: isoDate("2026-11-22"), end: isoDate("2026-12-21") };
+
+  const schedulesFor = (
+    actor: Actor,
+    input: { period?: typeof ABAN; scheduleId?: string } = {},
+  ) =>
+    getDepartmentSchedules(as(actor), {
+      departmentId: DEMO_ICU.id,
+      today: TODAY,
+      ...input,
+    });
+
+  it("selects the schedule that covers the month", async () => {
+    const data = await schedulesFor(actors.icuHead, { period: ABAN });
+    expect(data.selected).toMatchObject({ id: S, label: "آبان ۱۴۰۵" });
+    expect(data.schedules.map((x) => x.id)).toEqual([S]);
+  });
+
+  it("selects nothing for a month without a schedule, instead of the nearest one", async () => {
+    for (const period of [MEHR, AZAR]) {
+      const data = await schedulesFor(actors.icuHead, { period });
+      expect(data.selected).toBeNull();
+      // The department still has its schedule; it is just not this month's.
+      expect(data.schedules.map((x) => x.id)).toEqual([S]);
+      expect(data.canCreate).toBe(true);
+    }
+  });
+
+  it("does not skip months: a schedule created later shows up for exactly its month", async () => {
+    const azar = await createSchedule(db, {
+      departmentId: DEMO_ICU.id,
+      period: AZAR,
+      label: "آذر ۱۴۰۵",
+      createdBy: U.icuHead.id,
+    });
+    expect(
+      (await schedulesFor(actors.icuHead, { period: AZAR })).selected?.id,
+    ).toBe(azar.id);
+    expect(
+      (await schedulesFor(actors.icuHead, { period: ABAN })).selected?.id,
+    ).toBe(S);
+    // Mehr, before Aban, is still empty although both neighbours have schedules.
+    expect(
+      (await schedulesFor(actors.icuHead, { period: MEHR })).selected,
+    ).toBeNull();
+  });
+
+  it("lets a requested period win over a schedule id, without falling back", async () => {
+    const data = await schedulesFor(actors.icuHead, {
+      period: MEHR,
+      scheduleId: S,
+    });
+    expect(data.selected).toBeNull();
+  });
+
+  it("keeps the schedule-id behaviour: an unknown id falls back to the default", async () => {
+    const data = await schedulesFor(actors.icuHead, {
+      scheduleId: "00000000-0000-4000-8000-000000000000",
+    });
+    expect(data.selected?.id).toBe(S);
+  });
+
+  it("is denied to everyone but the Head Nurse, empty months included", async () => {
+    for (const actor of [actors.icuNurse, actors.erHead, actors.supervisor])
+      await expect(
+        schedulesFor(actor, { period: MEHR }),
+      ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

@@ -301,25 +301,52 @@ on failure.
 
 Phase 7a (read-only). Paths are relative to `src/`. No schema change and no migration.
 
-### D39 · Calendar-first review
+### D39 · Calendar-first review, navigated by calendar month
 
 The department schedule page leads with a month calendar: 7 Saturday-first columns and as many
 week rows as the period needs (5 or 6 for a Jalali month; never a fixed 35 cells). Hierarchy:
 month → day → shift → nurse / finding. Days outside the period only complete the first and last
-week: dimmed, not links. Month navigation is only the Previous / Next controls in the calendar
-header; they move to the department's previous / next schedule (by period) and name the target
-month; a missing neighbour is a disabled control. The old schedule link list is gone. The Phase 4
-summary, preference and roster cards stay below the calendar.
-Enforced in `features/calendar/month-grid.ts` and `features/schedule-review/month-calendar.tsx`.
+week: dimmed, not links.
+
+Previous / Next in the calendar header are the only month navigation, and they move by **calendar
+month** (the previous / next Jalali month), never by which schedules exist:
+
+- `?month=1405-08` (Jalali year-month) selects the month. A schedule exists for it when its
+  period shares at least one day with the month (the earliest, if several do); it is shown, and
+  there is never a fallback to another month's schedule.
+- A month without a schedule is still a destination. It shows the header and the message
+  «برای این ماه هنوز برنامه‌ای ایجاد نشده است.»; when the actor may create a schedule
+  (`schedule.create`, reported by `getDepartmentSchedules` as `canCreate`) the existing
+  create-month action is offered there, preselected to that month.
+- Navigation stops only past the supported Jalali years (1300–1500), where the control is disabled.
+- `?schedule=<id>` keeps working (the redirect after creating a schedule, old links); an invalid
+  `month` value is ignored. With `month` present the schedule id is ignored. With neither, the
+  default schedule is shown, and a department with no schedule at all keeps the original empty
+  state.
+- Day links and closing the day keep the URL form the page was opened with.
+
+The Phase 4 summary, preference and roster cards stay below the calendar; the schedule link list
+is gone.
+Enforced in `features/calendar/month-grid.ts`, `features/calendar/jalali.ts`
+(`adjacentJalaliMonth`, `parseJalaliMonthParam`), `application/schedules/queries.ts`
+(`scheduleForPeriod`) and `features/schedule-review/month-calendar.tsx` / `empty-month.tsx`.
 
 ### D40 · Day health is semantic
 
 `DayHealth` is `UNPLANNED` (no assignment that day), `NEEDS_ATTENTION` (at least one finding of an
 applicable rule attributed to the day) or `VALID` (assignments and no finding), in that precedence.
-Only rules that exist are applied: until staffing rules exist (D44), `VALID` means "no current rule
-is broken", worded «بدون ایراد», not "fully staffed". Colors are the `health-*` tokens in
-`globals.css`, mapped in the presentation layer only; every state also has its own icon shape and
-text (and is part of the cell's accessible name).
+
+**`VALID` means: "no violation was found among the currently implemented and applicable
+validators."** It does not mean the day is fully staffed or fully correct: staffing minimum /
+maximum requirements are not defined yet (D44), so nothing about staffing is checked. The wording
+is therefore neutral, «بدون ایراد», and the explanatory text says that staffing is not checked yet
+(«در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.»). No text may
+imply fully staffed, complete, approved or ready for finalization; a unit test guards the label
+and description. When staffing validators are added, `VALID` includes them without any change to
+the meaning.
+
+Colors are the `health-*` tokens in `globals.css`, mapped in the presentation layer only; every
+state also has its own icon shape and text (and is part of the cell's accessible name).
 Enforced in `domain/schedule/day-health.ts` and `features/schedule-review/presentation.ts`.
 
 ### D41 · Holiday is a separate dimension

@@ -73,6 +73,8 @@ export interface ScheduleOverview extends ScheduleListItem {
 export interface DepartmentSchedules {
   readonly schedules: readonly ScheduleListItem[];
   readonly selected: ScheduleOverview | null;
+  /** The actor may create a schedule in this department (`schedule.create`). */
+  readonly canCreate: boolean;
 }
 
 /**
@@ -93,13 +95,40 @@ export function defaultSchedule<T extends { period: DatePeriod }>(
 }
 
 /**
+ * The schedule that covers a period (a calendar month): the earliest one
+ * sharing at least one day with it, or undefined. Never falls back to another
+ * period, so a month without a schedule stays empty.
+ */
+export function scheduleForPeriod<T extends { period: DatePeriod }>(
+  schedules: readonly T[],
+  period: DatePeriod,
+): T | undefined {
+  return schedules
+    .filter(
+      (s) =>
+        compareIsoDates(s.period.start, period.end) <= 0 &&
+        compareIsoDates(s.period.end, period.start) >= 0,
+    )
+    .sort((a, b) => compareIsoDates(a.period.start, b.period.start))[0];
+}
+
+/**
  * The Head Nurse's schedule management view of one department. Authorized
  * here as well as by the page (`department.manage`); a denied actor gets the
  * same NotFoundError as an unknown department.
  */
 export async function getDepartmentSchedules(
   ctx: AppContext,
-  input: { departmentId: string; scheduleId?: string; today: IsoDate },
+  input: {
+    departmentId: string;
+    scheduleId?: string;
+    /**
+     * Select by calendar period (a month) instead: the schedule covering it,
+     * or none. Takes precedence over `scheduleId` and has no fallback.
+     */
+    period?: DatePeriod;
+    today: IsoDate;
+  },
 ): Promise<DepartmentSchedules> {
   const { db, actor } = ctx;
   if (
@@ -115,11 +144,16 @@ export async function getDepartmentSchedules(
     label,
     status,
   }));
-  // Only this department's schedules can be selected; an unknown id falls back.
-  const chosen =
-    all.find((s) => s.id === input.scheduleId) ??
-    defaultSchedule(all, input.today);
-  if (!chosen) return { schedules, selected: null };
+  const canCreate = decide(actor, "schedule.create", {
+    departmentId: input.departmentId,
+  }).allowed;
+  // Only this department's schedules can be selected; an unknown id falls back
+  // to the default, while a requested period never does.
+  const chosen = input.period
+    ? scheduleForPeriod(all, input.period)
+    : (all.find((s) => s.id === input.scheduleId) ??
+      defaultSchedule(all, input.today));
+  if (!chosen) return { schedules, selected: null, canCreate };
 
   const now = ctx.clock?.() ?? new Date();
   const [roster, windows] = await Promise.all([
@@ -135,6 +169,7 @@ export async function getDepartmentSchedules(
 
   return {
     schedules,
+    canCreate,
     selected: {
       id: chosen.id,
       period: chosen.period,

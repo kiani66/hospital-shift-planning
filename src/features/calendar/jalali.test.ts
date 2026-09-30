@@ -5,14 +5,17 @@ import { createPeriod } from "@/domain/shared/period";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
 import {
+  adjacentJalaliMonth,
   formatJalaliDate,
   formatJalaliDateTime,
   formatJalaliRange,
   isJalaliMonth,
   jalaliMonthLabel,
   jalaliMonthOptions,
+  jalaliMonthParam,
   jalaliMonthPeriod,
   jalaliWeekday,
+  parseJalaliMonthParam,
   toJalali,
   wholeJalaliMonthOf,
 } from "./jalali";
@@ -163,5 +166,97 @@ describe("jalaliMonthOptions", () => {
     const { years, suggested } = jalaliMonthOptions(d("2027-03-01"), []);
     expect(years).toEqual([1405, 1406]);
     expect(suggested).toEqual({ year: 1406, month: 1 });
+  });
+});
+
+describe("calendar-month navigation", () => {
+  it.each([
+    [{ year: 1405, month: 8 }, "previous", { year: 1405, month: 7 }],
+    [{ year: 1405, month: 8 }, "next", { year: 1405, month: 9 }],
+    // Across the Jalali year boundary.
+    [{ year: 1405, month: 1 }, "previous", { year: 1404, month: 12 }],
+    [{ year: 1405, month: 12 }, "next", { year: 1406, month: 1 }],
+  ] as const)("%j %s is %j", (from, direction, expected) => {
+    expect(adjacentJalaliMonth(from, direction)).toEqual(expected);
+  });
+
+  it("stops at the supported years instead of returning an invalid month", () => {
+    expect(
+      adjacentJalaliMonth({ year: 1300, month: 1 }, "previous"),
+    ).toBeNull();
+    expect(adjacentJalaliMonth({ year: 1500, month: 12 }, "next")).toBeNull();
+    expect(adjacentJalaliMonth({ year: 1300, month: 1 }, "next")).toEqual({
+      year: 1300,
+      month: 2,
+    });
+  });
+
+  it("walks month by month with no gap: each next month starts the day after the previous ends", () => {
+    let month = { year: 1404, month: 10 };
+    for (let i = 0; i < 18; i++) {
+      const following = adjacentJalaliMonth(month, "next")!;
+      const a = jalaliMonthPeriod(month);
+      const b = jalaliMonthPeriod(following);
+      expect(toJalali(b.start)).toMatchObject({ ...following, day: 1 });
+      expect(
+        jalaliMonthPeriod(adjacentJalaliMonth(following, "previous")!),
+      ).toEqual(a);
+      month = following;
+    }
+  });
+
+  it("round-trips a month through the ?month= parameter", () => {
+    expect(jalaliMonthParam({ year: 1405, month: 8 })).toBe("1405-08");
+    expect(jalaliMonthParam({ year: 1405, month: 12 })).toBe("1405-12");
+    expect(parseJalaliMonthParam("1405-08")).toEqual({ year: 1405, month: 8 });
+    expect(parseJalaliMonthParam("1405-12")).toEqual({ year: 1405, month: 12 });
+  });
+
+  it.each([
+    undefined,
+    null,
+    ["1405-08"],
+    "",
+    "1405-8",
+    "1405-13",
+    "1405-00",
+    "1299-12",
+    "1501-01",
+    "۱۴۰۵-۰۸",
+    "2026-10",
+    "1405-08-01",
+    " 1405-08",
+  ])("rejects the month parameter %j", (value) => {
+    // 2026-10 reads as year 2026, outside the supported Jalali years.
+    expect(parseJalaliMonthParam(value)).toBeNull();
+  });
+});
+
+describe("jalaliMonthOptions with a focused month", () => {
+  const today = d("2026-09-30"); // Mehr 8, 1405
+
+  it("suggests the focused month, even far from today, and offers its year", () => {
+    const { years, options, suggested } = jalaliMonthOptions(today, [], {
+      year: 1408,
+      month: 3,
+    });
+    expect(years).toEqual([1405, 1406, 1408]);
+    expect(suggested).toEqual({ year: 1408, month: 3 });
+    expect(options.some((o) => o.year === 1408 && o.month === 3)).toBe(true);
+  });
+
+  it("does not duplicate a year that is already offered and keeps years sorted", () => {
+    const inside = jalaliMonthOptions(today, [], { year: 1406, month: 1 });
+    expect(inside.years).toEqual([1405, 1406]);
+    expect(inside.suggested).toEqual({ year: 1406, month: 1 });
+    const before = jalaliMonthOptions(today, [], { year: 1404, month: 12 });
+    expect(before.years).toEqual([1404, 1405, 1406]);
+  });
+
+  it("suggests the usual next month when nothing is focused", () => {
+    expect(jalaliMonthOptions(today, []).suggested).toEqual({
+      year: 1405,
+      month: 8,
+    });
   });
 });

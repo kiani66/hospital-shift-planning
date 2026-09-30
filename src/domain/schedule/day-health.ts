@@ -17,9 +17,11 @@ import type { ShiftCode } from "../shifts/shift-type";
  * - UNPLANNED: nothing is assigned yet, so the day cannot meaningfully be
  *   called valid or invalid.
  * - NEEDS_ATTENTION: at least one finding of an applicable rule.
- * - VALID: assignments exist and every applicable rule passes. Only the rules
- *   that exist are applied; staffing rules do not exist yet (see
- *   `rules/staffing.ts`), so VALID does not claim the day is fully staffed.
+ * - VALID: assignments exist and no violation was found among the currently
+ *   implemented and applicable rules. It does NOT mean the day is fully
+ *   staffed or correct: staffing requirements are not defined yet (see
+ *   `rules/staffing.ts`). When staffing validators are added, VALID includes
+ *   them without any change here.
  */
 export const DAY_HEALTH_STATES = [
   "UNPLANNED",

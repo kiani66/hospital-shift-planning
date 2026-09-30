@@ -49,6 +49,19 @@ describe("health presentation", () => {
     }
   });
 
+  it("words VALID cautiously: no violation found, staffing not checked", () => {
+    const valid = HEALTH_PRESENTATION.VALID;
+    expect(valid.label).toBe("بدون ایراد");
+    // Nothing implying a fully staffed, complete, approved or ready day.
+    for (const text of [valid.label, valid.description]) {
+      expect(text).not.toMatch(
+        /کامل|تکمیل|تأیید|تایید|آماده|نهایی|مناسب|تأمین‌شده|پر شده/,
+      );
+    }
+    expect(valid.description).toContain("موردی یافت نشد");
+    expect(valid.description).toContain("تأمین نفرات هنوز بررسی نمی‌شود");
+  });
+
   it("names a day cell with its date, health, findings and holiday", () => {
     expect(dayCellLabel(reviewDay())).toBe("یکشنبه ۳ آبان ۱۴۰۵، بدون ایراد");
     expect(

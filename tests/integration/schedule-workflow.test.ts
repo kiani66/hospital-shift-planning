@@ -739,6 +739,7 @@ describe("getDepartmentSchedules", () => {
     expect(await query(actors.erHead, DEMO_ER.id)).toEqual({
       schedules: [],
       selected: null,
+      canCreate: true,
     });
   });
 
