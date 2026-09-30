@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 
 import { createSchedule } from "../../../src/application/schedules/create-schedule";
+import type { ScheduleStatus } from "../../../src/domain/schedule/status";
 import { isoDate } from "../../../src/domain/shared/dates";
 import type { ShiftCode } from "../../../src/domain/shifts/shift-type";
 import { todayIn } from "../../../src/infrastructure/auth/actor";
@@ -10,6 +11,10 @@ import { createDatabase } from "../../../src/infrastructure/db/database";
 import { setAssignment } from "../../../src/infrastructure/repositories/assignments";
 import { loadActor } from "../../../src/infrastructure/repositories/memberships";
 import { setPreference } from "../../../src/infrastructure/repositories/preferences";
+import {
+  findScheduleById,
+  updateSchedule,
+} from "../../../src/infrastructure/repositories/schedules";
 import { findUserByEmail } from "../../../src/infrastructure/repositories/users";
 import { provisionDepartment, type E2eDepartment } from "./workspace";
 
@@ -34,7 +39,8 @@ export interface ReviewDepartment extends E2eDepartment {
 /**
  * A fresh department with Aban and Azar schedules (created through the real
  * use case) and a known set of Aban assignments. Phase 7a has no assignment
- * editing, so assignments are written with the repository, as Phase 7b will.
+ * editing, so assignments are written with the repository (Phase 7b's use
+ * case writes the same rows).
  *
  * - 2 Aban (2026-10-24): M, E, N, ME, all valid.
  * - 3 Aban (2026-10-25): nurse 1 works N.
@@ -97,6 +103,30 @@ export async function provisionReviewDepartment(): Promise<ReviewDepartment> {
       azarId: ids[1]!,
       nurseNames: [n1.displayName, n2.displayName, n3.displayName],
     };
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Moves a schedule to a status the workflow (Phase 8) will reach, so tests
+ * can check what editing does in it. Test-only: bypasses the state machine.
+ */
+export async function forceScheduleStatus(
+  scheduleId: string,
+  status: ScheduleStatus,
+): Promise<void> {
+  loadEnvConfig(process.cwd());
+  if (!process.env.DATABASE_URL && existsSync(".env.local"))
+    process.loadEnvFile(".env.local");
+  const { db, pool } = createDatabase(process.env.DATABASE_URL!, { max: 1 });
+  try {
+    const schedule = (await findScheduleById(db, scheduleId))!;
+    await updateSchedule(db, {
+      id: scheduleId,
+      expectedRevision: schedule.revision,
+      status,
+    });
   } finally {
     await pool.end();
   }

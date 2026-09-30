@@ -21,5 +21,6 @@ export * from "./scope/date-scope";
 export * from "./preferences/preference-window";
 export * from "./preferences/can-edit-preference";
 export * from "./preferences/my-preferences";
+export * from "./preferences/preference-fit";
 export * from "./authz/actor";
 export * from "./authz/policies";

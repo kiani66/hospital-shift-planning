@@ -45,6 +45,7 @@ describe("toActionError", () => {
       {
         code: "INVALID_STATE",
         message: "Cannot FINALIZE while the schedule is APPROVED",
+        reason: "FINALIZE",
       },
     ],
     [

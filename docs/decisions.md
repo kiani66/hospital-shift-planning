@@ -420,3 +420,86 @@ validated in memory with the adjacent schedules' boundary days: three queries fo
 more (roster, that day's preferences) for a selected day, independent of department size (tested
 with 60 nurses × 31 days). Future reports (working hours from `shiftDurationMinutes`, staffing
 and coverage summaries) derive from the same assignments and catalog.
+
+## Head Nurse schedule editing decisions
+
+Phase 7b. Paths are relative to `src/`. No schema change and no migration: the primary key
+`(schedule_id, user_id, date)`, the roster foreign key and `schedules.revision` already carry the
+invariants. From this phase on the Head Nurse writes the working copy; D46's "Phase 7a writes
+nothing" describes that phase only, and its authorization and read rules stay as they are.
+
+### D48 · Assignment editing (write model)
+
+- One command, `setAssignments`: a list of cells `{ nurseId, date, shift | null }` (null clears;
+  1 to 62 cells). A single edit is one cell; a range edit is several cells of one request. It
+  runs in one transaction: lock the schedule row, authorize `assignment.edit` for the schedule's
+  own department (D27), plan in the domain, check the revision (D49), write, audit, bump the
+  revision. All or nothing: one refused cell refuses the request.
+- Editable days are `canEditAssignment`'s (unchanged since Phase 1): the whole period in DRAFT,
+  PLANNING, FINALIZED and a first-cycle RETURNED; only the revision's dates in REVISING and a
+  returned revision (D14); nothing in SUBMITTED or APPROVED (`INVALID_STATE`, reason
+  `EDIT_ASSIGNMENT` or `EDIT_ASSIGNMENT_OUTSIDE_REVISION_SCOPE`).
+- Editing never changes the status (a DRAFT schedule stays DRAFT; START_PLANNING is not implied),
+  the roster, memberships or preferences. Clearing deletes only the assignment row: the nurse
+  stays on the roster and in the day's editing list. The Head Nurse is assigned like any rostered
+  nurse.
+- Who may be assigned is the roster snapshot (D21); a person not on it is `VALIDATION`
+  (`nurseId`). Membership dates inside the period are not checked (no approved rule exists).
+- Scheduling rules are not enforced on edits: a night-rest violation is stored and reported
+  (D7: allowed while editing, blocks FINALIZE and SUBMIT). Preferences are never constraints
+  (D35).
+- Audit, one event per changed cell: `assignment.created`, `assignment.changed` or
+  `assignment.cleared`, entity `assignment` (`<nurseId>:<date>`), data
+  `{ date, nurseId, before, after }` (plus `batchSize` for a multi-cell request), with actor,
+  department and schedule. No notification is sent: no notification type exists for it, and
+  whether edits after FINALIZED (visible to nurses, D11) should notify is left to Phase 8.
+
+Enforced in `domain/schedule/assignment-editing.ts` (`planAssignmentEdits`) and
+`application/schedules/edit-assignments.ts`.
+
+### D49 · Edit concurrency, idempotency and refresh
+
+- Optimistic concurrency with the existing schedule revision (D30): every edit carries the
+  revision the page was read at (the review reads it before the assignments, so it is never
+  newer than the data shown). A stale revision is `CONFLICT` and nothing is written; the page is
+  re-read, the user sees the newer state and re-applies if still wanted. Checked after
+  authorization, so an outsider learns nothing.
+- Cells that repeat the stored value are dropped; a request with nothing left succeeds without
+  writing, auditing or bumping, whatever revision it carries (a retried request is harmless).
+- The editor sends one request at a time, each with the latest revision it received, so fast
+  editing in one tab never conflicts with itself; a failed request drops the ones queued behind
+  it (they would apply on a state the user has not seen).
+- After every edit the Server Action calls `refresh()`: the month (health of every day, so the
+  day after a changed Night is never stale) and the open day are re-read and re-validated in the
+  same response. Measured at 60 nurses × 31 days: edit ≈ 7 ms, month + day re-read ≈ 13 ms
+  (median, local PostgreSQL); the edit's statement count does not grow with the roster.
+- Undo re-sends the replaced values of the last saved request through the same command
+  (authorization, revision check, audit); it is refused with `CONFLICT` if anything changed in
+  between. No version history.
+
+Enforced in `application/schedules/edit-assignments.ts` and
+`features/schedule-editing/day-editor.tsx`.
+
+### D50 · Day editor (interaction)
+
+- Editing happens in the existing day dialog (D45; desktop modal, phones full screen) when the
+  day is editable; otherwise the Phase 7a read-only layout shows with the reason. Previous / next
+  day sit in the dialog's sticky header and keep it open (within the period, chronological).
+- The dialog lists every rostered nurse in roster order (by name), assigned or not, with role as
+  secondary text, the preference and how it relates to the shift (`preferenceFit`: matches,
+  differs, not yet assigned; a difference is a neutral note, never an error), a marker when a
+  finding involves them, and one-step M / E / N / ME / no-shift controls. A filter (all, no
+  shift, each shift) and a name search find people; a row edited under a filter stays in view.
+- Findings reported on the neighbouring day that involve this day (the Night before a violating
+  shift) are shown as related, so either day explains the conflict.
+- Range edit: one nurse, one shift or no shift, from the open day through a chosen later day of
+  the period; one request, undoable.
+- Keyboard (only when a shift control has focus, never while typing, keys by position so a
+  Persian layout works): M, E, N, L (long, ME), Delete / Backspace (no shift), ↑ / ↓ (nurse),
+  ← / → (control, RTL order), [ / ] (previous / next day, focus stays on the nurse), Ctrl/Cmd+Z
+  (undo). The list is one tab stop. Every shortcut has a visible control.
+- Feedback per edit: pending (optimistic, marked), saved (with undo), and distinct messages for
+  a conflict, a locked schedule or day, a person not on the roster, no permission, a server
+  error and no connection. No browser alerts.
+
+Enforced in `features/schedule-editing/` and `domain/preferences/preference-fit.ts`.

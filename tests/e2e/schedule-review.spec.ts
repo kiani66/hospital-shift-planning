@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { DEMO_USERS, isDesktop, signInAndWait } from "./support/auth";
 import {
+  forceScheduleStatus,
   provisionReviewDepartment,
   type ReviewDepartment,
 } from "./support/review";
@@ -96,10 +97,12 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(dialog).toContainText(
       `«${department.nurseNames[0]}» در یکشنبه ۳ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (دوشنبه ۴ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`,
     );
-    for (const code of ["M", "E", "N", "ME"])
+    // The four shifts, each a way to list who works it (Phase 7b editor).
+    const shifts = dialog.getByRole("group", { name: "نمایش پرسنل" });
+    for (const name of ["صبح (M)", "عصر (E)", "شب (N)", "طولانی (ME)"])
       await expect(
-        dialog.getByRole("region").filter({
-          has: page.getByRole("heading", { name: new RegExp(`^${code}\\b`) }),
+        shifts.getByRole("button", {
+          name: new RegExp(`^${name.replace(/[()]/g, "\\$&")}`),
         }),
       ).toHaveCount(1);
     expect(await dialog.innerText()).not.toMatch(ISO_DATE);
@@ -126,16 +129,30 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await page.goto(pageOf(department, "&day=2026-10-24"));
     const dialog = dayDialog(page);
     await expect(dialog).toHaveAccessibleName("شنبه ۲ آبان ۱۴۰۵");
-    const shift = (code: string) =>
-      dialog.getByRole("list", { name: `پرستاران شیفت ${code}` });
-    await expect(shift("صبح")).toHaveText(
-      new RegExp(department.nurseNames[0]!),
+    const works = (name: string, shift: string) =>
+      expect(
+        dialog
+          .getByRole("group", { name: `شیفت ${name}` })
+          .getByRole("button", { name: shift }),
+      ).toHaveAttribute("aria-pressed", "true");
+    await works(department.nurseNames[0]!, "صبح (M)");
+    await works(department.nurseNames[1]!, "عصر (E)");
+    await works(department.nurseNames[2]!, "شب (N)");
+    await works("سرپرستار آزمایشی", "طولانی (ME)");
+    // Listing one shift shows exactly who works it.
+    const chips = dialog.getByRole("group", { name: "نمایش پرسنل" });
+    await chips.getByRole("button", { name: /^صبح \(M\)/ }).click();
+    await expect(dialog.locator("li[data-nurse-row]")).toHaveCount(1);
+    await expect(dialog.locator("li[data-nurse-row]")).toContainText(
+      department.nurseNames[0]!,
     );
-    await expect(shift("عصر")).toContainText(department.nurseNames[1]!);
+    await chips.getByRole("button", { name: /^همه/ }).click();
     // The nurse's own wish is shown as context, never as an assignment.
-    await expect(shift("عصر")).toContainText("ترجیح: شب");
-    await expect(shift("شب")).toContainText(department.nurseNames[2]!);
-    await expect(shift("طولانی")).toContainText("سرپرستار آزمایشی");
+    const nurse2 = dialog.locator("li[data-nurse-row]").filter({
+      hasText: department.nurseNames[1]!,
+    });
+    await expect(nurse2).toContainText("ترجیح: شب");
+    await expect(nurse2).toContainText("متفاوت با ترجیح");
     // ME counts toward Morning coverage; staffing numbers are not invented.
     await expect(dialog).toContainText(
       "پوشش صبح: ۲ نفر (۱ نفر از شیفت طولانی)",
@@ -148,15 +165,39 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       "در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.",
     );
 
-    // Read-only: the only control is closing (plus the collapsible list).
-    await expect(dialog.locator("button")).toHaveCount(1);
-    await expect(dialog.locator("input, select, textarea, form")).toHaveCount(
-      0,
-    );
-
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(page).not.toHaveURL(/day=/);
+  });
+
+  test("shows a locked (submitted) schedule read-only, with the reason", async ({
+    page,
+  }) => {
+    await forceScheduleStatus(department.abanId, "SUBMITTED");
+    await page.goto(pageOf(department, "&day=2026-10-24"));
+    const dialog = dayDialog(page);
+    await expect(dialog).toHaveAccessibleName("شنبه ۲ آبان ۱۴۰۵");
+    await expect(dialog.getByText("فقط مشاهده")).toBeVisible();
+    await expect(dialog).toContainText(
+      "برنامه در وضعیت فعلی قفل است؛ شیفت‌ها فقط قابل مشاهده‌اند.",
+    );
+    const shift = (code: string) =>
+      dialog.getByRole("list", { name: `پرستاران شیفت ${code}` });
+    await expect(shift("صبح")).toHaveText(
+      new RegExp(department.nurseNames[0]!),
+    );
+    await expect(shift("عصر")).toContainText(department.nurseNames[1]!);
+    await expect(shift("عصر")).toContainText("ترجیح: شب");
+    await expect(shift("شب")).toContainText(department.nurseNames[2]!);
+    await expect(shift("طولانی")).toContainText("سرپرستار آزمایشی");
+    // Nothing to edit: only closing and moving between days.
+    await expect(dialog.getByRole("group", { name: /^شیفت / })).toHaveCount(0);
+    await expect(dialog.locator("input, select, textarea, form")).toHaveCount(
+      0,
+    );
+    await expect(
+      dialog.getByRole("button", { name: "بستن جزئیات روز" }),
+    ).toBeVisible();
   });
 
   test("is keyboard operable and ignores days outside the month", async ({

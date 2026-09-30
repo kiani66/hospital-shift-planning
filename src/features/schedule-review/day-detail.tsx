@@ -1,4 +1,5 @@
-import { CircleAlert, Eye, Users } from "lucide-react";
+import { CircleAlert, Eye, Link2, Lock, Pencil, Users } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type {
   DayReview,
@@ -6,6 +7,7 @@ import type {
   ReviewShift,
 } from "@/application/schedules/review";
 import { faNumber } from "@/features/calendar/jalali";
+import { editDenialLabel } from "@/features/schedule-editing/presentation";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import {
   COVERAGE_PERIOD_NAMES,
@@ -44,10 +46,17 @@ export function DayBadges({ day }: { day: DayReview }) {
           {HOLIDAY_LABEL}: {day.holiday.name}
         </span>
       )}
-      <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
-        <Eye aria-hidden="true" className="size-3.5" />
-        فقط مشاهده
-      </span>
+      {day.edit.allowed ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+          <Pencil aria-hidden="true" className="size-3.5" />
+          قابل ویرایش
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+          <Eye aria-hidden="true" className="size-3.5" />
+          فقط مشاهده
+        </span>
+      )}
     </span>
   );
 }
@@ -119,6 +128,70 @@ function Findings({ day }: { day: DayReview }) {
   );
 }
 
+/**
+ * Findings reported on the neighbouring day that involve this one (the
+ * Night before a violating shift), so either day explains the conflict.
+ */
+function RelatedFindings({ day }: { day: DayReview }) {
+  if (day.relatedFindings.length === 0) return null;
+  return (
+    <section
+      aria-labelledby="day-related-findings"
+      className="flex flex-col gap-2 rounded-lg border border-dashed p-3"
+    >
+      <h3
+        id="day-related-findings"
+        className="flex items-center gap-2 text-sm font-semibold"
+      >
+        <Link2 aria-hidden="true" className="size-4 text-muted-foreground" />
+        مرتبط با روز دیگر ({faNumber(day.relatedFindings.length)} مورد)
+      </h3>
+      <ul className="flex flex-col gap-1.5">
+        {day.relatedFindings.map((f, i) => (
+          <li
+            key={`${f.code}-${f.nurseIds.join()}-${i}`}
+            className="text-sm leading-relaxed"
+          >
+            <span className="font-medium">{RULE_TITLES[f.code]}: </span>
+            {findingMessage(f)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** One line per coverage period while editing: how many staff it has (ME included). */
+function CoverageSummary({ day }: { day: DayReview }) {
+  const status = day.coverage[0]!;
+  const sameStatus = day.coverage.every((c) => c.status === status.status);
+  return (
+    <section
+      aria-label="پوشش نفرات در این روز"
+      className="flex flex-col gap-1 rounded-lg border px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+    >
+      <p className="flex flex-wrap gap-x-4 gap-y-1">
+        {day.coverage.map((c) => {
+          const direct = day.shifts.find((s) => s.code === c.period)!.nurses
+            .length;
+          const fromLong = c.covered - direct;
+          return (
+            <span key={c.period}>
+              پوشش {COVERAGE_PERIOD_NAMES[c.period]}:{" "}
+              <span className="font-semibold text-foreground">
+                {faNumber(c.covered)} نفر
+              </span>
+              {fromLong > 0 && ` (${faNumber(fromLong)} نفر از شیفت طولانی)`}
+              {!sameStatus && ` · ${staffingStatusLabel(c.status, c.bounds)}`}
+            </span>
+          );
+        })}
+      </p>
+      {sameStatus && <p>{staffingStatusLabel(status.status, status.bounds)}</p>}
+    </section>
+  );
+}
+
 /** Operational coverage of M/E (including long shifts) and its staffing status. */
 function CoverageNote({ day, shift }: { day: DayReview; shift: ReviewShift }) {
   if (shift.code === "ME")
@@ -184,13 +257,37 @@ function ShiftSection({ day, shift }: { day: DayReview; shift: ReviewShift }) {
 }
 
 /**
- * Layer 2: one day. Findings first (what needs attention), then the four
- * shifts with their nurses, then who has no shift. Read-only.
+ * Layer 2: one day. Findings first (what needs attention). With `editor`
+ * (the Head Nurse may edit this day), the coverage and the editing list of
+ * every rostered nurse follow; otherwise the four shifts with their nurses,
+ * then who has no shift, read-only with the reason.
  */
-export function DayDetail({ day }: { day: DayReview }) {
+export function DayDetail({
+  day,
+  editor,
+}: {
+  day: DayReview;
+  editor?: ReactNode;
+}) {
+  if (editor)
+    return (
+      <div className="flex flex-col gap-4">
+        <Findings day={day} />
+        <RelatedFindings day={day} />
+        <CoverageSummary day={day} />
+        {editor}
+      </div>
+    );
   return (
     <div className="flex flex-col gap-4">
+      {!day.edit.allowed && (
+        <p className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          {editDenialLabel(day.edit.reason)}
+        </p>
+      )}
       <Findings day={day} />
+      <RelatedFindings day={day} />
       <div className="grid gap-3 md:grid-cols-2">
         {day.shifts.map((shift) => (
           <ShiftSection key={shift.code} day={day} shift={shift} />

@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
-import { getScheduleReview } from "@/application/schedules/review";
+import {
+  getScheduleReview,
+  type DayReview,
+} from "@/application/schedules/review";
+import { addDays, eachDay, type IsoDate } from "@/domain/shared/dates";
+import { isInPeriod, type DatePeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
 import {
   adjacentJalaliMonth,
@@ -21,8 +26,10 @@ import {
   EmptySchedules,
   ScheduleOverviewView,
 } from "@/features/schedule/schedule-overview";
+import { DayEditor } from "@/features/schedule-editing/day-editor";
 import { DayBadges, DayDetail } from "@/features/schedule-review/day-detail";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
+import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
 import { EmptyMonth } from "@/features/schedule-review/empty-month";
 import { MonthCalendar } from "@/features/schedule-review/month-calendar";
 import { requireDepartmentPage } from "@/features/shell/department-page";
@@ -30,6 +37,42 @@ import { PageHeader } from "@/features/shell/page-header";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
 export const metadata: Metadata = { title: "برنامه بخش" };
+
+const dayLabel = (date: IsoDate) => formatJalaliDate(date, { weekday: true });
+
+/** The Head Nurse's editor for a day the use cases let them edit. */
+function dayEditor(
+  day: DayReview,
+  schedule: { id: string; revision: number; period: DatePeriod },
+  links: { previous: DayLink | null; next: DayLink | null },
+) {
+  if (!day.edit.allowed) return undefined;
+  const flagged = new Set(
+    [...day.findings, ...day.relatedFindings].flatMap((f) => f.nurseIds),
+  );
+  const rangeEnds =
+    day.date < schedule.period.end
+      ? eachDay(addDays(day.date, 1), schedule.period.end).map((date) => ({
+          date,
+          label: dayLabel(date),
+        }))
+      : [];
+  return (
+    <DayEditor
+      scheduleId={schedule.id}
+      revision={schedule.revision}
+      date={day.date}
+      dayLabel={dayLabel(day.date)}
+      nurses={day.roster.map((n) => ({
+        ...n,
+        flagged: flagged.has(n.userId),
+      }))}
+      rangeEnds={rangeEnds}
+      previousDayHref={links.previous?.href ?? null}
+      nextDayHref={links.next?.href ?? null}
+    />
+  );
+}
 
 /** Head Nurse of this department only (`department.manage`); the use cases check again. */
 export default async function DepartmentSchedulePage({
@@ -134,6 +177,15 @@ export default async function DepartmentSchedulePage({
   // Day links and closing keep the URL form the page was opened with.
   const here = (date?: string) =>
     requestedMonth ? monthHref(current, date) : scheduleHref(selected.id, date);
+  // Previous / next day of the open day, within the period (chronological).
+  const dayLink = (date: IsoDate): DayLink | null =>
+    isInPeriod(review.month.period, date)
+      ? { href: here(date), label: dayLabel(date) }
+      : null;
+  const dayLinks = review.day && {
+    previous: dayLink(addDays(review.day.date, -1)),
+    next: dayLink(addDays(review.day.date, 1)),
+  };
 
   return (
     <>
@@ -153,15 +205,27 @@ export default async function DepartmentSchedulePage({
           }
         />
       </div>
-      {review.day && (
+      {review.day && dayLinks && (
+        // Not keyed by date: it stays open (and keeps focus) across days.
         <DayDetailDialog
-          key={review.day.date}
-          title={formatJalaliDate(review.day.date, { weekday: true })}
+          title={dayLabel(review.day.date)}
           description={<DayBadges day={review.day} />}
           closeHref={here()}
           returnFocusId={`day-${review.day.date}`}
+          navigation={<DayNav {...dayLinks} />}
         >
-          <DayDetail day={review.day} />
+          <DayDetail
+            day={review.day}
+            editor={dayEditor(
+              review.day,
+              {
+                id: selected.id,
+                revision: review.month.revision,
+                period: review.month.period,
+              },
+              dayLinks,
+            )}
+          />
         </DayDetailDialog>
       )}
     </>

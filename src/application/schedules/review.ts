@@ -8,12 +8,18 @@ import {
 } from "../../domain/rules/staffing";
 import { validateSchedule } from "../../domain/rules/validate-schedule";
 import {
+  assignmentsLockedIn,
+  canEditAssignment,
+  type AssignmentEditDenial,
+} from "../../domain/schedule/assignment-editing";
+import {
   DAY_HEALTH_STATES,
   summarizeScheduleDays,
   type DayHealth,
   type ScheduleDaySummary,
 } from "../../domain/schedule/day-health";
 import type { ScheduleStatus } from "../../domain/schedule/status";
+import type { Decision } from "../../domain/shared/decision";
 import { addDays, isIsoDate, type IsoDate } from "../../domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import {
@@ -28,6 +34,7 @@ import {
   listAssignments,
 } from "../../infrastructure/repositories/assignments";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
+import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import { listRoster } from "../../infrastructure/repositories/roster";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
 import {
@@ -63,6 +70,18 @@ export interface ScheduleMonthReview {
   readonly period: DatePeriod;
   readonly label: string;
   readonly status: ScheduleStatus;
+  /**
+   * The schedule revision this review was read at (read before the
+   * assignments, so it is never newer than the data shown). Edits send it
+   * back; a stale one gets CONFLICT.
+   */
+  readonly revision: number;
+  /**
+   * The actor may edit assignments of this schedule now (`assignment.edit`
+   * and a status that is not locked). A revision may still limit which days
+   * (`DayReview.edit`).
+   */
+  readonly editable: boolean;
   readonly days: readonly ReviewDay[];
   /** Days per health state. */
   readonly totals: Readonly<Record<DayHealth, number>>;
@@ -76,6 +95,11 @@ export interface ReviewNurse {
   readonly role: MembershipRole;
   /** The nurse's own wish for the day (read-only context), if any. */
   readonly preference: PreferenceValue | null;
+}
+
+/** A rostered nurse on the selected day, with their shift (null: no shift). */
+export interface ReviewRosterNurse extends ReviewNurse {
+  readonly shift: ShiftCode | null;
 }
 
 export interface ReviewShift {
@@ -107,8 +131,17 @@ export interface DayReview {
   readonly shifts: readonly ReviewShift[];
   readonly coverage: readonly ReviewCoverage[];
   readonly findings: readonly ReviewFinding[];
+  /**
+   * Findings reported on another day that involve this one (a Night here
+   * followed by a shift the next day), so editing either day shows them.
+   */
+  readonly relatedFindings: readonly ReviewFinding[];
   /** Rostered nurses without an assignment that day. */
   readonly unassigned: readonly ReviewNurse[];
+  /** Everyone on the roster (sorted by name), assigned or not: the editing list. */
+  readonly roster: readonly ReviewRosterNurse[];
+  /** Whether the actor may edit this day's assignments, and why not. */
+  readonly edit: Decision<AssignmentEditDenial | "NOT_AUTHORIZED">;
 }
 
 export interface ScheduleReview {
@@ -186,11 +219,16 @@ export async function getScheduleReview(
     ]),
   ) as Record<DayHealth, number>;
 
+  const mayEdit = decide(actor, "assignment.edit", {
+    departmentId: schedule.departmentId,
+  }).allowed;
   const month: ScheduleMonthReview = {
     scheduleId: schedule.id,
     period,
     label: schedule.label,
     status: schedule.status,
+    revision: schedule.revision,
+    editable: mayEdit && !assignmentsLockedIn(schedule.status),
     days,
     totals,
     unattributedFindings: summary.unattributedFindings,
@@ -202,13 +240,18 @@ export async function getScheduleReview(
       : null;
   if (!date) return { month, day: null };
 
-  const [roster, preferences, requirements] = await Promise.all([
+  // The revision scope matters only once a schedule has been approved (D14).
+  const revisionScoped =
+    mayEdit &&
+    (schedule.status === "REVISING" || schedule.status === "RETURNED");
+  const [roster, preferences, requirements, revision] = await Promise.all([
     listRoster(db, schedule.id),
     listPreferences(db, schedule.id, { date }),
     staffing.requirementsFor({
       departmentId: schedule.departmentId,
       dates: [date],
     }),
+    revisionScoped ? findOpenRevision(db, schedule.id) : null,
   ]);
   const summaryOfDay = days.find((d) => d.date === date)!;
   const shiftOf = new Map(
@@ -223,6 +266,13 @@ export async function getScheduleReview(
     preference: preferenceOf.get(r.userId) ?? null,
   });
   const requirement = requirements.get(date);
+  const withNames = (d: Diagnostic): ReviewFinding => ({
+    ...d,
+    nurses: d.nurseIds.map((id) => ({
+      userId: id,
+      displayName: nameOf.get(id) ?? "—",
+    })),
+  });
 
   return {
     month,
@@ -240,16 +290,23 @@ export async function getScheduleReview(
         bounds: requirement?.[p] ?? null,
         status: staffingStatus(summaryOfDay.coverage[p], requirement?.[p]),
       })),
-      findings: diagnostics
-        .filter((d) => d.date === date)
-        .map((d) => ({
-          ...d,
-          nurses: d.nurseIds.map((id) => ({
-            userId: id,
-            displayName: nameOf.get(id) ?? "—",
-          })),
-        })),
+      findings: diagnostics.filter((d) => d.date === date).map(withNames),
+      relatedFindings: diagnostics
+        .filter((d) => d.date !== date && d.dates.includes(date))
+        .map(withNames),
       unassigned: roster.filter((r) => !shiftOf.has(r.userId)).map(nurse),
+      roster: roster.map((r) => ({
+        ...nurse(r),
+        shift: shiftOf.get(r.userId) ?? null,
+      })),
+      edit: mayEdit
+        ? canEditAssignment({
+            status: schedule.status,
+            period,
+            date,
+            revisionDates: revision ? new Set(revision.dates) : null,
+          })
+        : { allowed: false, reason: "NOT_AUTHORIZED" },
     },
   };
 }
