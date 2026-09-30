@@ -1,7 +1,16 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
+import type { DatePeriod } from "../../domain/shared/period";
+import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { DbExecutor } from "../db/database";
-import { scheduleSubmissions } from "../db/schema";
+import {
+  departments,
+  schedules,
+  scheduleSubmissions,
+  users,
+} from "../db/schema";
+import { asIsoDate } from "./mappers";
 
 export type SubmissionDecision = "APPROVED" | "RETURNED" | "WITHDRAWN";
 
@@ -26,6 +35,8 @@ export async function createSubmission(
     submittedBy: string;
     revisionId?: string | null;
     note?: string | null;
+    /** The use case's clock; the column defaults to the database's now(). */
+    submittedAt?: Date;
   },
 ): Promise<SubmissionRecord> {
   const [row] = await db.insert(scheduleSubmissions).values(input).returning();
@@ -86,4 +97,116 @@ export async function listSubmissions(
     .from(scheduleSubmissions)
     .where(eq(scheduleSubmissions.scheduleId, scheduleId))
     .orderBy(asc(scheduleSubmissions.submittedAt));
+}
+
+/** A schedule as the Supervisor's review list shows it, with its latest submission. */
+export interface ReviewListRow {
+  readonly scheduleId: string;
+  readonly departmentId: string;
+  readonly departmentCode: string;
+  readonly departmentName: string;
+  readonly period: DatePeriod;
+  readonly label: string;
+  readonly status: ScheduleStatus;
+  /** The most recent submission of the schedule, whatever its decision. */
+  readonly latest: {
+    readonly id: string;
+    readonly submittedBy: string;
+    readonly submittedByName: string;
+    readonly submittedAt: Date;
+    readonly decision: SubmissionDecision | null;
+    readonly decidedByName: string | null;
+    readonly decidedAt: Date | null;
+  } | null;
+}
+
+/**
+ * The review list of a set of departments in one query (no query per row):
+ * each schedule in `statuses` with its department and its latest submission
+ * (`DISTINCT ON`), the submitter's and decider's names joined in. Most
+ * recent period first.
+ */
+export async function listSchedulesForReview(
+  db: DbExecutor,
+  input: {
+    departmentIds: readonly string[];
+    statuses: readonly ScheduleStatus[];
+  },
+): Promise<ReviewListRow[]> {
+  if (input.departmentIds.length === 0 || input.statuses.length === 0)
+    return [];
+  const latest = db
+    .selectDistinctOn([scheduleSubmissions.scheduleId], {
+      scheduleId: scheduleSubmissions.scheduleId,
+      submissionId: scheduleSubmissions.id,
+      submittedBy: scheduleSubmissions.submittedBy,
+      submittedAt: scheduleSubmissions.submittedAt,
+      decision: scheduleSubmissions.decision,
+      decidedBy: scheduleSubmissions.decidedBy,
+      decidedAt: scheduleSubmissions.decidedAt,
+    })
+    .from(scheduleSubmissions)
+    .innerJoin(schedules, eq(schedules.id, scheduleSubmissions.scheduleId))
+    .where(inArray(schedules.departmentId, [...input.departmentIds]))
+    .orderBy(
+      scheduleSubmissions.scheduleId,
+      desc(scheduleSubmissions.submittedAt),
+      desc(scheduleSubmissions.id),
+    )
+    .as("latest_submission");
+  const submitter = alias(users, "submitter");
+  const decider = alias(users, "decider");
+
+  const rows = await db
+    .select({
+      scheduleId: schedules.id,
+      departmentId: schedules.departmentId,
+      departmentCode: departments.code,
+      departmentName: departments.name,
+      periodStart: schedules.periodStart,
+      periodEnd: schedules.periodEnd,
+      label: schedules.label,
+      status: schedules.status,
+      submissionId: latest.submissionId,
+      submittedBy: latest.submittedBy,
+      submittedByName: submitter.displayName,
+      submittedAt: latest.submittedAt,
+      decision: latest.decision,
+      decidedByName: decider.displayName,
+      decidedAt: latest.decidedAt,
+    })
+    .from(schedules)
+    .innerJoin(departments, eq(departments.id, schedules.departmentId))
+    .leftJoin(latest, eq(latest.scheduleId, schedules.id))
+    .leftJoin(submitter, eq(submitter.id, latest.submittedBy))
+    .leftJoin(decider, eq(decider.id, latest.decidedBy))
+    .where(
+      and(
+        inArray(schedules.departmentId, [...input.departmentIds]),
+        inArray(schedules.status, [...input.statuses]),
+      ),
+    )
+    .orderBy(desc(schedules.periodStart), asc(departments.code));
+
+  return rows.map((r) => ({
+    scheduleId: r.scheduleId,
+    departmentId: r.departmentId,
+    departmentCode: r.departmentCode,
+    departmentName: r.departmentName,
+    period: { start: asIsoDate(r.periodStart), end: asIsoDate(r.periodEnd) },
+    label: r.label,
+    status: r.status,
+    latest:
+      r.submissionId && r.submittedBy && r.submittedAt
+        ? {
+            id: r.submissionId,
+            submittedBy: r.submittedBy,
+            submittedByName: r.submittedByName ?? "—",
+            submittedAt: r.submittedAt,
+            decision: r.decision,
+            decidedByName: r.decidedByName,
+            decidedAt: r.decidedAt,
+          }
+        : null,
+  }));
 }

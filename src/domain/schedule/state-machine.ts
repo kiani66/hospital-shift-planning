@@ -54,6 +54,12 @@ export type TransitionError =
   InvalidStateError | RuleViolationError | ValidationError;
 
 /**
+ * `InvalidStateError.attempted` when SUBMIT is refused because preference
+ * collection is still open (stable, machine-readable; the UI words it).
+ */
+export const PREFERENCE_WINDOW_OPEN = "PREFERENCE_WINDOW_OPEN";
+
+/**
  * Computes the next status or explains why the command is not allowed.
  *
  * Guards:
@@ -81,9 +87,7 @@ export function transition(
         );
       }
       if (command.type === "SUBMIT" && command.activePreferenceWindows > 0) {
-        return err(
-          new InvalidStateError(from, "SUBMIT with an open preference window"),
-        );
+        return err(new InvalidStateError(from, PREFERENCE_WINDOW_OPEN));
       }
       return ok(target);
     }

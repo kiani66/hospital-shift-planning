@@ -80,6 +80,49 @@ export async function listActiveMembers(
     .orderBy(departmentMemberships.userId);
 }
 
+/** Head Nurses of the department on `onDate` with an active account (workflow notifications). */
+export async function listActiveHeadNurseIds(
+  db: DbExecutor,
+  departmentId: string,
+  onDate: IsoDate,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: departmentMemberships.userId })
+    .from(departmentMemberships)
+    .innerJoin(users, eq(users.id, departmentMemberships.userId))
+    .where(
+      and(
+        eq(departmentMemberships.departmentId, departmentId),
+        eq(departmentMemberships.role, "HEAD_NURSE"),
+        eq(users.isActive, true),
+        activeOn(departmentMemberships, onDate),
+      ),
+    )
+    .orderBy(departmentMemberships.userId);
+  return rows.map((r) => r.userId);
+}
+
+/** Supervisors of the department on `onDate` with an active account (workflow notifications). */
+export async function listActiveSupervisorIds(
+  db: DbExecutor,
+  departmentId: string,
+  onDate: IsoDate,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: supervisorAssignments.userId })
+    .from(supervisorAssignments)
+    .innerJoin(users, eq(users.id, supervisorAssignments.userId))
+    .where(
+      and(
+        eq(supervisorAssignments.departmentId, departmentId),
+        eq(users.isActive, true),
+        activeOn(supervisorAssignments, onDate),
+      ),
+    )
+    .orderBy(supervisorAssignments.userId);
+  return rows.map((r) => r.userId);
+}
+
 export async function assignSupervisor(
   db: DbExecutor,
   input: {

@@ -6,7 +6,6 @@ import {
   type StaffingBounds,
   type StaffingStatus,
 } from "../../domain/rules/staffing";
-import { validateSchedule } from "../../domain/rules/validate-schedule";
 import {
   assignmentsLockedIn,
   canEditAssignment,
@@ -20,7 +19,7 @@ import {
 } from "../../domain/schedule/day-health";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { Decision } from "../../domain/shared/decision";
-import { addDays, isIsoDate, type IsoDate } from "../../domain/shared/dates";
+import { isIsoDate, type IsoDate } from "../../domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import {
   COVERAGE_PERIODS,
@@ -29,14 +28,14 @@ import {
   type PreferenceValue,
   type ShiftCode,
 } from "../../domain/shifts/shift-type";
-import {
-  listAdjacentAssignments,
-  listAssignments,
-} from "../../infrastructure/repositories/assignments";
+import { countActiveWindows } from "../../domain/preferences/preference-window";
+import { listPreferenceWindows } from "../../infrastructure/repositories/preference-windows";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import { listRoster } from "../../infrastructure/repositories/roster";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
+import { listSubmissions } from "../../infrastructure/repositories/submissions";
+import { listDisplayNames } from "../../infrastructure/repositories/users";
 import {
   NO_HOLIDAY_DATA,
   type HolidayCalendar,
@@ -48,6 +47,12 @@ import {
   NO_STAFFING_REQUIREMENTS,
   type StaffingRequirementsSource,
 } from "./staffing-requirements";
+import {
+  describeWorkflow,
+  workflowPeople,
+  type ScheduleWorkflow,
+} from "./workflow";
+import { validateWorkingCopy } from "./working-copy-validation";
 
 /**
  * The read-only monthly review of one schedule (Phase 7a): the month as
@@ -56,8 +61,10 @@ import {
  *
  * Reads the working copy (`shift_assignments`) in every status. Nothing here
  * writes. Queries per call: the schedule, its assignments, the adjacent
- * schedules' boundary days, holidays; plus the roster and that day's
- * preferences when a day is selected. Never one query per day or per nurse.
+ * schedules' boundary days, holidays, the preference windows and the
+ * submissions (with their people's names) for the workflow; plus the roster
+ * and that day's preferences when a day is selected. Never one query per day
+ * or per nurse.
  */
 
 export interface ReviewDay extends ScheduleDaySummary {
@@ -146,6 +153,8 @@ export interface DayReview {
 
 export interface ScheduleReview {
   readonly month: ScheduleMonthReview;
+  /** Lifecycle status, submission history and the actor's workflow actions (Phase 8). */
+  readonly workflow: ScheduleWorkflow;
   /** The requested day, or null when none (or one outside the period) was asked for. */
   readonly day: DayReview | null;
 }
@@ -185,22 +194,23 @@ export async function getScheduleReview(
     throw new NotFoundError("Schedule");
   const { period } = schedule;
 
-  const assignments = await listAssignments(db, schedule.id);
-  const [adjacent, officialHolidays] = await Promise.all([
-    // Night-rest holds across schedule boundaries (D7, D20).
-    listAdjacentAssignments(db, {
-      departmentId: schedule.departmentId,
-      excludeScheduleId: schedule.id,
-      nurseIds: [...new Set(assignments.map((a) => a.nurseId))],
-      dates: [addDays(period.start, -1), addDays(period.end, 1)],
-    }),
-    holidays.listOfficialHolidays(period),
-  ]);
-  const diagnostics = validateSchedule({
-    period,
-    assignments,
-    adjacentAssignments: adjacent,
-  }).map((v) => toDiagnostic(v, period));
+  const now = ctx.clock?.() ?? new Date();
+  const [{ assignments, violations }, officialHolidays, windows, submissions] =
+    await Promise.all([
+      // The same validation FINALIZE and SUBMIT are gated by (D58).
+      validateWorkingCopy(db, schedule),
+      holidays.listOfficialHolidays(period),
+      listPreferenceWindows(db, schedule.id),
+      listSubmissions(db, schedule.id),
+    ]);
+  const diagnostics = violations.map((v) => toDiagnostic(v, period));
+  const workflow = describeWorkflow(actor, {
+    schedule,
+    violations,
+    activePreferenceWindows: countActiveWindows(windows, now),
+    submissions,
+    names: await listDisplayNames(db, workflowPeople(submissions)),
+  });
   const summary = summarizeScheduleDays({ period, assignments, diagnostics });
 
   const holidayOn = new Map(
@@ -238,7 +248,7 @@ export async function getScheduleReview(
     input.day && isIsoDate(input.day) && isInPeriod(period, input.day)
       ? input.day
       : null;
-  if (!date) return { month, day: null };
+  if (!date) return { month, workflow, day: null };
 
   // The revision scope matters only once a schedule has been approved (D14).
   const revisionScoped =
@@ -276,6 +286,7 @@ export async function getScheduleReview(
 
   return {
     month,
+    workflow,
     day: {
       date,
       health: summaryOfDay.health,

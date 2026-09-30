@@ -56,20 +56,44 @@ function preferencesPath(scheduleId: string | null): Route {
   ) as Route;
 }
 
+/** The Head Nurse's schedule page of the notification's schedule. */
+function departmentSchedulePath(
+  departmentCode: string | null | undefined,
+  scheduleId: string | null,
+): Route | null {
+  if (!departmentCode || !scheduleId) return null;
+  return `/departments/${encodeURIComponent(departmentCode)}/schedule?schedule=${encodeURIComponent(scheduleId)}` as Route;
+}
+
 /**
- * Where opening a notification leads, from its stored type and schedule
- * (never from anything the browser sends, so it cannot become an open
- * redirect). Only types that are created today and have a page are routed;
- * the rest return null and opening them only marks them read.
+ * Where opening a notification leads, from its stored type and schedule and
+ * the department that schedule belongs to (all read on the server, never
+ * from anything the browser sends, so it cannot become an open redirect).
+ * The destination page authorizes on its own; the link grants nothing.
+ *
+ * - PREFERENCES_OPENED / DATES_REOPENED: the nurse's preference page.
+ * - SCHEDULE_SUBMITTED: the Supervisor's read-only review of the schedule.
+ * - SCHEDULE_APPROVED / SCHEDULE_RETURNED: the Head Nurse's schedule page
+ *   (where a return comment is shown).
+ * Types not created yet return null: opening them only marks them read.
  */
 export function notificationDestination(notification: {
   readonly type: NotificationType;
   readonly scheduleId: string | null;
+  readonly departmentCode?: string | null;
 }): Route | null {
+  const { scheduleId } = notification;
   switch (notification.type) {
     case "PREFERENCES_OPENED":
     case "DATES_REOPENED":
-      return preferencesPath(notification.scheduleId);
+      return preferencesPath(scheduleId);
+    case "SCHEDULE_SUBMITTED":
+      return scheduleId
+        ? (`/review/${encodeURIComponent(scheduleId)}` as Route)
+        : "/review";
+    case "SCHEDULE_APPROVED":
+    case "SCHEDULE_RETURNED":
+      return departmentSchedulePath(notification.departmentCode, scheduleId);
     default:
       return null;
   }
@@ -86,9 +110,10 @@ const forSchedule = (item: NotificationItem, fallback: string) => {
 };
 
 /**
- * Every stored type has wording. Only PREFERENCES_OPENED is created today
- * (Phase 4); the other enum values get neutral text and no destination until
- * the phase that creates them defines where they lead.
+ * Every stored type has wording. Created today: PREFERENCES_OPENED (Phase 4)
+ * and SCHEDULE_SUBMITTED / APPROVED / RETURNED (Phase 8); the other enum
+ * values get neutral text and no destination until the phase that creates
+ * them defines where they lead.
  */
 const RENDERERS: Record<NotificationType, Renderer> = {
   PREFERENCES_OPENED: (item) => {
@@ -116,15 +141,15 @@ const RENDERERS: Record<NotificationType, Renderer> = {
   }),
   SCHEDULE_SUBMITTED: (item) => ({
     title: "برنامه برای تأیید ارسال شد",
-    message: `برنامه ${forSchedule(item, "شیفت")} برای تأیید ارسال شد.`,
+    message: `برنامه ${forSchedule(item, "شیفت")} برای بررسی و تأیید شما ارسال شد.`,
   }),
   SCHEDULE_APPROVED: (item) => ({
     title: "برنامه تأیید شد",
-    message: `برنامه ${forSchedule(item, "شیفت")} تأیید شد.`,
+    message: `برنامه ${forSchedule(item, "شیفت")} توسط سوپروایزر تأیید شد.`,
   }),
   SCHEDULE_RETURNED: (item) => ({
     title: "برنامه برای اصلاح برگشت داده شد",
-    message: `برنامه ${forSchedule(item, "شیفت")} برای اصلاح برگشت داده شد.`,
+    message: `سوپروایزر برنامه ${forSchedule(item, "شیفت")} را برای اصلاح برگشت داد؛ توضیح او را در صفحه برنامه ببینید.`,
   }),
   REVISION_STARTED: (item) => ({
     title: "بازنگری برنامه آغاز شد",
@@ -148,5 +173,13 @@ export function describeNotification(item: NotificationItem): NotificationView {
   const context = item.context
     ? `${item.context.departmentName} · ${item.context.scheduleLabel}`
     : scheduleLabel(item);
-  return { ...view, context, destination: notificationDestination(item) };
+  return {
+    ...view,
+    context,
+    destination: notificationDestination({
+      type: item.type,
+      scheduleId: item.scheduleId,
+      departmentCode: item.context?.departmentCode,
+    }),
+  };
 }

@@ -15,7 +15,11 @@ const item = (overrides: Partial<NotificationItem> = {}): NotificationItem => ({
   createdAt: new Date("2026-10-01T06:30:00Z"),
   read: false,
   scheduleId: SCHEDULE_ID,
-  context: { scheduleLabel: "آبان ۱۴۰۵", departmentName: "مراقبت‌های ویژه" },
+  context: {
+    scheduleLabel: "آبان ۱۴۰۵",
+    departmentName: "مراقبت‌های ویژه",
+    departmentCode: "icu",
+  },
   data: {
     label: "آبان ۱۴۰۵",
     firstDate: "2026-10-23",
@@ -125,9 +129,64 @@ describe("notificationDestination", () => {
   it("routes only types that are created today", () => {
     const routed = ALL_TYPES.filter(
       (type) =>
-        notificationDestination({ type, scheduleId: SCHEDULE_ID }) !== null,
+        notificationDestination({
+          type,
+          scheduleId: SCHEDULE_ID,
+          departmentCode: "icu",
+        }) !== null,
     );
-    expect(routed).toEqual(["PREFERENCES_OPENED", "DATES_REOPENED"]);
+    expect(routed).toEqual([
+      "PREFERENCES_OPENED",
+      "DATES_REOPENED",
+      "SCHEDULE_SUBMITTED",
+      "SCHEDULE_APPROVED",
+      "SCHEDULE_RETURNED",
+    ]);
+  });
+
+  it("sends SCHEDULE_SUBMITTED to the Supervisor's review of the schedule", () => {
+    expect(
+      notificationDestination({
+        type: "SCHEDULE_SUBMITTED",
+        scheduleId: SCHEDULE_ID,
+      }),
+    ).toBe(`/review/${SCHEDULE_ID}`);
+    expect(
+      notificationDestination({ type: "SCHEDULE_SUBMITTED", scheduleId: null }),
+    ).toBe("/review");
+  });
+
+  it.each(["SCHEDULE_APPROVED", "SCHEDULE_RETURNED"] as const)(
+    "sends %s to the Head Nurse's schedule page of that schedule",
+    (type) => {
+      expect(
+        notificationDestination({
+          type,
+          scheduleId: SCHEDULE_ID,
+          departmentCode: "icu",
+        }),
+      ).toBe(`/departments/icu/schedule?schedule=${SCHEDULE_ID}`);
+      // Without a known department (schedule gone) it only marks read.
+      expect(
+        notificationDestination({ type, scheduleId: SCHEDULE_ID }),
+      ).toBeNull();
+      expect(
+        notificationDestination({
+          type,
+          scheduleId: null,
+          departmentCode: "icu",
+        }),
+      ).toBeNull();
+    },
+  );
+
+  it("uses the department from the notification's context", () => {
+    expect(
+      describeNotification(item({ type: "SCHEDULE_RETURNED" })).destination,
+    ).toBe(`/departments/icu/schedule?schedule=${SCHEDULE_ID}`);
+    expect(
+      describeNotification(item({ type: "SCHEDULE_RETURNED" })).message,
+    ).toContain("توضیح");
   });
 
   it("always produces a same-site path", () => {
@@ -135,9 +194,12 @@ describe("notificationDestination", () => {
       const path = notificationDestination({
         type,
         scheduleId: "//evil.example/x?y",
+        departmentCode: "//evil.example",
       });
-      if (path)
-        expect(path.startsWith("/preferences?schedule=%2F%2F")).toBe(true);
+      if (path) {
+        expect(path).toMatch(/^\/(preferences|review|departments)[/?]/);
+        expect(path).not.toContain("//");
+      }
     }
   });
 });

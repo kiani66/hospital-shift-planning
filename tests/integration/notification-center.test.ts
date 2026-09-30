@@ -357,6 +357,7 @@ describe("markNotificationRead", () => {
         id,
         type: "PREFERENCES_OPENED",
         scheduleId: S,
+        departmentCode: "icu",
         changed: true,
       },
     });

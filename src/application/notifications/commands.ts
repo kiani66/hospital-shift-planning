@@ -6,6 +6,7 @@ import {
   markAllNotificationsRead as markAllRead,
   markNotificationRead as markRead,
 } from "../../infrastructure/repositories/notifications";
+import { findScheduleDepartmentCode } from "../../infrastructure/repositories/schedules";
 import { NotFoundError } from "../errors";
 import { defineCommand } from "../use-case";
 
@@ -20,6 +21,8 @@ export interface MarkNotificationReadOutput {
   readonly id: string;
   readonly type: NotificationType;
   readonly scheduleId: string | null;
+  /** The code of the schedule's department, for the destination link. */
+  readonly departmentCode: string | null;
   /** False when it was already read (the call is idempotent). */
   readonly changed: boolean;
 }
@@ -57,6 +60,9 @@ export const markNotificationRead = defineCommand({
       id: notification.id,
       type: notification.type,
       scheduleId: notification.scheduleId,
+      departmentCode: notification.scheduleId
+        ? await findScheduleDepartmentCode(uow.tx, notification.scheduleId)
+        : null,
       changed,
     };
   },

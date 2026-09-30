@@ -522,15 +522,17 @@ describe("performance", () => {
     expect(month.result.month.days).toHaveLength(31);
     expect(month.result.month.totals.NEEDS_ATTENTION).toBe(0);
     expect(month.count).toBe((await queriesFor(small)).count);
-    // Schedule, assignments, adjacent boundary days.
-    expect(month.count).toBeGreaterThanOrEqual(2);
-    expect(month.count).toBeLessThanOrEqual(3);
+    // Schedule, assignments, adjacent boundary days; and for the Phase 8
+    // workflow the preference windows and submissions (their people's names
+    // are one more query once a submission exists), all independent of size.
+    expect(month.count).toBeGreaterThanOrEqual(4);
+    expect(month.count).toBeLessThanOrEqual(5);
 
     const withDay = await queriesFor(large, isoDate("2027-04-01"));
     expect(withDay.count).toBe(
       (await queriesFor(small, isoDate("2027-04-01"))).count,
     );
-    expect(withDay.count).toBeLessThanOrEqual(5);
+    expect(withDay.count).toBeLessThanOrEqual(7);
     const detail = withDay.result.day!;
     expect(
       detail.shifts.reduce((n, s) => n + s.nurses.length, 0) +

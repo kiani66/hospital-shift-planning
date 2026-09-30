@@ -34,6 +34,10 @@ import {
 } from "@/features/schedule/schedule-overview";
 import { DayEditor } from "@/features/schedule-editing/day-editor";
 import {
+  HeadNurseLifecycleAction,
+  HeadNurseWorkflowNotice,
+} from "@/features/schedule-workflow/workflow-ui";
+import {
   DayBadges,
   DayDetail,
   flaggedNurses,
@@ -212,10 +216,23 @@ export default async function DepartmentSchedulePage({
           preferences: selected.preferences.state,
           editable: review.month.editable,
         }}
-        primaryAction={<PreferenceAction schedule={selected} />}
+        primaryAction={
+          <>
+            <PreferenceAction schedule={selected} />
+            <HeadNurseLifecycleAction
+              schedule={{
+                scheduleId: selected.id,
+                revision: review.month.revision,
+                label: selected.label,
+              }}
+              workflow={review.workflow}
+            />
+          </>
+        }
         secondaryAction={data.canCreate ? createDialog(false) : null}
       />
       <div className="flex flex-col gap-3">
+        <HeadNurseWorkflowNotice workflow={review.workflow} dayHref={here} />
         <MonthSummary month={review.month} dayHref={here} />
         {noAssignments && (
           <Callout role="note" tone="info" icon={Info}>
