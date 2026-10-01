@@ -29,6 +29,7 @@ import {
   returnScheduleAction,
   submitScheduleAction,
   withdrawSubmissionAction,
+  discardRevisionAction,
 } from "./actions";
 import { blockerLabel, shortJalaliDay } from "./presentation";
 
@@ -63,7 +64,7 @@ export function HeadNurseLifecycleAction({
   schedule: ScheduleRef;
   workflow: ScheduleWorkflow;
 }) {
-  const { finalize, submit, withdraw } = workflow.actions;
+  const { finalize, submit, withdraw, discardRevision } = workflow.actions;
   const common = {
     scheduleId: schedule.scheduleId,
     revision: schedule.revision,
@@ -93,20 +94,36 @@ export function HeadNurseLifecycleAction({
         describedBy={blocked(finalize) ? WORKFLOW_BLOCKERS_ID : undefined}
       />
     );
+  // A revision of an approved schedule can also be abandoned (Phase 9).
+  const discard = discardRevision && (
+    <ConfirmScheduleAction
+      {...common}
+      action={discardRevisionAction}
+      icon="discard"
+      destructive
+      triggerLabel="کنار گذاشتن بازنگری"
+      title={`کنار گذاشتن بازنگری برنامه ${label}؟`}
+      description={`همه تغییرهای این بازنگری برگردانده می‌شوند و شیفت‌ها دوباره همان آخرین نسخه تأییدشده می‌شوند، که اجرایی می‌ماند. سابقه بازنگری، تغییرها و درخواست‌های اعمال‌شده حفظ می‌شود و به پرستارانی که درخواستشان در این بازنگری اعمال شده بود اطلاع داده می‌شود.`}
+      confirmLabel="بله، کنار گذاشته شود"
+    />
+  );
   if (submit) {
     const again = workflow.status === "RETURNED";
     return (
-      <ConfirmScheduleAction
-        {...common}
-        action={submitScheduleAction}
-        icon="submit"
-        triggerLabel={again ? "ارسال دوباره برای تأیید" : "ارسال برای تأیید"}
-        title={`ارسال برنامه ${label} برای تأیید؟`}
-        description="برنامه برای بررسی به سوپروایزر ارسال و به او اطلاع داده می‌شود. از این لحظه تا تصمیم سوپروایزر شیفت‌ها قفل می‌شوند؛ تا پیش از اقدام او می‌توانید ارسال را پس بگیرید."
-        confirmLabel="بله، ارسال شود"
-        disabled={blocked(submit)}
-        describedBy={blocked(submit) ? WORKFLOW_BLOCKERS_ID : undefined}
-      />
+      <>
+        <ConfirmScheduleAction
+          {...common}
+          action={submitScheduleAction}
+          icon="submit"
+          triggerLabel={again ? "ارسال دوباره برای تأیید" : "ارسال برای تأیید"}
+          title={`ارسال برنامه ${label} برای تأیید؟`}
+          description="برنامه برای بررسی به سوپروایزر ارسال و به او اطلاع داده می‌شود. از این لحظه تا تصمیم سوپروایزر شیفت‌ها قفل می‌شوند؛ تا پیش از اقدام او می‌توانید ارسال را پس بگیرید."
+          confirmLabel="بله، ارسال شود"
+          disabled={blocked(submit)}
+          describedBy={blocked(submit) ? WORKFLOW_BLOCKERS_ID : undefined}
+        />
+        {discard}
+      </>
     );
   }
   if (withdraw)

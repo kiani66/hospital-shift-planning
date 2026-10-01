@@ -184,6 +184,11 @@ const RENDERERS: Record<NotificationType, Renderer> = {
           title: "درخواست تغییر شیفت اعمال شد",
           message: `سرپرستار درخواست تغییر شیفت شما را در ${schedule} اعمال کرد.`,
         };
+      case "REVISION_DISCARDED":
+        return {
+          title: "تغییر درخواست شما کنار گذاشته شد",
+          message: `بازنگری ${schedule} که تغییر درخواست شما در آن اعمال شده بود کنار گذاشته شد؛ این تغییر دیگر بخشی از برنامه اجرایی نیست.`,
+        };
       case "REJECTED":
         return {
           title: "درخواست تغییر شیفت رد شد",

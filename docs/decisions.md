@@ -44,7 +44,7 @@ Enforced in `authz/policies.ts` (`schedule.viewDepartment`) and `schedule/state-
 
 A nurse may submit a shift-change request from `FINALIZED` on: `FINALIZED`, `SUBMITTED`,
 `RETURNED`, `APPROVED`, `REVISING`. Requests never change assignments automatically.
-Enforced in `authz/policies.ts` (`changeRequest.submit`).
+Enforced in `authz/policies.ts` (`changeRequest.submit`). Phase 9 defines the requests (D65–D77).
 
 ### D14 · Revision scope after approval
 
@@ -198,8 +198,8 @@ Enforced in `features/calendar/jalali.ts` and `features/schedule/actions.ts`.
 - Opening preference collection is the state machine's `OPEN_PREFERENCES` (`DRAFT → PLANNING`)
   and creates one `INITIAL` window: by default the whole period for the whole roster. A narrower
   date scope (`DateScope`) or nurse scope must lie inside the period and the roster.
-- Closing closes every open window; the status does not change. Reopening (scoped `REOPEN`
-  windows) is a later phase.
+- Closing closes every open window; the status does not change. (Amended by D65: there is no
+  preference reopen after finalization; the `REOPEN` window kind stays in the schema, unused.)
 - Every write carries the schedule revision the caller saw: stale or concurrent attempts get
   `CONFLICT`; audit events and notifications commit with the change.
 - Opening notifies the nurses in scope (`PREFERENCES_OPENED`). Closing writes no notification:
@@ -746,7 +746,9 @@ Enforced in `application/schedules/lifecycle.ts`, `working-copy-validation.ts` a
   assignments is stored at submission; instead the `schedule.submitted` and `schedule.approved`
   audit events both carry `assignmentsFingerprint` (SHA-256 of the sorted nurse/day/shift cells)
   and `assignmentCount`, and equal fingerprints show the version is exactly what was submitted.
-- Approval does not start a revision; APPROVED → REVISING and re-approval are Phase 11.
+- Approval does not start a revision. (Amended by D70: Phase 9 opens revisions when a change is
+  applied to an APPROVED schedule, approves them through this workflow and lets the Head Nurse
+  discard them.)
 
 ### D60 · Supervisor authority and self-approval
 
@@ -807,7 +809,8 @@ Enforced in `application/schedules/lifecycle.ts` and `features/notifications/pre
 
 - The schedule header keeps D52's single next step: open or close preference collection, then
   finalize, submit (or "submit again" after a return) or withdraw, never two lifecycle steps at
-  once. A blocked step stays visible but disabled, described by a blocker panel under the header
+  once. (Amended by D70: while a revision is open, "discard revision" stands next to "submit" as
+  its alternative.) A blocked step stays visible but disabled, described by a blocker panel under the header
   (findings with links to their days, or the open preference window). SUBMITTED says it waits for
   the Supervisor; RETURNED shows the comment; APPROVED says so, with no action.
 - Every transition goes through a confirmation that states its consequence in Persian;
@@ -818,3 +821,166 @@ Enforced in `application/schedules/lifecycle.ts` and `features/notifications/pre
   green only for APPROVED (new `review` and `success` Callout tones on the existing tokens).
 
 Enforced in `features/schedule-workflow/`.
+
+## Shift change request decisions
+
+Phase 9. Paths are relative to `src/`. Migrations 0005 (legacy rename), 0006 (schema) and 0007
+(change reasons). The original "scoped preference reopen" idea was rejected.
+
+### D65 · Preferences end with planning; changes after it are requests
+
+- Preferences exist only during pre-finalization planning (Phase 6, D35–D38). From `FINALIZED` on
+  they are closed for good: there is **no preference reopen** after finalization.
+- A nurse who needs a change after finalization creates a **Shift Change Request**. The nurse
+  requests; the **Head Nurse** decides and is the only one who changes the schedule.
+- A request never mutates the schedule. The request and the schedule change it may lead to are
+  two separate, audited facts (`shift_change_requests` and `schedule_changes` /
+  `schedule_change_cells`).
+
+Enforced in `domain/change-requests/` and `application/change-requests/commands.ts`.
+
+### D66 · Request types, statuses and duplicates
+
+- Types: `UNAVAILABLE` (cannot work the shift), `CHANGE_SHIFT` (another shift the same day),
+  `SWAP` (exchange with another nurse), `OTHER` (the Head Nurse decides the result). Statuses:
+  `PENDING`, `CANCELLED`, `REJECTED`, `APPLIED`. A swap also has a consent status (`PENDING`,
+  `ACCEPTED`, `DECLINED`); there is no approved-but-not-applied state.
+- A request is about the nurse's own assignment, as they see it (D11: the approved version, else
+  the finalized working copy), on a day of the period that is not in the past (today allowed;
+  historical correction is out of scope). The requester is always the signed-in actor.
+- One active (pending) request per nurse, schedule and day (`DUPLICATE_ACTIVE_REQUEST`, partial
+  unique index `shift_change_requests_one_active_key`). Cancelled, rejected and applied requests
+  stay as history; requests are never deleted.
+- The nurse may cancel a pending request. An applied request is final: it is never undone through
+  the request; a further correction is a new request or a Head Nurse adjustment.
+
+### D67 · Structured reasons
+
+Reasons are master data (`change_reasons`, codes inserted by migration 0007, reportable by code):
+each has a scope (requests, adjustments or both), an active flag and a note rule. `OTHER` always
+requires an explanatory note (also a check constraint). A reason that may be referenced is never
+deleted: it is retired with `is_active = false` in a migration, stays readable in history and
+cannot be chosen any more. There is no reason administration UI.
+Enforced in `domain/change-requests/reason.ts`.
+
+### D68 · Swaps
+
+- MVP swaps are **same day, same schedule**, between two rostered nurses whose shifts that day
+  differ (one of them may be off). Cross-date swaps are deferred.
+- The partner must **explicitly consent**; consent is never assumed and only the partner can give
+  it (`changeRequest.consent`). Declining closes the request as `REJECTED`
+  (`COUNTERPART_DECLINED`).
+- A swap is applied only with consent for exactly its context: if either nurse's shift changed
+  since the request or the consent, applying is **blocked** (`SWAP_CONTEXT_CHANGED`); the
+  requester refreshes the request with the current shifts and the partner must consent again.
+- A Head Nurse reassigning nurses for staffing is a schedule adjustment (D72), never a pretended
+  swap request.
+
+### D69 · Applying, stale context and validation
+
+- Only a Head Nurse of the request's department applies or rejects (`changeRequest.apply`,
+  `changeRequest.review`); a Supervisor may read requests but never applies them. Applying locks
+  the schedule, then the request, re-authorizes, checks the revision the Head Nurse previewed
+  (`CONFLICT` otherwise), re-checks consent and stale context, and re-validates.
+- The change is always computed against the schedule's **current** working copy, never the
+  nurse's snapshot. For `UNAVAILABLE` / `CHANGE_SHIFT` / `OTHER` a changed assignment is a soft
+  warning that shows requested-against vs current; applying then needs the Head Nurse's explicit
+  confirmation (`STALE_CONTEXT_NOT_CONFIRMED`).
+- Validation is the existing rule set on the destination (working copy plus the neighbouring
+  schedules' boundary days, D7, D20). Invariant: **a change must not introduce or worsen a hard
+  violation attributable to the changed cells; pre-existing unrelated hard violations do not
+  block.** Hard rules (`error`, e.g. night rest) block; soft rules (`warning`) are shown and never
+  block. Staffing (D44) is a warning reported only where bounds are configured; none are
+  configured yet. Plain editing (`setAssignments`, D7/D48) keeps allowing violations while
+  planning.
+- A rejection note is optional. Applied and rejected requests notify the requester (and a swap
+  partner).
+
+Enforced in `domain/change-requests/plan-change.ts`, `domain/rules/assess-change.ts` and
+`application/change-requests/commands.ts`.
+
+### D70 · Approved versions are immutable; changes after approval use a revision
+
+- An `APPROVED` schedule and its versions are never edited in place (D17). Applying a change (a
+  request or an adjustment) to an `APPROVED` schedule opens a revision (`START_REVISION`, APPROVED
+  → REVISING) scoped to the changed day; while it is open (REVISING or a returned revision) further
+  changes add their days to the scope, each day once (D14 stays: per day, never the whole month).
+  There is at most one open revision per schedule.
+- A never-approved schedule (FINALIZED, first-cycle RETURNED) is changed in its working copy.
+  `SUBMITTED` is frozen: nothing is applied; the Head Nurse withdraws first (D10), never
+  automatically. Before FINALIZED, the planning editor is the way to change shifts.
+- The revision goes through the normal workflow (submit, Supervisor approval or return). Approving
+  it closes the revision as `APPROVED` and creates the next immutable version; the **latest
+  approved version is the executable schedule** (`schedules.current_version_id`). Earlier versions
+  stay unchanged.
+- The Head Nurse may **discard** a revision (REVISING or a returned revision → APPROVED): the
+  working copy is restored from the latest approved version, the revision is closed as
+  `DISCARDED` (kept), and the approved version stays executable.
+
+Enforced in `domain/schedule/schedule-change.ts`, `application/schedules/schedule-changes.ts`
+and `application/schedules/lifecycle.ts`.
+
+### D71 · Applied requests and discarded revisions
+
+`APPLIED` is the request's own history and is never rewritten. What became of its change is
+shown separately, for the Head Nurse and the nurse alike: in the working copy awaiting approval,
+in a revision awaiting approval, part of an approval (historically: the change was part of a
+schedule or revision the Supervisor approved; the cell may have changed again since), or
+**discarded** with its revision (not part of the executable schedule). Discarding a revision
+notifies the nurses of the requests applied in it (`CHANGE_REQUEST_REVIEWED`, outcome
+`REVISION_DISCARDED`); it erases no request, change or audit history.
+
+### D72 · Head Nurse operational adjustments
+
+A Head Nurse may change shifts after finalization without a nurse request (`adjustSchedule`,
+`schedule.adjust`): a structured adjustment reason is required (a note for `OTHER`), the change
+is previewed and validated exactly like an applied request, goes to the working copy or a
+revision by D70, and is audited with every cell's before and after. In the UI it is offered in
+the day dialog only where the planning editor cannot act (an APPROVED schedule, or a day outside
+the open revision), never for a past day; it does not replace planning edits (`setAssignments`
+is unchanged and needs no reason).
+
+### D73 · Audit
+
+One transaction per command, with its audit events and notifications. Events:
+`changeRequest.created`, `.cancelled`, `.swapAccepted`, `.swapDeclined`, `.swapRefreshed`,
+`.rejected`, `.applied` (with change id, revision, cells, stale context, warnings);
+`schedule.adjusted`; `revision.started`, `revision.scopeExtended`, `revision.approved`,
+`revision.discarded`; and the editor's per-cell `assignment.created|changed|cleared` with the
+change id and reason. `schedule_changes` keeps kind, request, revision, reason, note, actor and
+time; `schedule_change_cells` keeps each before and after. Requests, changes, cells, revisions,
+versions and audit events are never physically deleted.
+
+### D74 · Authorization
+
+Server-side only, in the use cases: a nurse creates, cancels and refreshes only their own
+requests (current members), sees only their own requests and the swaps that name them, and
+answers only swaps that name them. A Head Nurse lists, reviews, applies, rejects and adjusts only
+in their own department; another department's queue or request is a 404. A Supervisor reads but
+never applies. A former member keeps read-only access to their own requests (D16).
+
+### D75 · Screens
+
+- Nurse: `/requests` lists swaps waiting for their answer, their upcoming shifts (each opens a
+  request dialog) and their requests with status, consent and outcome.
+- Head Nurse: `/departments/<code>/requests` (navigation "درخواست‌های بخش"; on phones it takes the
+  history placeholder's place) with status tabs; `?request=<id>` opens the detail: snapshot vs
+  current shifts, schedule and revision context, stale state, resolution (replacement, OTHER's
+  shift) and the validated preview (hard findings disable Apply, warnings shown, coverage, where
+  the change goes). `CHANGE_REQUEST_SUBMITTED` opens the request; `SWAP_CONSENT_REQUESTED` and
+  `CHANGE_REQUEST_REVIEWED` open `/requests`.
+
+### D76 · Legacy Phase 2 change-request tables
+
+The Phase 2 tables were renamed to `legacy_shift_change_requests` /
+`legacy_shift_change_request_items` (enum `legacy_change_request_status`) with their rows and
+constraints, never dropped; they are compatibility/history storage only, not Phase 9 requests,
+and no runtime code uses them (`tests/unit/legacy-schema-usage.test.ts`). Dropping them is a
+future, explicit decision (`docs/database.md`).
+
+### D77 · Deferred
+
+Cross-date swaps; a full `/my-shifts` calendar; reason administration UI; multi-cell adjustments
+in the UI (the command accepts several cells); a grouped count for the queue tabs; staffing
+numbers (D44); SMS, e-mail or push notifications; Schedule Copy / Clone; historical correction of
+past days; payroll and attendance integration; automatic swap matching or schedule repair.

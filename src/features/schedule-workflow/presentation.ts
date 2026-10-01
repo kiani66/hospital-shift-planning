@@ -16,7 +16,7 @@ import {
  */
 
 export type LifecycleCommand =
-  "finalize" | "submit" | "withdraw" | "approve" | "return";
+  "finalize" | "submit" | "withdraw" | "approve" | "return" | "discard";
 
 /** The action as the end of "…بتوان آن را ___" ("نهایی کرد"). */
 const ACT: Record<LifecycleCommand, string> = {
@@ -25,6 +25,7 @@ const ACT: Record<LifecycleCommand, string> = {
   withdraw: "پس گرفت",
   approve: "تأیید کرد",
   return: "برگشت داد",
+  discard: "کنار گذاشت",
 };
 
 export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
@@ -33,6 +34,8 @@ export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
   withdraw: "ارسال برنامه پس گرفته شد؛ برنامه دوباره نهایی‌شده است.",
   approve: "برنامه تأیید شد.",
   return: "برنامه با توضیح شما برای اصلاح به سرپرستار برگشت داده شد.",
+  discard:
+    "بازنگری کنار گذاشته شد؛ برنامه به آخرین نسخه تأییدشده برگشت و همان نسخه اجرایی است.",
 };
 
 /** "۴ آبان" (the month's day and name; the year is the page's). */

@@ -60,7 +60,10 @@ export async function insertScheduleChange(
 /** A schedule's applied changes, oldest first, with their cells. */
 export async function listScheduleChanges(
   db: DbExecutor,
-  filter: { scheduleId: string } | { requestIds: readonly string[] },
+  filter:
+    | { scheduleId: string }
+    | { requestIds: readonly string[] }
+    | { revisionId: string },
 ): Promise<ScheduleChangeRecord[]> {
   if ("requestIds" in filter && filter.requestIds.length === 0) return [];
   const changes = await db
@@ -69,7 +72,9 @@ export async function listScheduleChanges(
     .where(
       "scheduleId" in filter
         ? eq(scheduleChanges.scheduleId, filter.scheduleId)
-        : inArray(scheduleChanges.requestId, [...filter.requestIds]),
+        : "revisionId" in filter
+          ? eq(scheduleChanges.revisionId, filter.revisionId)
+          : inArray(scheduleChanges.requestId, [...filter.requestIds]),
     )
     .orderBy(asc(scheduleChanges.appliedAt), asc(scheduleChanges.id));
   if (changes.length === 0) return [];

@@ -23,6 +23,7 @@ import { setAssignments } from "../../src/application/schedules/edit-assignments
 import {
   approveSchedule,
   finalizeSchedule,
+  returnSchedule,
   submitSchedule,
 } from "../../src/application/schedules/lifecycle";
 import {
@@ -1407,5 +1408,347 @@ describe("Head Nurse queue and review (Slice D)", () => {
       await expect(
         getDepartmentForPage(as(actor), "icu", "changeRequest.review"),
       ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("revision lifecycle end to end (Slice E)", () => {
+  const revisionsOf = async () =>
+    (
+      await db.execute<{ id: string; status: string }>(
+        sql`select id, status from schedule_revisions where schedule_id = ${S} order by started_at`,
+      )
+    ).rows;
+  const openRevisions = async () =>
+    (await revisionsOf()).filter((r) => r.status === "OPEN").length;
+  const counts = async () => {
+    const { rows } = await db.execute<{
+      requests: number;
+      changes: number;
+      cells: number;
+      audit: number;
+      versions: number;
+    }>(sql`select
+      (select count(*)::int from shift_change_requests) as requests,
+      (select count(*)::int from schedule_changes) as changes,
+      (select count(*)::int from schedule_change_cells) as cells,
+      (select count(*)::int from audit_events) as audit,
+      (select count(*)::int from schedule_versions) as versions`);
+    return rows[0]!;
+  };
+  const cellAt = (
+    cells: readonly { nurseId: string; date: string; shift: string }[],
+    nurseId: string,
+    date: string,
+  ) =>
+    cells.find((a) => a.nurseId === nurseId && a.date === date)?.shift ?? null;
+
+  beforeEach(toApproved);
+
+  it("v1 → request → apply (revision) → submit → approve → v2 is current; v1 unchanged; history kept", async () => {
+    const [v1] = await listVersions(db, S);
+    const v1Cells = await listVersionAssignments(db, v1!.id);
+
+    const { id } = ok(
+      await request(actors.nurse1, {
+        type: "CHANGE_SHIFT",
+        date: "2026-10-28",
+        targetShift: "E",
+      }),
+    );
+    const applied = ok(await apply(id));
+    expect(applied).toMatchObject({
+      mode: "START_REVISION",
+      status: "REVISING",
+    });
+    expect((await findOpenRevision(db, S))!.dates).toEqual(["2026-10-28"]);
+    expect(await cell(U.icuNurse1.id, "2026-10-28")).toBe("E");
+    expect((await findChangeRequest(db, id))!.status).toBe("APPLIED");
+    expect(await openRevisions()).toBe(1);
+
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor);
+
+    const versions = await listVersions(db, S);
+    expect(versions.map((v) => v.versionNo)).toEqual([1, 2]);
+    expect((await schedule()).currentVersionId).toBe(versions[1]!.id);
+    expect(await revisionsOf()).toEqual([
+      { id: applied.revisionId, status: "APPROVED" },
+    ]);
+    expect(await listVersionAssignments(db, v1!.id)).toEqual(v1Cells);
+    const v2Cells = await listVersionAssignments(db, versions[1]!.id);
+    expect(cellAt(v1Cells, U.icuNurse1.id, "2026-10-28")).toBe("M");
+    expect(cellAt(v2Cells, U.icuNurse1.id, "2026-10-28")).toBe("E");
+    // The request and its change are history, unchanged by the approval.
+    expect((await findChangeRequest(db, id))!.status).toBe("APPLIED");
+    const [change] = await listScheduleChanges(db, { requestIds: [id] });
+    expect(change).toMatchObject({
+      kind: "REQUEST",
+      requestId: id,
+      revisionId: applied.revisionId,
+      reasonCode: "ILLNESS",
+      appliedBy: U.icuHead.id,
+      cells: [
+        {
+          nurseId: U.icuNurse1.id,
+          date: "2026-10-28",
+          before: "M",
+          after: "E",
+        },
+      ],
+    });
+    const events = await listAuditEventsForSchedule(db, S);
+    expect(events.find((e) => e.action === "revision.approved")).toMatchObject({
+      actorId: U.supervisor.id,
+      entityId: applied.revisionId,
+      data: { versionNo: 2, dates: ["2026-10-28"] },
+    });
+  });
+
+  it("scope: a second day extends it, the same day is not added twice, one revision stays open", async () => {
+    ok(await apply(ok(await unavailable()).id)); // 25 Oct (nurse1 M)
+    ok(await apply(ok(await unavailable(actors.nurse2)).id)); // 25 Oct again (nurse2 E)
+    expect((await findOpenRevision(db, S))!.dates).toEqual(["2026-10-25"]);
+    ok(
+      await apply(
+        ok(
+          await request(actors.nurse1, {
+            type: "CHANGE_SHIFT",
+            date: "2026-10-28",
+            targetShift: "E",
+          }),
+        ).id,
+      ),
+    );
+    expect((await findOpenRevision(db, S))!.dates).toEqual([
+      "2026-10-25",
+      "2026-10-28",
+    ]);
+    expect(await openRevisions()).toBe(1);
+    const actions = await auditActions();
+    expect(actions.filter((a) => a === "revision.started")).toHaveLength(1);
+    expect(actions.filter((a) => a === "revision.scopeExtended")).toHaveLength(
+      1,
+    );
+    const { rows } = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from schedule_revision_dates d join schedule_revisions r on r.id = d.revision_id where r.schedule_id = ${S}`,
+    );
+    expect(rows[0]!.n).toBe(2);
+  });
+
+  it("a returned revision keeps its revision: changes extend it, resubmission approves it", async () => {
+    const first = ok(await apply(ok(await unavailable()).id));
+    await lifecycle(submitSchedule, actors.head);
+    ok(
+      await returnSchedule(as(actors.supervisor), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        comment: "شیفت ۶ آبان را هم بررسی کنید",
+      }),
+    );
+    expect((await schedule()).status).toBe("RETURNED");
+    const second = ok(
+      await apply(
+        ok(
+          await request(actors.nurse1, {
+            type: "CHANGE_SHIFT",
+            date: "2026-10-28",
+            targetShift: "E",
+          }),
+        ).id,
+      ),
+    );
+    expect(second).toMatchObject({
+      mode: "EXTEND_REVISION",
+      status: "RETURNED",
+      revisionId: first.revisionId,
+    });
+    expect(await openRevisions()).toBe(1);
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor);
+    expect(await revisionsOf()).toEqual([
+      { id: first.revisionId, status: "APPROVED" },
+    ]);
+    expect((await listVersions(db, S)).map((v) => v.versionNo)).toEqual([1, 2]);
+  });
+
+  it("discard: working copy restored, v1 stays current, history kept, requesters told", async () => {
+    const [v1] = await listVersions(db, S);
+    const v1Cells = await listVersionAssignments(db, v1!.id);
+    const { id } = ok(await swap());
+    ok(
+      await respondToSwapRequest(as(actors.nurse2), {
+        requestId: id,
+        accept: true,
+      }),
+    );
+    const applied = ok(await apply(id));
+    ok(
+      await adjustSchedule(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        reasonCode: "STAFFING_NEED",
+      }),
+    );
+    const before = await counts();
+
+    ok(
+      await discardRevision(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+      }),
+    );
+    const s = await schedule();
+    expect(s).toMatchObject({ status: "APPROVED", currentVersionId: v1!.id });
+    const working = await listAssignments(db, S);
+    expect(working.length).toBe(v1Cells.length);
+    expect(working).toEqual(
+      expect.arrayContaining(v1Cells.map((a) => expect.objectContaining(a))),
+    );
+    expect(await listVersionAssignments(db, v1!.id)).toEqual(v1Cells);
+    expect(await revisionsOf()).toEqual([
+      { id: applied.revisionId, status: "DISCARDED" },
+    ]);
+    // Nothing historical was deleted: requests, changes and cells all remain.
+    const after = await counts();
+    expect(after).toMatchObject({
+      requests: before.requests,
+      changes: before.changes,
+      cells: before.cells,
+      versions: before.versions,
+    });
+    expect(after.audit).toBeGreaterThan(before.audit);
+    expect((await findChangeRequest(db, id))!.status).toBe("APPLIED");
+    const event = (await listAuditEventsForSchedule(db, S)).find(
+      (e) => e.action === "revision.discarded",
+    );
+    expect(event).toMatchObject({
+      actorId: U.icuHead.id,
+      data: { revisionId: applied.revisionId, appliedRequestIds: [id] },
+    });
+    // Both nurses of the applied swap are told it is no longer executable.
+    for (const nurse of [U.icuNurse1.id, U.icuNurse2.id]) {
+      const [latest] = await listNotificationsForRecipient(db, nurse);
+      expect(latest).toMatchObject({
+        type: "CHANGE_REQUEST_REVIEWED",
+        data: { outcome: "REVISION_DISCARDED" },
+      });
+    }
+  });
+
+  it("a direct adjustment goes through the same revision path to v2", async () => {
+    const [v1] = await listVersions(db, S);
+    const result = ok(
+      await adjustSchedule(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        reasonCode: "OTHER",
+        note: "پوشش جلسه آموزشی",
+      }),
+    );
+    expect(result).toMatchObject({
+      mode: "START_REVISION",
+      status: "REVISING",
+    });
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor);
+    const versions = await listVersions(db, S);
+    expect((await schedule()).currentVersionId).toBe(versions[1]!.id);
+    expect(
+      cellAt(
+        await listVersionAssignments(db, versions[1]!.id),
+        U.icuNurse4.id,
+        "2026-10-26",
+      ),
+    ).toBe("M");
+    expect(
+      cellAt(
+        await listVersionAssignments(db, v1!.id),
+        U.icuNurse4.id,
+        "2026-10-26",
+      ),
+    ).toBeNull();
+    const [change] = await listScheduleChanges(db, { scheduleId: S });
+    expect(change).toMatchObject({
+      kind: "ADJUSTMENT",
+      requestId: null,
+      revisionId: result.revisionId,
+      reasonCode: "OTHER",
+      note: "پوشش جلسه آموزشی",
+      appliedBy: U.icuHead.id,
+    });
+  });
+});
+
+describe("audit trail covers every Phase 9 fact", () => {
+  it("records creation, cancellation, consent, decline, rejection, apply, adjustment and every revision step", async () => {
+    await toApproved();
+    ok(
+      await cancelChangeRequest(as(actors.nurse1), {
+        requestId: ok(await unavailable()).id,
+      }),
+    );
+    const declined = ok(await swap()).id;
+    ok(
+      await respondToSwapRequest(as(actors.nurse2), {
+        requestId: declined,
+        accept: false,
+      }),
+    );
+    const accepted = ok(await swap()).id;
+    ok(
+      await respondToSwapRequest(as(actors.nurse2), {
+        requestId: accepted,
+        accept: true,
+      }),
+    );
+    ok(await apply(accepted)); // revision.started
+    ok(
+      await rejectChangeRequest(as(actors.head), {
+        requestId: ok(await unavailable(actors.nurse1, "2026-10-28")).id,
+      }),
+    );
+    ok(
+      await adjustSchedule(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        reasonCode: "STAFFING_NEED",
+      }),
+    ); // revision.scopeExtended
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor); // revision.approved
+    ok(
+      await adjustSchedule(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-27", shift: "E" }],
+        reasonCode: "STAFFING_NEED",
+      }),
+    );
+    ok(
+      await discardRevision(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+      }),
+    );
+
+    const actions = new Set(await auditActions());
+    for (const action of [
+      "changeRequest.created",
+      "changeRequest.cancelled",
+      "changeRequest.swapAccepted",
+      "changeRequest.swapDeclined",
+      "changeRequest.rejected",
+      "changeRequest.applied",
+      "schedule.adjusted",
+      "revision.started",
+      "revision.scopeExtended",
+      "revision.approved",
+      "revision.discarded",
+      "assignment.changed",
+    ])
+      expect(actions, action).toContain(action);
   });
 });

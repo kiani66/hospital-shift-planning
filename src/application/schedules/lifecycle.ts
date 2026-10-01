@@ -360,6 +360,20 @@ export const approveSchedule = defineCommand({
         assignmentsFingerprint: assignmentsFingerprint(assignments),
       },
     });
+    if (revision)
+      await uow.audit({
+        ...auditBase(schedule),
+        action: "revision.approved",
+        entityType: "revision",
+        entityId: revision.id,
+        data: {
+          revisionId: revision.id,
+          dates: revision.dates,
+          submissionId: submission.id,
+          versionId: version.id,
+          versionNo: version.versionNo,
+        },
+      });
     await notify(uow, await headNurses(uow, schedule), {
       type: "SCHEDULE_APPROVED",
       scheduleId: schedule.id,

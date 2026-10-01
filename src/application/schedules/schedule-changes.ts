@@ -56,7 +56,11 @@ import {
   startRevision,
 } from "../../infrastructure/repositories/revisions";
 import { listRoster } from "../../infrastructure/repositories/roster";
-import { insertScheduleChange } from "../../infrastructure/repositories/schedule-changes";
+import { findChangeRequest } from "../../infrastructure/repositories/change-requests";
+import {
+  insertScheduleChange,
+  listScheduleChanges,
+} from "../../infrastructure/repositories/schedule-changes";
 import {
   findScheduleById,
   type ScheduleRecord,
@@ -493,6 +497,26 @@ export const discardRevision = defineCommand({
       status: "DISCARDED",
       now: uow.now,
     });
+    // Nurses whose applied requests were in this revision learn that their
+    // change is not part of the executable schedule (their request stays
+    // APPLIED: history is never rewritten).
+    const discardedRequests = (
+      await listScheduleChanges(uow.tx, { revisionId: revision.id })
+    ).flatMap((c) => (c.requestId ? [c.requestId] : []));
+    const recipients = new Set<string>();
+    for (const requestId of discardedRequests) {
+      const request = await findChangeRequest(uow.tx, requestId);
+      for (const id of [request?.requesterId, request?.counterpartId])
+        if (id && id !== uow.actor.userId) recipients.add(id);
+    }
+    await uow.notify(
+      [...recipients].map((recipientId) => ({
+        recipientId,
+        type: "CHANGE_REQUEST_REVIEWED" as const,
+        scheduleId: schedule.id,
+        data: { label: schedule.label, outcome: "REVISION_DISCARDED" },
+      })),
+    );
     const saved = await saveSchedule(uow, schedule, { status });
     await uow.audit({
       ...auditBase(schedule),
@@ -506,6 +530,7 @@ export const discardRevision = defineCommand({
         dates: revision.dates,
         restoredFromVersionId: schedule.currentVersionId,
         restoredCells: restored.length,
+        appliedRequestIds: discardedRequests,
       },
     });
     return {

@@ -186,6 +186,11 @@ describe("Head Nurse wording (Slice D)", () => {
     expect(APPLIED_STATE.PENDING_REVISION.description).toMatch(/تا تأیید/);
     expect(APPLIED_STATE.WORKING_COPY.description).toMatch(/با تأیید برنامه/);
     expect(APPLIED_STATE.APPROVED.tone).toBe("success");
+    // Historically accurate: part of an approval, not "the value in effect now".
+    expect(APPLIED_STATE.APPROVED.description).toMatch(
+      /بخشی از برنامه یا بازنگری/,
+    );
+    expect(APPLIED_STATE.APPROVED.description).toMatch(/ممکن است/);
     expect(APPLIED_STATE.DISCARDED.tone).not.toBe("success");
   });
 

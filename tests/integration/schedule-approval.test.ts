@@ -1154,6 +1154,7 @@ describe("Supervisor review queries", () => {
       withdraw: null,
       approve: null,
       return: null,
+      discardRevision: null,
     });
 
     unwrapOk(await run(submitSchedule, actors.icuHead));
@@ -1192,6 +1193,7 @@ describe("Supervisor review queries", () => {
       withdraw: { blockers: [] },
       approve: null,
       return: null,
+      discardRevision: null,
     });
   });
 });

@@ -214,6 +214,7 @@ describe("change request notifications (Phase 9)", () => {
   it.each([
     ["APPLIED", "درخواست تغییر شیفت اعمال شد"],
     ["REJECTED", "درخواست تغییر شیفت رد شد"],
+    ["REVISION_DISCARDED", "تغییر درخواست شما کنار گذاشته شد"],
     [undefined, "درخواست تغییر شیفت بررسی شد"],
   ])("words a reviewed request by its outcome (%s)", (outcome, title) => {
     const view = describeNotification(

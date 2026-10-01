@@ -5,6 +5,7 @@ import {
   Lock,
   LockOpen,
   MessageSquareWarning,
+  RotateCcw,
   Send,
   Undo2,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const ICONS = {
   withdraw: Undo2,
   approve: BadgeCheck,
   return: MessageSquareWarning,
+  discard: RotateCcw,
 } as const;
 
 /** Directional icons (send, undo) point the other way in RTL. */
