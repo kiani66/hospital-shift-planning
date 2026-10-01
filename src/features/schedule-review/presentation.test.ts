@@ -21,12 +21,19 @@ import {
 } from "./presentation";
 
 const period = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
-const ISO_OR_CODE = /\d{4}-\d{2}-\d{2}|NIGHT_REST|DUPLICATE|OUTSIDE_PERIOD/;
+const ISO_OR_CODE =
+  /\d{4}-\d{2}-\d{2}|NIGHT_REST|DUPLICATE|OUTSIDE_PERIOD|STAFFING|BELOW_MINIMUM|ABOVE_MAXIMUM/;
 
-const finding = (violation: Violation, name = "سارا نمونه"): ReviewFinding => ({
-  ...toDiagnostic(violation, period),
-  nurses: [{ userId: violation.nurseId, displayName: name }],
-});
+const finding = (violation: Violation, name = "سارا نمونه"): ReviewFinding => {
+  const diagnostic = toDiagnostic(violation, period);
+  return {
+    ...diagnostic,
+    nurses: diagnostic.nurseIds.map((userId) => ({
+      userId,
+      displayName: name,
+    })),
+  };
+};
 
 const reviewDay = (overrides: Partial<ReviewDay> = {}): ReviewDay => ({
   date: isoDate("2026-10-25"),
@@ -187,6 +194,43 @@ describe("finding messages", () => {
     };
     expect(findingSeverityLabel(f)).toBe("هشدار");
   });
+});
+
+describe("staffing findings (warnings)", () => {
+  it.each([
+    ["BELOW_MINIMUM", 1, { min: 3 }, "کمتر از حداقل (۳ نفر)", "افزایش"],
+    ["ABOVE_MAXIMUM", 6, { max: 4 }, "بیشتر از حداکثر (۴ نفر)", "کاهش"],
+  ] as const)(
+    "words %s per coverage period, without names, codes or ISO dates",
+    (status, covered, bounds, words, fix) => {
+      const f = finding({
+        rule: "STAFFING",
+        severity: "warning",
+        date: isoDate("2026-10-25"),
+        period: "E",
+        covered,
+        status,
+        bounds,
+      });
+      expect(f.nurses).toEqual([]);
+      expect(f.scope).toBe("SHIFT");
+      expect(findingMessage(f)).toContain("نوبت عصر");
+      expect(findingMessage(f)).toContain(words);
+      expect(findingMessage(f)).not.toMatch(ISO_OR_CODE);
+      expect(findingSeverityLabel(f)).toBe("هشدار");
+      expect(findingFacts(f)).toEqual([
+        {
+          role: "نوبت",
+          date: "2026-10-25",
+          dateLabel: "یکشنبه ۳ آبان ۱۴۰۵",
+          shift: "E",
+        },
+      ]);
+      expect(findingResolution(f)).toContain(fix);
+      expect(findingResolution(f)).not.toMatch(ISO_OR_CODE);
+      expect(RULE_TITLES.STAFFING).toBe("تأمین نفرات");
+    },
+  );
 });
 
 describe("staffing, preferences and avatars", () => {

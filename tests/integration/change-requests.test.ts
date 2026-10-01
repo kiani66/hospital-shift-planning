@@ -119,9 +119,7 @@ describe("shift change requests", () => {
       requesterId: request!.requesterId,
     };
     expect(decide(actor, "changeRequest.view", resource).allowed).toBe(true);
-    expect(decide(actor, "changeRequest.withdraw", resource).allowed).toBe(
-      false,
-    );
+    expect(decide(actor, "changeRequest.cancel", resource).allowed).toBe(false);
   });
 
   it("rejects requests from nurses who are not on the roster", async () => {

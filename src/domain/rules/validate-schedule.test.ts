@@ -16,7 +16,7 @@ const a = (nurseId: string, date: string, shift: ShiftCode): Assignment => ({
 const period = { start: isoDate("2026-03-21"), end: isoDate("2026-04-20") };
 
 const summary = (vs: Violation[]) =>
-  vs.map((v) => `${v.rule}:${v.nurseId}:${v.date}`);
+  vs.map((v) => `${v.rule}:${"nurseId" in v ? v.nurseId : "-"}:${v.date}`);
 
 describe("validateSchedule", () => {
   it("returns nothing for a valid schedule", () => {
@@ -161,5 +161,36 @@ describe("hasBlockingViolations", () => {
     const warning = { severity: "warning" } as unknown as Violation;
     expect(isBlocking(warning)).toBe(false);
     expect(hasBlockingViolations([warning])).toBe(false);
+  });
+});
+
+describe("staffing (warnings)", () => {
+  it("adds staffing warnings next to hard findings without making them blocking", () => {
+    const result = validateSchedule({
+      period,
+      assignments: [a("sara", "2026-03-25", "N"), a("sara", "2026-03-26", "M")],
+      staffingRequirements: new Map([
+        [isoDate("2026-03-26"), { M: { min: 2 }, E: { min: 1 } }],
+      ]),
+    });
+    // Day-level findings sort before the nurses' findings of the same day.
+    expect(result.map((v) => v.rule)).toEqual([
+      "STAFFING",
+      "STAFFING",
+      "NIGHT_REST",
+    ]);
+    const staffing = result.filter((v) => v.rule === "STAFFING");
+    expect(staffing.map((v) => v.period)).toEqual(["E", "M"]);
+    expect(hasBlockingViolations(staffing)).toBe(false);
+    expect(hasBlockingViolations(result)).toBe(true);
+  });
+
+  it("checks no staffing when no requirements are given", () => {
+    expect(
+      validateSchedule({
+        period,
+        assignments: [a("sara", "2026-03-26", "M")],
+      }),
+    ).toEqual([]);
   });
 });

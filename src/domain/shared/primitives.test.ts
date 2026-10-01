@@ -71,4 +71,10 @@ describe("domain errors", () => {
     const e = new InvalidStateError("DRAFT", "SUBMIT");
     expect([e.status, e.attempted]).toEqual(["DRAFT", "SUBMIT"]);
   });
+
+  it("names another stateful subject when given one", () => {
+    expect(
+      new InvalidStateError("APPLIED", "CANCEL", "the change request").message,
+    ).toBe("Cannot CANCEL while the change request is APPLIED");
+  });
 });

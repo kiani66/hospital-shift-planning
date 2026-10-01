@@ -76,6 +76,8 @@ const HEAD_NURSE_ONLY = [
   "assignment.edit",
   "assignment.prefill",
   "changeRequest.review",
+  "changeRequest.apply",
+  "schedule.adjust",
 ] as const satisfies readonly Action[];
 
 describe("authorization matrix", () => {
@@ -154,12 +156,47 @@ describe("authorization matrix", () => {
       ["headNurse", "supervisor"],
     ],
     [
-      "changeRequest.withdraw",
+      "changeRequest.view",
+      (actor) => ({
+        departmentId: DEPT,
+        requesterId: "someone-else",
+        counterpartId: actor.userId,
+      }),
+      [
+        "nurse",
+        "headNurse",
+        "otherHeadNurse",
+        "otherNurse",
+        "supervisor",
+        "otherSupervisor",
+      ],
+    ],
+    [
+      "changeRequest.view",
+      () => ({
+        departmentId: DEPT,
+        requesterId: "someone-else",
+        counterpartId: null,
+      }),
+      ["headNurse", "supervisor"],
+    ],
+    [
+      "changeRequest.consent",
+      (actor) => ({ departmentId: DEPT, counterpartId: actor.userId }),
+      ["nurse", "headNurse"],
+    ],
+    [
+      "changeRequest.consent",
+      () => ({ departmentId: DEPT, counterpartId: "someone-else" }),
+      [],
+    ],
+    [
+      "changeRequest.cancel",
       (actor) => ({ departmentId: DEPT, requesterId: actor.userId }),
       ["nurse", "headNurse"],
     ],
     [
-      "changeRequest.withdraw",
+      "changeRequest.cancel",
       () => ({ departmentId: DEPT, requesterId: "someone-else" }),
       [],
     ],
@@ -433,7 +470,7 @@ describe("historical access after leaving a department (D16)", () => {
 
   it("cannot withdraw or otherwise change an old request", () => {
     expect(
-      decide(former, "changeRequest.withdraw", {
+      decide(former, "changeRequest.cancel", {
         departmentId: DEPT,
         requesterId: former.userId,
       }),
@@ -496,13 +533,43 @@ describe("historical access after leaving a department (D16)", () => {
   });
 });
 
-describe("change-request withdrawal", () => {
-  it("only the requester may withdraw", () => {
+describe("change-request cancellation and consent", () => {
+  it("only the requester may cancel", () => {
     expect(
-      decide(actors.headNurse, "changeRequest.withdraw", {
+      decide(actors.headNurse, "changeRequest.cancel", {
         departmentId: DEPT,
         requesterId: "nurse",
       }),
     ).toEqual({ allowed: false, reason: "NOT_REQUESTER" });
+  });
+
+  it("only the swap partner may answer, and the Head Nurse cannot answer for them", () => {
+    expect(
+      decide(actors.headNurse, "changeRequest.consent", {
+        departmentId: DEPT,
+        counterpartId: "nurse",
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_COUNTERPART" });
+  });
+
+  it("a former member named as partner cannot answer any more (D16)", () => {
+    expect(
+      decide(actors.otherNurse, "changeRequest.consent", {
+        departmentId: DEPT,
+        counterpartId: actors.otherNurse.userId,
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_MEMBER_OF_DEPARTMENT" });
+  });
+
+  it("a supervisor may read requests but never apply them", () => {
+    const resource = { departmentId: DEPT };
+    expect(decide(actors.supervisor, "changeRequest.apply", resource)).toEqual({
+      allowed: false,
+      reason: "NOT_HEAD_NURSE_OF_DEPARTMENT",
+    });
+    expect(decide(actors.supervisor, "schedule.adjust", resource)).toEqual({
+      allowed: false,
+      reason: "NOT_HEAD_NURSE_OF_DEPARTMENT",
+    });
   });
 });
