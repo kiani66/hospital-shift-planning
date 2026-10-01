@@ -73,7 +73,11 @@ export function toActionError(error: unknown): ActionError {
       };
   }
   if (error instanceof ApplicationError)
-    return { code: error.code, message: error.message };
+    return {
+      code: error.code,
+      message: error.message,
+      ...(error.reason && { reason: error.reason }),
+    };
   if (error instanceof z.ZodError) {
     return {
       code: "VALIDATION",

@@ -38,6 +38,7 @@ const ALL_TYPES: NotificationType[] = [
   "REVISION_STARTED",
   "CHANGE_REQUEST_SUBMITTED",
   "CHANGE_REQUEST_REVIEWED",
+  "SWAP_CONSENT_REQUESTED",
 ];
 
 describe("describeNotification", () => {
@@ -141,6 +142,8 @@ describe("notificationDestination", () => {
       "SCHEDULE_SUBMITTED",
       "SCHEDULE_APPROVED",
       "SCHEDULE_RETURNED",
+      "CHANGE_REQUEST_REVIEWED",
+      "SWAP_CONSENT_REQUESTED",
     ]);
   });
 
@@ -197,9 +200,38 @@ describe("notificationDestination", () => {
         departmentCode: "//evil.example",
       });
       if (path) {
-        expect(path).toMatch(/^\/(preferences|review|departments)[/?]/);
+        expect(path).toMatch(
+          /^\/(preferences|review|departments)[/?]|^\/requests$/,
+        );
         expect(path).not.toContain("//");
       }
     }
+  });
+});
+
+describe("change request notifications (Phase 9)", () => {
+  it.each([
+    ["APPLIED", "درخواست تغییر شیفت اعمال شد"],
+    ["REJECTED", "درخواست تغییر شیفت رد شد"],
+    [undefined, "درخواست تغییر شیفت بررسی شد"],
+  ])("words a reviewed request by its outcome (%s)", (outcome, title) => {
+    const view = describeNotification(
+      item({
+        type: "CHANGE_REQUEST_REVIEWED",
+        data: { label: "آبان ۱۴۰۵", outcome },
+      }),
+    );
+    expect(view.title).toBe(title);
+    expect(view.message).toContain("«آبان ۱۴۰۵»");
+    expect(view.destination).toBe("/requests");
+  });
+
+  it("asks the swap partner to answer on the requests page", () => {
+    const view = describeNotification(
+      item({ type: "SWAP_CONSENT_REQUESTED", data: { label: "آبان ۱۴۰۵" } }),
+    );
+    expect(view.title).toBe("درخواست جابه‌جایی شیفت");
+    expect(view.message).toContain("موافقت یا مخالفت");
+    expect(view.destination).toBe("/requests");
   });
 });

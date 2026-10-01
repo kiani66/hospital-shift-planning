@@ -9,14 +9,19 @@ const { db, url } = setupTestDatabase({ seed: false });
 
 const EXPECTED_TABLES = [
   "audit_events",
+  "change_reasons",
   "department_memberships",
   "departments",
+  "legacy_shift_change_request_items",
+  "legacy_shift_change_requests",
   "login_throttles",
   "notifications",
   "nurse_preferences",
   "preference_window_dates",
   "preference_window_nurses",
   "preference_windows",
+  "schedule_change_cells",
+  "schedule_changes",
   "schedule_revision_dates",
   "schedule_revisions",
   "schedule_roster",
@@ -25,7 +30,6 @@ const EXPECTED_TABLES = [
   "schedule_versions",
   "schedules",
   "shift_assignments",
-  "shift_change_request_items",
   "shift_change_requests",
   "shift_types",
   "supervisor_assignments",
@@ -34,14 +38,18 @@ const EXPECTED_TABLES = [
 
 const EXPECTED_ENUMS = {
   assignment_source: ["MANUAL", "PREFILL"],
-  change_request_status: [
+  change_reason_scope: ["REQUEST", "ADJUSTMENT", "BOTH"],
+  change_request_rejection: ["HEAD_NURSE", "COUNTERPART_DECLINED"],
+  change_request_status: ["PENDING", "CANCELLED", "REJECTED", "APPLIED"],
+  change_request_type: ["UNAVAILABLE", "CHANGE_SHIFT", "SWAP", "OTHER"],
+  date_scope_kind: ["DAY", "DAYS", "RANGE", "WEEK", "PERIOD"],
+  legacy_change_request_status: [
     "PENDING",
     "ACKNOWLEDGED",
     "DECLINED",
     "RESOLVED",
     "WITHDRAWN",
   ],
-  date_scope_kind: ["DAY", "DAYS", "RANGE", "WEEK", "PERIOD"],
   membership_role: ["NURSE", "HEAD_NURSE"],
   notification_type: [
     "PREFERENCES_OPENED",
@@ -53,10 +61,12 @@ const EXPECTED_ENUMS = {
     "REVISION_STARTED",
     "CHANGE_REQUEST_SUBMITTED",
     "CHANGE_REQUEST_REVIEWED",
+    "SWAP_CONSENT_REQUESTED",
   ],
   preference_value: ["M", "E", "N", "ME", "OFF"],
   preference_window_kind: ["INITIAL", "REOPEN"],
   revision_status: ["OPEN", "APPROVED", "DISCARDED"],
+  schedule_change_kind: ["REQUEST", "ADJUSTMENT"],
   schedule_status: [
     "DRAFT",
     "PLANNING",
@@ -67,6 +77,7 @@ const EXPECTED_ENUMS = {
     "REVISING",
   ],
   submission_decision: ["APPROVED", "RETURNED", "WITHDRAWN"],
+  swap_consent_status: ["PENDING", "ACCEPTED", "DECLINED"],
 };
 
 describe("migrations (applied to an empty database by the global setup)", () => {
@@ -101,6 +112,7 @@ describe("migrations (applied to an empty database by the global setup)", () => 
         "schedule_submissions_one_pending_key",
         "schedules_department_period_key",
         "schedule_versions_schedule_version_key",
+        "shift_change_requests_one_active_key",
       ]),
     );
   });
@@ -150,8 +162,9 @@ describe("migrations (applied to an empty database by the global setup)", () => 
         )
       ).rows[0]!.n;
     const before = await count();
-    // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login throttles
-    expect(before).toBe(5);
+    // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login
+    // throttles, 0005 legacy change requests, 0006 Phase 9 schema, 0007 reasons
+    expect(before).toBe(8);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

@@ -1,4 +1,6 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+
+import type { IsoDate } from "../../domain/shared/dates";
 
 import type { Assignment } from "../../domain/shifts/assignment";
 import type { DbExecutor } from "../db/database";
@@ -108,6 +110,37 @@ export async function listVersionAssignments(
     .orderBy(
       asc(scheduleVersionAssignments.date),
       asc(scheduleVersionAssignments.userId),
+    );
+  return rows.map((r) => ({
+    nurseId: r.nurseId,
+    date: asIsoDate(r.date),
+    shift: asShiftCode(r.shift),
+  }));
+}
+
+/** A version's assignments of the given nurses on the given dates (one query). */
+export async function listVersionAssignmentsFor(
+  db: DbExecutor,
+  input: {
+    versionId: string;
+    nurseIds: readonly string[];
+    dates: readonly IsoDate[];
+  },
+): Promise<Assignment[]> {
+  if (input.nurseIds.length === 0 || input.dates.length === 0) return [];
+  const rows = await db
+    .select({
+      nurseId: scheduleVersionAssignments.userId,
+      date: scheduleVersionAssignments.date,
+      shift: scheduleVersionAssignments.shiftCode,
+    })
+    .from(scheduleVersionAssignments)
+    .where(
+      and(
+        eq(scheduleVersionAssignments.versionId, input.versionId),
+        inArray(scheduleVersionAssignments.userId, [...input.nurseIds]),
+        inArray(scheduleVersionAssignments.date, [...input.dates]),
+      ),
     );
   return rows.map((r) => ({
     nurseId: r.nurseId,

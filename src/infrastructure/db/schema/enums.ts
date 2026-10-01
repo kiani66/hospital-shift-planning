@@ -1,6 +1,13 @@
 import { pgEnum } from "drizzle-orm/pg-core";
 
 import type { MembershipRole } from "../../../domain/authz/actor";
+import {
+  CHANGE_REQUEST_REJECTIONS,
+  CHANGE_REQUEST_STATUSES,
+  CHANGE_REQUEST_TYPES,
+  SWAP_CONSENT_STATUSES,
+} from "../../../domain/change-requests/model";
+import { REASON_SCOPES } from "../../../domain/change-requests/reason";
 import type { DateScopeKind } from "../../../domain/scope/date-scope";
 import { SCHEDULE_STATUSES } from "../../../domain/schedule/status";
 import { PREFERENCE_VALUES } from "../../../domain/shifts/shift-type";
@@ -46,13 +53,44 @@ export const revisionStatus = pgEnum("revision_status", [
   "DISCARDED",
 ]);
 
-export const changeRequestStatus = pgEnum("change_request_status", [
-  "PENDING",
-  "ACKNOWLEDGED",
-  "DECLINED",
-  "RESOLVED",
-  "WITHDRAWN",
-]);
+/** LEGACY: the Phase 2 request status (renamed by migration 0005; not used by the application). */
+export const legacyChangeRequestStatus = pgEnum(
+  "legacy_change_request_status",
+  ["PENDING", "ACKNOWLEDGED", "DECLINED", "RESOLVED", "WITHDRAWN"],
+);
+
+export const changeRequestType = pgEnum(
+  "change_request_type",
+  CHANGE_REQUEST_TYPES,
+);
+
+/** Phase 9 request status (the Phase 2 enum is `legacy_change_request_status`). */
+export const changeRequestStatus = pgEnum(
+  "change_request_status",
+  CHANGE_REQUEST_STATUSES,
+);
+
+export const swapConsentStatus = pgEnum(
+  "swap_consent_status",
+  SWAP_CONSENT_STATUSES,
+);
+
+export const changeRequestRejection = pgEnum(
+  "change_request_rejection",
+  CHANGE_REQUEST_REJECTIONS,
+);
+
+export const changeReasonScope = pgEnum("change_reason_scope", REASON_SCOPES);
+
+/** An applied schedule change comes from a nurse's request or is a direct Head Nurse adjustment. */
+export const SCHEDULE_CHANGE_KINDS = ["REQUEST", "ADJUSTMENT"] as const;
+
+export type ScheduleChangeKind = (typeof SCHEDULE_CHANGE_KINDS)[number];
+
+export const scheduleChangeKind = pgEnum(
+  "schedule_change_kind",
+  SCHEDULE_CHANGE_KINDS,
+);
 
 export const NOTIFICATION_TYPES = [
   "PREFERENCES_OPENED",
@@ -64,6 +102,7 @@ export const NOTIFICATION_TYPES = [
   "REVISION_STARTED",
   "CHANGE_REQUEST_SUBMITTED",
   "CHANGE_REQUEST_REVIEWED",
+  "SWAP_CONSENT_REQUESTED",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

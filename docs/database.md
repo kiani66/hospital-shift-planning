@@ -22,29 +22,58 @@ TypeScript schema.
 | Area                | Tables                                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | People and access   | `users`, `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments`                           |
-| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002)                                                                                    |
+| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                 |
 | Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role) |
 | Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                           |
 | Working copy        | `shift_assignments`                                                                                                                        |
 | Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                    |
 | Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                           |
-| Change requests     | `shift_change_requests`, `shift_change_request_items`                                                                                      |
+| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)  |
+| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                   |
 | Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                     |
 | Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                              |
 
 ## Where each rule is enforced
 
-| Rule                                                                                 | Enforced by                                                                                               |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| One assignment / one preference per nurse per day                                    | Primary keys `(schedule_id, user_id, date)`                                                               |
-| Only rostered nurses have preferences, assignments or change requests                | Composite foreign keys to `schedule_roster`                                                               |
-| One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                    |
-| Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                     |
-| One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                           |
-| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                |
-| History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows |
-| Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                   |
-| State machine, authorization, night-rest, revision scope, visibility                 | Domain (`src/domain`) called from application use cases, not SQL                                          |
+| Rule                                                                                 | Enforced by                                                                                                 |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| One assignment / one preference per nurse per day                                    | Primary keys `(schedule_id, user_id, date)`                                                                 |
+| Only rostered nurses have preferences, assignments or change requests                | Composite foreign keys to `schedule_roster` (a swap partner too)                                            |
+| One active (PENDING) change request per nurse, schedule and day                      | Partial unique index `shift_change_requests_one_active_key`                                                 |
+| A request's type, consent and closing columns are consistent with its status         | Check constraints `shift_change_requests_*_check`                                                           |
+| Applied changes and their cells are append-only, one per request                     | Application (no update/delete in `repositories/schedule-changes.ts`); unique `schedule_changes_request_key` |
+| One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                      |
+| Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                       |
+| One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                             |
+| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                  |
+| History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows   |
+| Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                     |
+| State machine, authorization, night-rest, revision scope, visibility                 | Domain (`src/domain`) called from application use cases, not SQL                                            |
+
+## Legacy tables
+
+Migration 0005 renamed the Phase 2 change-request tables, their status enum and every constraint
+and index to `legacy_*` instead of dropping them, so any rows a deployed database holds are kept
+with their keys, foreign keys and checks (`legacy_shift_change_requests`,
+`legacy_shift_change_request_items`, `legacy_change_request_status`).
+
+- They are **compatibility / history storage only**. No application code reads or writes them;
+  only the schema definition (`schema/legacy-change-requests.ts`, so drizzle-kit keeps tracking
+  them) and the development/test seed reset (which never runs in production) refer to them.
+- Their rows are **not** Phase 9 requests and are not migrated into `shift_change_requests`:
+  no lossless mapping exists (multi-day items, free-text reason, no request type).
+- Dropping them is a future, explicit decision. Before it, check the production branch
+  (`select count(*) from legacy_shift_change_requests;`) and decide what to keep; then drop in a
+  migration of its own.
+- `tests/integration/legacy-change-requests-migration.test.ts` upgrades a database holding Phase 2
+  rows from 0004 and checks that rows, constraints and indexes survive.
+
+## Reference data
+
+Rows of `shift_types` (0002) and `change_reasons` (0007) are inserted by migrations, not by the
+seed, and survive `resetData`. A change reason is never deleted once it may be referenced: retire
+it with `is_active = false` in a new migration (inactive reasons stay readable in history but
+cannot be chosen). `OTHER` always requires a note (check `change_reasons_other_note_check`).
 
 ## Dates and times
 

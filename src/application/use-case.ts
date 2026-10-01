@@ -17,6 +17,10 @@ import {
   type NewNotification,
 } from "../infrastructure/repositories/notifications";
 import { toActionError, type ActionResult } from "./result";
+import {
+  NO_STAFFING_REQUIREMENTS,
+  type StaffingRequirementsSource,
+} from "./schedules/staffing-requirements";
 
 /** Who is calling and with what. Built per request by the (Phase 3) adapter. */
 export interface AppContext {
@@ -24,6 +28,11 @@ export interface AppContext {
   readonly actor: Actor;
   /** Injectable clock for deterministic tests. */
   readonly clock?: () => Date;
+  /**
+   * Where staffing bounds come from (D44). Defaults to the source that
+   * configures nothing, so no staffing finding exists until numbers do.
+   */
+  readonly staffing?: StaffingRequirementsSource;
 }
 
 /** What a command handler works with: one transaction plus audit and notification writers bound to it. */
@@ -31,6 +40,8 @@ export interface UnitOfWork {
   readonly tx: Transaction;
   readonly actor: Actor;
   readonly now: Date;
+  /** Staffing bounds for validation (`AppContext.staffing` or none configured). */
+  readonly staffing: StaffingRequirementsSource;
   /** Throws `ForbiddenError` (rolling back) unless the policy allows the action. */
   authorize<A extends Action>(action: A, resource: ActionResources[A]): void;
   /** Appends an audit event in this transaction; the actor is filled in. */
@@ -71,6 +82,7 @@ export function defineCommand<S extends z.ZodType, O>(definition: {
           tx,
           actor: ctx.actor,
           now: ctx.clock?.() ?? new Date(),
+          staffing: ctx.staffing ?? NO_STAFFING_REQUIREMENTS,
           authorize(action, resource) {
             unwrap(authorize(ctx.actor, action, resource));
             authorized = true;
