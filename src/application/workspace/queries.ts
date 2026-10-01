@@ -67,7 +67,8 @@ export async function getShellContext(ctx: AppContext): Promise<ShellContext> {
 }
 
 /** Department pages and the policy action that guards them. */
-export type DepartmentPageAction = "department.manage" | "audit.view";
+export type DepartmentPageAction =
+  "department.manage" | "audit.view" | "changeRequest.review";
 
 /**
  * The department behind a URL segment, if the actor may open it for

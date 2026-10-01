@@ -142,6 +142,7 @@ describe("notificationDestination", () => {
       "SCHEDULE_SUBMITTED",
       "SCHEDULE_APPROVED",
       "SCHEDULE_RETURNED",
+      "CHANGE_REQUEST_SUBMITTED",
       "CHANGE_REQUEST_REVIEWED",
       "SWAP_CONSENT_REQUESTED",
     ]);
@@ -233,5 +234,30 @@ describe("change request notifications (Phase 9)", () => {
     expect(view.title).toBe("درخواست جابه‌جایی شیفت");
     expect(view.message).toContain("موافقت یا مخالفت");
     expect(view.destination).toBe("/requests");
+  });
+});
+
+describe("a new request for the Head Nurse (Phase 9)", () => {
+  it("opens the request in the department's queue", () => {
+    const view = describeNotification(
+      item({
+        type: "CHANGE_REQUEST_SUBMITTED",
+        data: { label: "آبان ۱۴۰۵", requestId: "r-1" },
+      }),
+    );
+    expect(view.destination).toBe("/departments/icu/requests?request=r-1");
+    expect(
+      notificationDestination({
+        type: "CHANGE_REQUEST_SUBMITTED",
+        scheduleId: null,
+        departmentCode: "icu",
+      }),
+    ).toBe("/departments/icu/requests");
+    expect(
+      notificationDestination({
+        type: "CHANGE_REQUEST_SUBMITTED",
+        scheduleId: null,
+      }),
+    ).toBeNull();
   });
 });

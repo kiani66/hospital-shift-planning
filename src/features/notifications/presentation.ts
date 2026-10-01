@@ -77,12 +77,16 @@ function departmentSchedulePath(
  *   (where a return comment is shown).
  * - CHANGE_REQUEST_REVIEWED / SWAP_CONSENT_REQUESTED: the nurse's requests
  *   page (Phase 9).
+ * - CHANGE_REQUEST_SUBMITTED: the Head Nurse's department request queue,
+ *   with the request open (the page authorizes it).
  * Types not created yet return null: opening them only marks them read.
  */
 export function notificationDestination(notification: {
   readonly type: NotificationType;
   readonly scheduleId: string | null;
   readonly departmentCode?: string | null;
+  /** CHANGE_REQUEST_SUBMITTED: the request to open in the queue. */
+  readonly requestId?: string | null;
 }): Route | null {
   const { scheduleId } = notification;
   switch (notification.type) {
@@ -99,6 +103,14 @@ export function notificationDestination(notification: {
     case "CHANGE_REQUEST_REVIEWED":
     case "SWAP_CONSENT_REQUESTED":
       return "/requests";
+    case "CHANGE_REQUEST_SUBMITTED": {
+      const { departmentCode, requestId } = notification;
+      if (!departmentCode) return null;
+      const queue = `/departments/${encodeURIComponent(departmentCode)}/requests`;
+      return (
+        requestId ? `${queue}?request=${encodeURIComponent(requestId)}` : queue
+      ) as Route;
+    }
     default:
       return null;
   }
@@ -205,6 +217,7 @@ export function describeNotification(item: NotificationItem): NotificationView {
       type: item.type,
       scheduleId: item.scheduleId,
       departmentCode: item.context?.departmentCode,
+      requestId: text(item.data.requestId),
     }),
   };
 }

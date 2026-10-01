@@ -30,6 +30,7 @@ import {
 } from "./actions";
 import { NewRequestDialog } from "./new-request-dialog";
 import {
+  APPLIED_STATE,
   CONSENT_STATUS,
   REJECTION_LABELS,
   REQUEST_STATUS,
@@ -280,12 +281,22 @@ function RequestCard({ request: r }: { request: MyChangeRequestItem }) {
         </Callout>
       )}
       {r.status === "APPLIED" && (
-        <Callout tone="success" icon={ListChecks}>
-          سرپرستار این تغییر را در برنامه اعمال کرد
-          {r.appliedAt
-            ? ` (${formatJalaliDateTime(r.appliedAt, APP_TIMEZONE)})`
-            : ""}
-          .
+        // APPLIED is the request's history; where the change stands is separate.
+        <Callout
+          tone={r.applied?.state === "APPROVED" ? "success" : "muted"}
+          icon={ListChecks}
+          as="div"
+        >
+          <p>
+            سرپرستار این تغییر را اعمال کرد
+            {r.appliedAt
+              ? ` (${formatJalaliDateTime(r.appliedAt, APP_TIMEZONE)})`
+              : ""}
+            .
+          </p>
+          {r.applied && (
+            <p className="mt-1">{APPLIED_STATE[r.applied.state].description}</p>
+          )}
         </Callout>
       )}
       {r.status === "PENDING" && r.swapContextChanged && (

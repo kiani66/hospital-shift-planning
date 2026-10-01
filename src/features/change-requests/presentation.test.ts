@@ -8,6 +8,8 @@ import {
 } from "@/domain/change-requests/model";
 
 import {
+  APPLIED_STATE,
+  CHANGE_MODE_LABELS,
   CONSENT_STATUS,
   fieldMessages,
   REQUEST_STATUS,
@@ -130,5 +132,67 @@ describe("errors", () => {
       other: "این مقدار معتبر نیست.",
     });
     expect(fieldMessages(error({}))).toEqual({});
+  });
+});
+
+describe("Head Nurse wording (Slice D)", () => {
+  const error = (overrides: Partial<ActionError>): ActionError => ({
+    code: "INTERNAL",
+    message: "x",
+    ...overrides,
+  });
+
+  it.each<[Partial<ActionError>, RegExp]>([
+    [
+      { code: "INVALID_STATE", reason: "APPLY_SWAP_WITHOUT_CONSENT" },
+      /موافقت همکار/,
+    ],
+    [
+      { code: "INVALID_STATE", reason: "STALE_CONTEXT_NOT_CONFIRMED" },
+      /تأیید کنید/,
+    ],
+    [{ code: "INVALID_STATE", reason: "CHANGE_WHILE_SUBMITTED" }, /پس بگیرید/],
+    [
+      { code: "INVALID_STATE", reason: "CHANGE_BEFORE_FINALIZATION" },
+      /نهایی نشده/,
+    ],
+    [
+      { code: "FORBIDDEN", reason: "NOT_HEAD_NURSE_OF_DEPARTMENT" },
+      /سرپرستار همین بخش/,
+    ],
+    [{ code: "RULE_VIOLATION" }, /قانون مسدودکننده/],
+  ])("words %j for apply", (overrides, text) => {
+    expect(requestErrorMessage("apply", error(overrides))).toMatch(text);
+  });
+
+  it("words the new resolution fields", () => {
+    expect(
+      fieldMessages(
+        error({
+          code: "VALIDATION",
+          fieldErrors: { replacementNurseId: ["x"], requesterShift: ["x"] },
+        }),
+      ),
+    ).toEqual({
+      replacementNurseId: expect.stringMatching(/جانشین/),
+      requesterShift: expect.stringMatching(/شیفت نهایی/),
+    });
+  });
+
+  it("never lets APPLIED alone read as 'in effect'", () => {
+    expect(APPLIED_STATE.DISCARDED.description).toMatch(
+      /در برنامه اجرایی نیست/,
+    );
+    expect(APPLIED_STATE.PENDING_REVISION.description).toMatch(/تا تأیید/);
+    expect(APPLIED_STATE.WORKING_COPY.description).toMatch(/با تأیید برنامه/);
+    expect(APPLIED_STATE.APPROVED.tone).toBe("success");
+    expect(APPLIED_STATE.DISCARDED.tone).not.toBe("success");
+  });
+
+  it("says that an approved version is never changed in place", () => {
+    expect(CHANGE_MODE_LABELS.START_REVISION).toMatch(
+      /نسخه تأییدشده دست نمی‌خورد/,
+    );
+    expect(CHANGE_MODE_LABELS.EXTEND_REVISION).toMatch(/بازنگری/);
   });
 });

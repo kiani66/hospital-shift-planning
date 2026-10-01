@@ -18,6 +18,7 @@ import {
 } from "../../src/application/change-requests/queries";
 import { NotFoundError } from "../../src/application/errors";
 import type { ActionResult } from "../../src/application/result";
+import { getAdjustmentPreview } from "../../src/application/schedules/change-preview";
 import { setAssignments } from "../../src/application/schedules/edit-assignments";
 import {
   approveSchedule,
@@ -35,6 +36,7 @@ import {
 } from "../../src/application/schedules/schedule-changes";
 import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
+import { getDepartmentForPage } from "../../src/application/workspace/queries";
 import type { Actor } from "../../src/domain/authz/actor";
 import { isoDate, type IsoDate } from "../../src/domain/shared/dates";
 import type { ShiftCode } from "../../src/domain/shifts/shift-type";
@@ -1178,5 +1180,232 @@ describe("visibility and scope", () => {
     expect(
       (await getChangeRequestOptions(as(actors.nurse1))).schedules,
     ).toEqual([]);
+  });
+});
+
+describe("Head Nurse queue and review (Slice D)", () => {
+  it("rows carry the live shift of pending requests; the detail adds context and candidates", async () => {
+    await toFinalized();
+    const { id } = ok(await unavailable());
+    await assign(U.icuNurse1.id, "2026-10-25", "E"); // changed since the request
+    const queue = await getChangeRequestQueue(as(actors.head), {
+      departmentId: DEMO_ICU.id,
+    });
+    expect(queue.items[0]).toMatchObject({
+      id,
+      requesterShift: "M",
+      current: { requester: "E", counterpart: null },
+      applied: null,
+    });
+
+    const review = await getChangeRequestReview(as(actors.head), {
+      departmentId: DEMO_ICU.id,
+      requestId: id,
+    });
+    expect(review.schedule).toMatchObject({
+      label: DEMO_SCHEDULE.label,
+      status: "FINALIZED",
+      hasApprovedVersion: false,
+      currentVersionNo: null,
+      openRevisionDates: null,
+    });
+    expect(review.stale).toMatchObject({ requestedAgainst: "M", current: "E" });
+    // Off that day: everyone rostered but nurse1 (the requester) and nurse2 (E).
+    expect(review.replacementCandidates.map((p) => p.userId).sort()).toEqual(
+      [U.icuHead.id, U.icuNurse3.id, U.icuNurse4.id, U.transferNurse.id].sort(),
+    );
+    expect(review.previewView).toMatchObject({
+      ok: true,
+      mode: "WORKING_COPY",
+      blocked: false,
+      cells: [
+        {
+          nurseId: U.icuNurse1.id,
+          displayName: U.icuNurse1.displayName,
+          before: "E",
+          after: null,
+        },
+      ],
+    });
+  });
+
+  it("names the blocking findings of a preview for the screens", async () => {
+    await toFinalized();
+    const { id } = ok(
+      await request(actors.nurse1, {
+        type: "CHANGE_SHIFT",
+        date: "2026-10-27",
+        targetShift: "N",
+      }),
+    );
+    const review = await getChangeRequestReview(as(actors.head), {
+      departmentId: DEMO_ICU.id,
+      requestId: id,
+    });
+    expect(review.blocker).toBeNull();
+    expect(review.previewView).toMatchObject({
+      ok: true,
+      blocked: true,
+      blocking: [
+        {
+          code: "NIGHT_REST",
+          blocking: true,
+          nurses: [{ displayName: U.icuNurse1.displayName }],
+        },
+      ],
+    });
+  });
+
+  it("shows a changed swap even before consent", async () => {
+    await toFinalized();
+    const { id } = ok(await swap());
+    await assign(U.icuNurse2.id, "2026-10-25", "N");
+    const review = await getChangeRequestReview(as(actors.head), {
+      departmentId: DEMO_ICU.id,
+      requestId: id,
+    });
+    expect(review.swapContextChanged).toBe(true);
+    expect(review.blocker).toMatchObject({
+      reason: "APPLY_SWAP_WITHOUT_CONSENT",
+    });
+  });
+
+  it("tells what became of an applied change: pending revision, approved, discarded", async () => {
+    await toApproved();
+    const stateOf = async (id: string) =>
+      (
+        await getChangeRequestQueue(as(actors.head), {
+          departmentId: DEMO_ICU.id,
+          status: "APPLIED",
+        })
+      ).items.find((r) => r.id === id)!.applied;
+
+    const { id: first } = ok(await unavailable());
+    ok(await apply(first));
+    expect(await stateOf(first)).toMatchObject({ state: "PENDING_REVISION" });
+    // Discarding the revision keeps the request APPLIED, but says so.
+    ok(
+      await discardRevision(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+      }),
+    );
+    expect((await findChangeRequest(db, first))!.status).toBe("APPLIED");
+    expect(await stateOf(first)).toMatchObject({ state: "DISCARDED" });
+    const review = await getChangeRequestReview(as(actors.head), {
+      departmentId: DEMO_ICU.id,
+      requestId: first,
+    });
+    expect(review.appliedChange).toMatchObject({
+      state: "DISCARDED",
+      cells: [{ nurseId: U.icuNurse1.id, before: "M", after: null }],
+    });
+    // The nurse's own view says the same.
+    const [mine] = await getMyChangeRequests(as(actors.nurse1));
+    expect(mine!.applied?.state).toBe("DISCARDED");
+
+    const { id: second } = ok(
+      await request(actors.nurse1, {
+        type: "CHANGE_SHIFT",
+        date: "2026-10-28",
+        targetShift: "E",
+      }),
+    );
+    ok(await apply(second));
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor);
+    expect(await stateOf(second)).toMatchObject({ state: "APPROVED" });
+    expect(await stateOf(first)).toMatchObject({ state: "DISCARDED" });
+  });
+
+  it("an applied change to a never-approved schedule waits for approval, then counts as approved", async () => {
+    await toFinalized();
+    const { id } = ok(await unavailable());
+    ok(await apply(id));
+    const [mine] = await getMyChangeRequests(as(actors.nurse1));
+    expect(mine!.applied?.state).toBe("WORKING_COPY");
+    await lifecycle(submitSchedule, actors.head);
+    await lifecycle(approveSchedule, actors.supervisor);
+    const [after] = await getMyChangeRequests(as(actors.nurse1));
+    expect(after!.applied?.state).toBe("APPROVED");
+  });
+
+  it("rejecting is audited with actor and time and notifies the requester", async () => {
+    await toFinalized();
+    const { id } = ok(await unavailable());
+    ok(
+      await rejectChangeRequest(as(actors.head), {
+        requestId: id,
+        note: "  ",
+      }),
+    );
+    const event = (await listAuditEventsForSchedule(db, S)).find(
+      (e) => e.action === "changeRequest.rejected",
+    )!;
+    expect(event).toMatchObject({
+      actorId: U.icuHead.id,
+      entityId: id,
+      data: { from: "PENDING", to: "REJECTED", note: null },
+    });
+    expect(event.occurredAt).toBeInstanceOf(Date);
+    expect(await findChangeRequest(db, id)).toMatchObject({
+      rejectedBy: U.icuHead.id,
+      rejectedAt: NOW,
+      rejectionNote: null,
+    });
+    const [n] = await listNotificationsForRecipient(db, U.icuNurse1.id);
+    expect(n).toMatchObject({
+      type: "CHANGE_REQUEST_REVIEWED",
+      data: { outcome: "REJECTED", rejection: "HEAD_NURSE" },
+    });
+  });
+
+  it("previews an adjustment for the screens (named cells, mode, blocking)", async () => {
+    await toApproved();
+    const view = await getAdjustmentPreview(as(actors.head), {
+      scheduleId: S,
+      changes: [{ nurseId: U.icuNurse4.id, date: d("2026-10-26"), shift: "M" }],
+    });
+    expect(view).toMatchObject({
+      ok: true,
+      mode: "START_REVISION",
+      targetStatus: "REVISING",
+      addedRevisionDates: ["2026-10-26"],
+      cells: [
+        { displayName: U.icuNurse4.displayName, before: null, after: "M" },
+      ],
+      blocked: false,
+    });
+    // Open a revision with a real adjustment, submit it: now it is frozen.
+    ok(
+      await adjustSchedule(as(actors.head), {
+        scheduleId: S,
+        expectedRevision: await revision(),
+        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        reasonCode: "STAFFING_NEED",
+      }),
+    );
+    await lifecycle(submitSchedule, actors.head);
+    expect(
+      await getAdjustmentPreview(as(actors.head), {
+        scheduleId: S,
+        changes: [
+          { nurseId: U.icuNurse4.id, date: d("2026-10-26"), shift: "M" },
+        ],
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_STATE", reason: "CHANGE_WHILE_SUBMITTED" },
+    });
+  });
+
+  it("opens the queue page only for the department's Head Nurse", async () => {
+    await expect(
+      getDepartmentForPage(as(actors.head), "icu", "changeRequest.review"),
+    ).resolves.toMatchObject({ id: DEMO_ICU.id });
+    for (const actor of [actors.erHead, actors.supervisor, actors.nurse1])
+      await expect(
+        getDepartmentForPage(as(actor), "icu", "changeRequest.review"),
+      ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

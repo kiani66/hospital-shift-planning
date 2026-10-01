@@ -22,7 +22,10 @@ import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
 import type { ShiftCode } from "../../domain/shifts/shift-type";
 import type { ScheduleStatus } from "../../domain/schedule/status";
-import { listAssignments } from "../../infrastructure/repositories/assignments";
+import {
+  listAssignments,
+  listAssignmentsFor,
+} from "../../infrastructure/repositories/assignments";
 import {
   listChangeReasons,
   selectableReasons,
@@ -36,6 +39,10 @@ import {
   type ChangeRequestRecord,
 } from "../../infrastructure/repositories/change-requests";
 import { listDepartmentsByIds } from "../../infrastructure/repositories/departments";
+import {
+  listRevisionStatuses,
+  findOpenRevision,
+} from "../../infrastructure/repositories/revisions";
 import { listRoster } from "../../infrastructure/repositories/roster";
 import { listScheduleChanges } from "../../infrastructure/repositories/schedule-changes";
 import {
@@ -44,7 +51,10 @@ import {
   type ScheduleRecord,
 } from "../../infrastructure/repositories/schedules";
 import { listDisplayNames } from "../../infrastructure/repositories/users";
-import { listVersionAssignments } from "../../infrastructure/repositories/versions";
+import {
+  findVersionById,
+  listVersionAssignments,
+} from "../../infrastructure/repositories/versions";
 import { NotFoundError } from "../errors";
 import type { ActionError } from "../result";
 import { toActionError } from "../result";
@@ -54,6 +64,11 @@ import {
   todayFor,
   type ChangePreview,
 } from "../schedules/schedule-changes";
+import {
+  describePreview,
+  type ChangePreviewView,
+  type PreviewCell,
+} from "../schedules/change-preview";
 import { NO_STAFFING_REQUIREMENTS } from "../schedules/staffing-requirements";
 import type { AppContext } from "../use-case";
 import { toRequestState, visibleDayCells, workingDayCells } from "./context";
@@ -76,6 +91,26 @@ export interface ReasonView {
   readonly code: string;
   readonly label: string;
   readonly requiresNote: boolean;
+}
+
+/**
+ * What became of an applied request's schedule change. APPLIED is the
+ * request's own, final history; the change it led to may still be waiting
+ * for approval in a revision, have been approved, or have been discarded
+ * with its revision (then it is not in the executable schedule).
+ *
+ * - WORKING_COPY: applied to a schedule never approved since (awaiting approval)
+ * - PENDING_REVISION: in a revision still open, submitted or returned
+ * - APPROVED: included in an approval after it was applied
+ * - DISCARDED: its revision was discarded; the approved version stayed as it was
+ */
+export type AppliedChangeState =
+  "WORKING_COPY" | "PENDING_REVISION" | "APPROVED" | "DISCARDED";
+
+export interface AppliedChangeInfo {
+  readonly changeId: string;
+  readonly revisionId: string | null;
+  readonly state: AppliedChangeState;
 }
 
 /** One request as the screens show it (no internal ids beyond the request's and people's). */
@@ -105,6 +140,43 @@ export interface ChangeRequestView {
   readonly rejectionNote: string | null;
   readonly appliedAt: Date | null;
   readonly appliedBy: Person | null;
+  /** For an APPLIED request: its schedule change and what became of it. */
+  readonly applied: AppliedChangeInfo | null;
+}
+
+async function appliedInfo(
+  ctx: AppContext,
+  requests: readonly ChangeRequestRecord[],
+  scheduleOf: ReadonlyMap<string, ScheduleRecord>,
+): Promise<Map<string, AppliedChangeInfo>> {
+  const changes = await listScheduleChanges(ctx.db, {
+    requestIds: requests.filter((r) => r.status === "APPLIED").map((r) => r.id),
+  });
+  const revisions = await listRevisionStatuses(
+    ctx.db,
+    changes.flatMap((c) => (c.revisionId ? [c.revisionId] : [])),
+  );
+  const info = new Map<string, AppliedChangeInfo>();
+  for (const change of changes) {
+    const revisionStatus = change.revisionId
+      ? revisions.get(change.revisionId)
+      : undefined;
+    const state: AppliedChangeState = change.revisionId
+      ? revisionStatus === "DISCARDED"
+        ? "DISCARDED"
+        : revisionStatus === "APPROVED"
+          ? "APPROVED"
+          : "PENDING_REVISION"
+      : scheduleOf.get(change.scheduleId)?.currentVersionId
+        ? "APPROVED"
+        : "WORKING_COPY";
+    info.set(change.requestId!, {
+      changeId: change.id,
+      revisionId: change.revisionId,
+      state,
+    });
+  }
+  return info;
 }
 
 async function toViews(
@@ -136,6 +208,7 @@ async function toViews(
     ).map((d) => [d.id, d.name]),
   );
   const reasonOf = new Map(reasons.map((r) => [r.code, r]));
+  const applied = await appliedInfo(ctx, requests, scheduleOf);
   const person = (id: string | null): Person | null =>
     id ? { userId: id, displayName: names.get(id) ?? "—" } : null;
 
@@ -171,6 +244,7 @@ async function toViews(
       rejectionNote: r.rejectionNote,
       appliedAt: r.appliedAt,
       appliedBy: person(r.appliedBy),
+      applied: applied.get(r.id) ?? null,
     };
   });
 }
@@ -406,10 +480,18 @@ export async function getAdjustmentReasons(
 
 export const QUEUE_LIMIT = 200;
 
+export interface ChangeRequestQueueItem extends ChangeRequestView {
+  /** Pending only: the involved nurses' shifts that day in the working copy now. */
+  readonly current: {
+    readonly requester: ShiftCode | null;
+    readonly counterpart: ShiftCode | null;
+  } | null;
+}
+
 export interface ChangeRequestQueue {
   readonly status: ChangeRequestStatus;
   readonly counts: Readonly<Record<ChangeRequestStatus, number>>;
-  readonly items: readonly ChangeRequestView[];
+  readonly items: readonly ChangeRequestQueueItem[];
 }
 
 /**
@@ -439,25 +521,67 @@ export async function getChangeRequestQueue(
       limit: QUEUE_LIMIT,
     }),
   ]);
-  return { status, counts, items: await toViews(ctx, records) };
+  // The live context of pending requests: one query per schedule involved.
+  const pending = records.filter((r) => r.status === "PENDING");
+  const live = new Map<string, ShiftCode>();
+  for (const scheduleId of new Set(pending.map((r) => r.scheduleId))) {
+    const mine = pending.filter((r) => r.scheduleId === scheduleId);
+    for (const a of await listAssignmentsFor(ctx.db, {
+      scheduleId,
+      nurseIds: mine.flatMap((r) =>
+        r.counterpartId ? [r.requesterId, r.counterpartId] : [r.requesterId],
+      ),
+      dates: mine.map((r) => r.date),
+    }))
+      live.set(`${scheduleId}|${a.nurseId}|${a.date}`, a.shift);
+  }
+  const shiftOf = (r: ChangeRequestRecord, nurseId: string | null) =>
+    nurseId ? (live.get(`${r.scheduleId}|${nurseId}|${r.date}`) ?? null) : null;
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const items = (await toViews(ctx, records)).map((view) => {
+    const r = byId.get(view.id)!;
+    return {
+      ...view,
+      current:
+        r.status === "PENDING"
+          ? {
+              requester: shiftOf(r, r.requesterId),
+              counterpart: shiftOf(r, r.counterpartId),
+            }
+          : null,
+    };
+  });
+  return { status, counts, items };
 }
 
 export interface ChangeRequestReview {
   readonly request: ChangeRequestView;
   readonly schedule: {
     readonly id: string;
+    readonly label: string;
+    readonly period: DatePeriod;
     readonly status: ScheduleStatus;
     /** Send back with `applyChangeRequest` (optimistic concurrency). */
     readonly revision: number;
     readonly hasApprovedVersion: boolean;
+    /** The executable (latest approved) version's number, if any. */
+    readonly currentVersionNo: number | null;
+    /** Days of the revision in progress, if one is open. */
+    readonly openRevisionDates: readonly IsoDate[] | null;
   };
   /** The involved nurses' shifts that day in the working copy now. */
   readonly current: {
     readonly requester: ShiftCode | null;
     readonly counterpart: ShiftCode | null;
   };
-  /** The requester's assignment changed since the request (soft; must be confirmed). */
+  /** UNAVAILABLE / CHANGE_SHIFT / OTHER: the requester's assignment changed since the request. */
   readonly stale: StaleRequestContext | null;
+  /** SWAP: either side changed since the request/consent (applying is blocked). */
+  readonly swapContextChanged: boolean;
+  /** Rostered nurses off that day (UNAVAILABLE: who could take the shift over). */
+  readonly replacementCandidates: readonly Person[];
+  /** The resolution the preview was computed with. */
+  readonly resolution: RequestResolution;
   /**
    * Why the request cannot be applied as it stands (not pending, consent
    * missing, swap context changed, nothing would change, the schedule is
@@ -466,25 +590,20 @@ export interface ChangeRequestReview {
   readonly blocker: ActionError | null;
   /** The validated outcome of applying it now (null when `blocker` is set first). */
   readonly preview: ChangePreview | null;
-  /** The applied change, once applied. */
-  readonly appliedChange: {
-    readonly changeId: string;
-    readonly revisionId: string | null;
-    readonly cells: readonly {
-      readonly nurseId: string;
-      readonly date: IsoDate;
-      readonly before: ShiftCode | null;
-      readonly after: ShiftCode | null;
-    }[];
-  } | null;
+  /** `preview` as the screens show it. */
+  readonly previewView: ChangePreviewView | null;
+  /** The applied change, once applied, and what became of it. */
+  readonly appliedChange:
+    (AppliedChangeInfo & { readonly cells: readonly PreviewCell[] }) | null;
 }
 
 /**
  * One request of the department with everything the Head Nurse needs to
- * decide: the request, the involved nurses' current shifts, the stale-context
- * warning, and the validated preview of applying it with `resolution`
- * (hard findings that would block, warnings, staffing impact, whether a
- * revision would be opened). Nothing is written.
+ * decide: the request, the involved nurses' CURRENT shifts, the stale-context
+ * state, the schedule's version and revision context, and the validated
+ * preview of applying it now with `resolution` (hard findings that would
+ * block, warnings, staffing impact, whether a revision would be opened).
+ * Nothing is written; applying re-checks everything under the row locks.
  */
 export async function getChangeRequestReview(
   ctx: AppContext,
@@ -508,30 +627,35 @@ export async function getChangeRequestReview(
   const schedule = (await findScheduleById(ctx.db, record.scheduleId))!;
   const resolution = input.resolution ?? {};
   const replacementId = resolution.replacementNurseId ?? null;
-  const [[request], cells, [applied]] = await Promise.all([
-    toViews(ctx, [record]),
-    workingDayCells(
-      ctx.db,
-      schedule.id,
-      [record.requesterId, record.counterpartId, replacementId].filter(
-        (id): id is string => id !== null,
-      ),
-      record.date,
-    ),
-    listScheduleChanges(ctx.db, { requestIds: [record.id] }),
-  ]);
+  const [[request], roster, [applied], version, openRevision] =
+    await Promise.all([
+      toViews(ctx, [record]),
+      listRoster(ctx.db, schedule.id),
+      listScheduleChanges(ctx.db, { requestIds: [record.id] }),
+      schedule.currentVersionId
+        ? findVersionById(ctx.db, schedule.currentVersionId)
+        : null,
+      schedule.currentVersionId ? findOpenRevision(ctx.db, schedule.id) : null,
+    ]);
+  // Everyone's shift that day: the live context and the replacement candidates.
+  const cells = await workingDayCells(
+    ctx.db,
+    schedule.id,
+    roster.map((r) => r.userId),
+    record.date,
+  );
   const current = {
     requester: cells.shiftOf(record.requesterId),
     counterpart: cells.shiftOf(record.counterpartId),
   };
+  const state = toRequestState(record);
+  const pending = record.status === "PENDING";
 
   let stale: StaleRequestContext | null = null;
   let blocker: ActionError | null = null;
   let preview: ChangePreview | null = null;
   try {
-    const state = toRequestState(record);
     unwrap(decideChangeRequest(state, "APPLY"));
-    const roster = await listRoster(ctx.db, schedule.id);
     const plan = unwrap(
       planRequestChange({
         request: state,
@@ -554,26 +678,61 @@ export async function getChangeRequestReview(
   } catch (error) {
     blocker = toActionError(error);
   }
+  // Shown even when another blocker (e.g. missing consent) came first.
+  if (
+    pending &&
+    record.type !== "SWAP" &&
+    !stale &&
+    current.requester !== record.requesterShift
+  )
+    stale = {
+      nurseId: record.requesterId,
+      date: record.date,
+      requestedAgainst: record.requesterShift,
+      current: current.requester,
+    };
+  const names = new Map(roster.map((r) => [r.userId, r.displayName]));
   return {
     request: request!,
-    schedule: scheduleSummary(schedule),
+    schedule: {
+      id: schedule.id,
+      label: schedule.label,
+      period: schedule.period,
+      status: schedule.status,
+      revision: schedule.revision,
+      hasApprovedVersion: schedule.currentVersionId !== null,
+      currentVersionNo: version?.versionNo ?? null,
+      openRevisionDates: openRevision?.dates ?? null,
+    },
     current,
     stale,
+    swapContextChanged:
+      pending && record.type === "SWAP" && swapContextChanged(state, current),
+    replacementCandidates:
+      pending && record.type === "UNAVAILABLE"
+        ? roster
+            .filter(
+              (r) =>
+                r.userId !== record.requesterId &&
+                cells.shiftOf(r.userId) === null,
+            )
+            .map((r) => ({ userId: r.userId, displayName: r.displayName }))
+        : [],
+    resolution,
     blocker,
     preview,
-    appliedChange: applied
-      ? {
-          changeId: applied.id,
-          revisionId: applied.revisionId,
-          cells: applied.cells,
-        }
+    previewView: preview
+      ? await describePreview(ctx.db, schedule.period, preview)
       : null,
+    appliedChange:
+      applied && request!.applied
+        ? {
+            ...request!.applied,
+            cells: applied.cells.map((c) => ({
+              ...c,
+              displayName: names.get(c.nurseId) ?? "—",
+            })),
+          }
+        : null,
   };
 }
-
-const scheduleSummary = (s: ScheduleRecord) => ({
-  id: s.id,
-  status: s.status,
-  revision: s.revision,
-  hasApprovedVersion: s.currentVersionId !== null,
-});

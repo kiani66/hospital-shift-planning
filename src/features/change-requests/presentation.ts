@@ -87,6 +87,49 @@ export function requestSummary(request: {
   }
 }
 
+/** What became of an applied request's change (APPLIED never says "in effect" alone). */
+export const APPLIED_STATE: Record<
+  "WORKING_COPY" | "PENDING_REVISION" | "APPROVED" | "DISCARDED",
+  {
+    readonly label: string;
+    readonly description: string;
+    readonly tone: BadgeTone;
+  }
+> = {
+  WORKING_COPY: {
+    label: "در انتظار تأیید برنامه",
+    description:
+      "تغییر در برنامه کاری اعمال شده و با تأیید برنامه اجرایی می‌شود.",
+    tone: "review",
+  },
+  PENDING_REVISION: {
+    label: "در بازنگری، در انتظار تأیید",
+    description:
+      "تغییر در بازنگری برنامه تأییدشده است؛ تا تأیید سوپروایزر، نسخه تأییدشده قبلی اجرایی است.",
+    tone: "warning",
+  },
+  APPROVED: {
+    label: "در نسخه تأییدشده",
+    description: "تغییر در تأیید بعدی برنامه گنجانده شد.",
+    tone: "success",
+  },
+  DISCARDED: {
+    label: "بازنگری کنار گذاشته شد",
+    description:
+      "بازنگری‌ای که این تغییر در آن بود کنار گذاشته شد؛ تغییر در برنامه اجرایی نیست. سابقه درخواست و تغییر حفظ شده است.",
+    tone: "destructive",
+  },
+};
+
+/** Where a change goes, in the Head Nurse's words. */
+export const CHANGE_MODE_LABELS = {
+  WORKING_COPY: "در برنامه کاری (هنوز تأیید نشده) اعمال می‌شود.",
+  START_REVISION:
+    "برنامه تأیید شده است: بازنگری جدیدی برای این روز باز می‌شود؛ نسخه تأییدشده دست نمی‌خورد و تغییر پس از ارسال و تأیید سوپروایزر اجرایی می‌شود.",
+  EXTEND_REVISION:
+    "به بازنگری باز این برنامه افزوده می‌شود؛ پس از ارسال و تأیید سوپروایزر اجرایی می‌شود.",
+} as const;
+
 export const REQUEST_SUCCESS = {
   create: "درخواست ثبت شد و برای سرپرستار ارسال شد.",
   createSwap:
@@ -97,9 +140,13 @@ export const REQUEST_SUCCESS = {
   refresh:
     "درخواست با شیفت‌های فعلی به‌روز شد و دوباره از همکار موافقت خواسته شد.",
   refreshUnchanged: "شیفت‌ها تغییری نکرده‌اند؛ درخواست همان است که بود.",
+  apply: "درخواست اعمال شد و به پرستار اطلاع داده شد.",
+  reject: "درخواست رد شد و به پرستار اطلاع داده شد.",
+  adjust: "تغییر عملیاتی ثبت شد.",
 } as const;
 
-export type RequestCommand = "create" | "cancel" | "respond" | "refresh";
+export type RequestCommand =
+  "create" | "cancel" | "respond" | "refresh" | "apply" | "reject" | "adjust";
 
 /** Persian messages for the form's fields (`fieldErrors` keys from the server). */
 export const FIELD_MESSAGES: Record<string, string> = {
@@ -111,6 +158,12 @@ export const FIELD_MESSAGES: Record<string, string> = {
   reasonCode: "علت را از فهرست انتخاب کنید.",
   note: "برای این علت توضیح لازم است (حداکثر ۵۰۰ نویسه).",
   requesterId: "شما در فهرست افراد این برنامه نیستید.",
+  replacementNurseId:
+    "جانشین باید از افراد همین برنامه باشد و در این روز شیفت نداشته باشد.",
+  requesterShift: "شیفت نهایی درخواست‌دهنده را انتخاب کنید.",
+  changes: "این تغییر چیزی را عوض نمی‌کند یا پرستار در فهرست این برنامه نیست.",
+  request: "برنامه هم‌اکنون همین وضعیت را دارد؛ اعمال، چیزی را تغییر نمی‌دهد.",
+  nurseId: "پرستار باید از افراد همین برنامه باشد.",
 };
 
 /** Per-field messages for an error that carries `fieldErrors`. */
@@ -130,6 +183,17 @@ const INVALID_STATE: Record<string, string> = {
     "شیفت یکی از شما در این روز تغییر کرده است؛ درخواست‌دهنده باید درخواست را با شیفت‌های فعلی به‌روز کند.",
   SWAP_CONSENT_ALREADY_ANSWERED: "به این درخواست قبلاً پاسخ داده شده است.",
   SWAP_ONLY: "این کار فقط برای درخواست جابه‌جایی است.",
+  APPLY_SWAP_WITHOUT_CONSENT:
+    "بدون موافقت همکار نمی‌توان جابه‌جایی را اعمال کرد.",
+  STALE_CONTEXT_NOT_CONFIRMED:
+    "شیفت پرستار پس از ثبت درخواست تغییر کرده است؛ برای اعمال بر اساس شیفت فعلی، آن را تأیید کنید.",
+  CHANGE_WHILE_SUBMITTED:
+    "برنامه برای تأیید سوپروایزر ارسال شده و قفل است؛ برای تغییر، ابتدا ارسال را پس بگیرید.",
+  CHANGE_BEFORE_FINALIZATION:
+    "برنامه هنوز نهایی نشده است؛ شیفت‌ها را از صفحه برنامه ویرایش کنید.",
+  CHANGE_WITHOUT_REVISION: "بازنگری بازی برای این برنامه پیدا نشد.",
+  EDIT_ASSIGNMENT: "شیفت‌های این برنامه در وضعیت فعلی قابل تغییر نیست.",
+  EDIT_ASSIGNMENT_OUTSIDE_REVISION_SCOPE: "این روز خارج از محدوده بازنگری است.",
 };
 
 const FORBIDDEN: Record<string, string> = {
@@ -139,6 +203,8 @@ const FORBIDDEN: Record<string, string> = {
     "شما عضو فعلی این بخش نیستید؛ درخواست‌های قبلی فقط قابل مشاهده‌اند.",
   NOT_REQUESTER: "فقط کسی که درخواست را ثبت کرده می‌تواند آن را تغییر دهد.",
   NOT_COUNTERPART: "فقط همکاری که نامش در درخواست آمده می‌تواند پاسخ دهد.",
+  NOT_HEAD_NURSE_OF_DEPARTMENT:
+    "فقط سرپرستار همین بخش می‌تواند این کار را انجام دهد.",
 };
 
 /** A refused command, in Persian. */
@@ -170,6 +236,9 @@ export function requestErrorMessage(
         "این درخواست دیگر در انتظار نیست و قابل تغییر نیست."
       );
     case "RULE_VIOLATION":
+      return command === "apply" || command === "adjust"
+        ? "این تغییر یک قانون مسدودکننده را نقض می‌کند و اعمال نشد؛ جزئیات را در بررسی ببینید."
+        : "خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.";
     case "INTERNAL":
       return "خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.";
   }

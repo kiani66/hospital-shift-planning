@@ -430,9 +430,12 @@ export const flaggedNurses = (day: DayReview): ReadonlySet<string> =>
 export function DayDetail({
   day,
   editor,
+  adjustment,
 }: {
   day: DayReview;
   editor?: ReactNode;
+  /** Phase 9: the Head Nurse's operational adjustment, where the editor cannot act. */
+  adjustment?: ReactNode;
 }) {
   const flagged = flaggedNurses(day);
   return (
@@ -443,6 +446,7 @@ export function DayDetail({
             {editDenialLabel(day.edit.reason)}
           </Callout>
         )}
+        {adjustment}
         <Findings day={day} linked={!!editor} />
         <RelatedFindings day={day} linked={!!editor} />
         <CoverageSummary day={day} />

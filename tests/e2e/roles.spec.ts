@@ -44,6 +44,7 @@ test.describe("nurse", () => {
   }) => {
     await expectNotFound(page, "/departments/icu/schedule", ICU_NAME);
     await expectNotFound(page, "/departments/icu/history", ICU_NAME);
+    await expectNotFound(page, "/departments/icu/requests", ICU_NAME);
     await expectNotFound(page, "/review");
   });
 
@@ -78,8 +79,15 @@ test.describe("head nurse", () => {
       page.getByRole("heading", { level: 1, name: /خوش آمدید/ }),
     ).toBeVisible();
     const nav = mainNav(page);
-    for (const label of ["شیفت‌های من", "برنامه بخش", "درخواست‌ها", "تاریخچه"])
-      await expect(nav.getByRole("link", { name: label })).toBeVisible();
+    for (const label of [
+      "شیفت‌های من",
+      "برنامه بخش",
+      "درخواست‌های بخش",
+      "درخواست‌ها",
+    ])
+      await expect(
+        nav.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
   });
 
   test("opens their own department", async ({ page }) => {
@@ -93,6 +101,7 @@ test.describe("head nurse", () => {
   test("is denied another department's pages", async ({ page }) => {
     await expectNotFound(page, "/departments/er/schedule", ER_NAME);
     await expectNotFound(page, "/departments/er/history", ER_NAME);
+    await expectNotFound(page, "/departments/er/requests", ER_NAME);
     await expectNotFound(page, "/departments/no-such-department/schedule");
   });
 });
