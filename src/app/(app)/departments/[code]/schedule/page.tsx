@@ -32,6 +32,8 @@ import {
   PreferenceAction,
   ScheduleDetails,
 } from "@/features/schedule/schedule-overview";
+import { getAdjustmentReasons } from "@/application/change-requests/queries";
+import { AdjustmentForm } from "@/features/change-request-review/adjustment-form";
 import { DayEditor } from "@/features/schedule-editing/day-editor";
 import {
   HeadNurseLifecycleAction,
@@ -86,6 +88,25 @@ function dayEditor(
       previousDayHref={links.previous?.href ?? null}
       nextDayHref={links.next?.href ?? null}
     />
+  );
+}
+
+/**
+ * Phase 9 operational adjustment, offered only where the planning editor
+ * cannot act under the approved rules: an APPROVED schedule (the change
+ * opens a revision) or a day outside an open revision's scope (the change
+ * extends it); never a past day. In FINALIZED / in-scope days the editor
+ * stays the way to change shifts. The use case decides again.
+ */
+function canOfferAdjustment(
+  day: DayReview,
+  status: string,
+  today: IsoDate,
+): boolean {
+  if (day.edit.allowed || day.date < today) return false;
+  return (
+    (day.edit.reason === "SCHEDULE_LOCKED" && status === "APPROVED") ||
+    day.edit.reason === "DATE_OUTSIDE_REVISION_SCOPE"
   );
 }
 
@@ -200,6 +221,22 @@ export default async function DepartmentSchedulePage({
     next: dayLink(addDays(review.day.date, 1)),
   };
 
+  const adjustment =
+    review.day && canOfferAdjustment(review.day, selected.status, today) ? (
+      <AdjustmentForm
+        key={review.day.date}
+        scheduleId={selected.id}
+        revision={review.month.revision}
+        date={review.day.date}
+        nurses={review.day.roster.map((n) => ({
+          userId: n.userId,
+          displayName: n.displayName,
+          shift: n.shift,
+        }))}
+        reasons={await getAdjustmentReasons(ctx)}
+      />
+    ) : undefined;
+
   const noAssignments =
     review.month.totals.UNPLANNED === review.month.days.length;
 
@@ -263,6 +300,7 @@ export default async function DepartmentSchedulePage({
         >
           <DayDetail
             day={review.day}
+            adjustment={adjustment}
             editor={dayEditor(
               review.day,
               {

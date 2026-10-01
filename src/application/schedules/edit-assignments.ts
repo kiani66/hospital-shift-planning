@@ -54,7 +54,8 @@ export interface SetAssignmentsOutput {
   readonly changes: readonly AssignmentChange[];
 }
 
-const AUDIT_ACTION = (change: AssignmentChange) =>
+/** The audit action of one changed cell (also used by post-finalization changes). */
+export const assignmentAuditAction = (change: AssignmentChange) =>
   change.before === null
     ? "assignment.created"
     : change.after === null
@@ -131,7 +132,7 @@ export const setAssignments = defineCommand({
           updatedBy: uow.actor.userId,
         });
       await uow.audit({
-        action: AUDIT_ACTION(change),
+        action: assignmentAuditAction(change),
         entityType: "assignment",
         entityId: `${change.nurseId}:${change.date}`,
         departmentId: schedule.departmentId,

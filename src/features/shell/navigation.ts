@@ -15,6 +15,7 @@ export type NavIcon =
   | "requests"
   | "notifications"
   | "departmentSchedule"
+  | "departmentRequests"
   | "history"
   | "review"
   | "more";
@@ -50,8 +51,10 @@ export const MAX_PRIMARY = 5;
 type Capabilities = Pick<ShellContext, "memberships" | "supervised"> &
   Partial<Pick<ShellContext, "unreadNotifications">>;
 
-const departmentPath = (code: string, page: "schedule" | "history") =>
-  `/departments/${encodeURIComponent(code)}/${page}` as Route;
+const departmentPath = (
+  code: string,
+  page: "schedule" | "requests" | "history",
+) => `/departments/${encodeURIComponent(code)}/${page}` as Route;
 
 /**
  * Deterministic default page (documented in docs/decisions.md, D24):
@@ -121,6 +124,12 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       label: qualify("برنامه بخش", d.name),
       icon: "departmentSchedule",
     } satisfies NavItem,
+    requests: {
+      id: `department-requests-${d.code}`,
+      href: departmentPath(d.code, "requests"),
+      label: qualify("درخواست‌های بخش", d.name),
+      icon: "departmentRequests",
+    } satisfies NavItem,
     history: {
       id: `department-history-${d.code}`,
       href: departmentPath(d.code, "history"),
@@ -150,7 +159,11 @@ export function buildNavigation(ctx: Capabilities): Navigation {
     sections.push({
       id: `department-${d.code}`,
       title: d.name,
-      items: [departmentItems[i]!.schedule, departmentItems[i]!.history],
+      items: [
+        departmentItems[i]!.schedule,
+        departmentItems[i]!.requests,
+        departmentItems[i]!.history,
+      ],
     }),
   );
   if (supervisor)
@@ -167,6 +180,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       ? [
           ITEMS.myShifts,
           firstDepartment.schedule,
+          firstDepartment.requests,
           ITEMS.requests,
           firstDepartment.history,
         ]

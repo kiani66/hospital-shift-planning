@@ -66,11 +66,12 @@ describe("buildNavigation", () => {
 
   it("gives a Head Nurse the nurse pages plus their department's pages", () => {
     const nav = buildNavigation(headNurse);
+    // The department's request queue replaces history on the phone bar.
     expect(labels(nav.primary)).toEqual([
       "شیفت‌های من",
       "برنامه بخش",
+      "درخواست‌های بخش",
       "درخواست‌ها",
-      "تاریخچه",
       "بیشتر",
     ]);
     expect(nav.sections.map((s) => s.title)).toEqual([
@@ -85,6 +86,7 @@ describe("buildNavigation", () => {
       "/requests",
       "/notifications",
       "/departments/icu/schedule",
+      "/departments/icu/requests",
       "/departments/icu/history",
     ]);
   });

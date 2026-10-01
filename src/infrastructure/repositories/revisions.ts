@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { IsoDate } from "../../domain/shared/dates";
 import type { DbExecutor } from "../db/database";
@@ -105,4 +105,17 @@ export async function closeRevision(
     )
     .returning({ id: scheduleRevisions.id });
   return rows.length > 0;
+}
+
+/** The status of each given revision (closed ones included), keyed by id. */
+export async function listRevisionStatuses(
+  db: DbExecutor,
+  ids: readonly string[],
+): Promise<Map<string, RevisionRecord["status"]>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: scheduleRevisions.id, status: scheduleRevisions.status })
+    .from(scheduleRevisions)
+    .where(inArray(scheduleRevisions.id, [...new Set(ids)]));
+  return new Map(rows.map((r) => [r.id, r.status]));
 }

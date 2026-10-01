@@ -18,6 +18,7 @@ const COMMANDS: LifecycleCommand[] = [
   "withdraw",
   "approve",
   "return",
+  "discard",
 ];
 
 const error = (overrides: Partial<ActionError>): ActionError => ({

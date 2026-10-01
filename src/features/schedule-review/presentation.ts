@@ -87,6 +87,7 @@ export const RULE_TITLES: Readonly<Record<RuleCode, string>> = {
   NIGHT_REST: "استراحت پس از شیفت شب",
   DUPLICATE_ASSIGNMENT: "بیش از یک شیفت در یک روز",
   OUTSIDE_PERIOD: "شیفت خارج از دوره برنامه",
+  STAFFING: "تأمین نفرات",
 };
 
 const day = (date: IsoDate) => formatJalaliDate(date, { weekday: true });
@@ -106,6 +107,8 @@ export function findingMessage(finding: ReviewFinding): string {
       return `برای ${name} در ${day(v.date)} بیش از یک شیفت ثبت شده است؛ هر پرستار در هر روز فقط یک شیفت دارد.`;
     case "OUTSIDE_PERIOD":
       return `برای ${name} در ${day(v.date)} شیفتی ثبت شده که خارج از دوره این برنامه است.`;
+    case "STAFFING":
+      return `نوبت ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر دارد: ${staffingStatusLabel(v.status, v.bounds)}.`;
     default:
       return v satisfies never;
   }
@@ -156,6 +159,15 @@ export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
           shift: finding.shift,
         },
       ];
+    case "STAFFING":
+      return [
+        {
+          role: "نوبت",
+          date: v.date,
+          dateLabel: day(v.date),
+          shift: v.period,
+        },
+      ];
     default:
       return v satisfies never;
   }
@@ -174,6 +186,10 @@ export function findingResolution(finding: ReviewFinding): string {
       return "برای رفع: فقط یک شیفت برای این روز نگه دارید.";
     case "OUTSIDE_PERIOD":
       return "برای رفع: شیفت خارج از دوره را پاک کنید.";
+    case "STAFFING":
+      return v.status === "BELOW_MINIMUM"
+        ? `برای رفع: نفرات نوبت ${SHIFT_PRESENTATION[v.period].name} را افزایش دهید.`
+        : `برای رفع: نفرات نوبت ${SHIFT_PRESENTATION[v.period].name} را کاهش دهید.`;
     default:
       return v satisfies never;
   }

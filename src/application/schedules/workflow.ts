@@ -77,6 +77,11 @@ export interface ScheduleWorkflow {
     readonly withdraw: WorkflowAction | null;
     readonly approve: WorkflowAction | null;
     readonly return: WorkflowAction | null;
+    /**
+     * Abandon the revision of an approved schedule (REVISING, or a returned
+     * revision): the working copy goes back to the latest approved version.
+     */
+    readonly discardRevision: WorkflowAction | null;
   };
   /**
    * The actor is a Supervisor of the department but submitted the pending
@@ -107,6 +112,8 @@ export function describeWorkflow(
       readonly departmentId: string;
       readonly period: DatePeriod;
       readonly status: ScheduleStatus;
+      /** The latest approved version, if any (a revision needs one). */
+      readonly currentVersionId?: string | null;
     };
     readonly violations: readonly Violation[];
     readonly activePreferenceWindows: number;
@@ -197,6 +204,15 @@ export function describeWorkflow(
           : null,
       approve: has("APPROVE") && mayDecide ? NO_BLOCKERS : null,
       return: has("RETURN") && mayDecide ? NO_BLOCKERS : null,
+      discardRevision:
+        has("DISCARD_REVISION") &&
+        decide(actor, "schedule.discardRevision", { departmentId }).allowed &&
+        transition(status, {
+          type: "DISCARD_REVISION",
+          hasApprovedVersion: (schedule.currentVersionId ?? null) !== null,
+        }).ok
+          ? NO_BLOCKERS
+          : null,
     },
     ownSubmission:
       supervisorDecision?.allowed === false &&

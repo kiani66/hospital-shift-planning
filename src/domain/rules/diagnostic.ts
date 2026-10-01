@@ -3,6 +3,7 @@ import { isInPeriod, type DatePeriod } from "../shared/period";
 import type { ShiftCode } from "../shifts/shift-type";
 import {
   isBlocking,
+  violationFootprint,
   type Violation,
   type ViolationSeverity,
 } from "./violation";
@@ -23,6 +24,8 @@ export const RULE_SCOPES: Readonly<Record<RuleCode, DiagnosticScope>> = {
   NIGHT_REST: "NURSE",
   DUPLICATE_ASSIGNMENT: "ASSIGNMENT",
   OUTSIDE_PERIOD: "ASSIGNMENT",
+  // One coverage period of one day.
+  STAFFING: "SHIFT",
 };
 
 /**
@@ -71,18 +74,17 @@ export function toDiagnostic(
   violation: Violation,
   period: DatePeriod,
 ): Diagnostic {
-  const nightRest = violation.rule === "NIGHT_REST";
+  const { nurseId, dates } = violationFootprint(violation);
   return {
     code: violation.rule,
     scope: RULE_SCOPES[violation.rule],
     severity: violation.severity,
     blocking: isBlocking(violation),
     date: violationDay(violation, period),
-    dates: uniqueSortedDates(
-      nightRest ? [violation.nightDate, violation.date] : [violation.date],
-    ),
-    nurseIds: [violation.nurseId],
-    shift: nightRest ? violation.shift : null,
+    dates: uniqueSortedDates(dates),
+    // A staffing finding is about the period, not one nurse.
+    nurseIds: nurseId === null ? [] : [nurseId],
+    shift: violation.rule === "NIGHT_REST" ? violation.shift : null,
     violation,
   };
 }

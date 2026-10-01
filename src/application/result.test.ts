@@ -67,6 +67,14 @@ describe("toActionError", () => {
         message: "The data was changed by someone else; reload and try again",
       },
     ],
+    [
+      new ConflictError("Already requested", "DUPLICATE_ACTIVE_REQUEST"),
+      {
+        code: "CONFLICT",
+        message: "Already requested",
+        reason: "DUPLICATE_ACTIVE_REQUEST",
+      },
+    ],
   ])("maps %s", (error, expected) => {
     expect(toActionError(error)).toEqual(expected);
   });

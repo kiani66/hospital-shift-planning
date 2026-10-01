@@ -88,6 +88,29 @@ describe("toDiagnostic", () => {
       "DUPLICATE_ASSIGNMENT",
       "NIGHT_REST",
       "OUTSIDE_PERIOD",
+      "STAFFING",
     ]);
+  });
+
+  it("describes a staffing warning: shift scope, not blocking, no nurse", () => {
+    const v: Violation = {
+      rule: "STAFFING",
+      severity: "warning",
+      date: isoDate("2026-10-30"),
+      period: "N",
+      covered: 1,
+      status: "BELOW_MINIMUM",
+      bounds: { min: 2 },
+    };
+    expect(toDiagnostic(v, period)).toMatchObject({
+      code: "STAFFING",
+      scope: "SHIFT",
+      severity: "warning",
+      blocking: false,
+      date: "2026-10-30",
+      dates: ["2026-10-30"],
+      nurseIds: [],
+      shift: null,
+    });
   });
 });

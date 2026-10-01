@@ -1,6 +1,8 @@
 /** Failures raised by the application layer (the domain has its own in domain/shared/errors). */
 export abstract class ApplicationError extends Error {
   abstract readonly code: "NOT_FOUND" | "CONFLICT";
+  /** Machine-readable detail for the UI (e.g. DUPLICATE_ACTIVE_REQUEST). */
+  readonly reason?: string;
 }
 
 export class NotFoundError extends ApplicationError {
@@ -19,6 +21,7 @@ export class ConflictError extends ApplicationError {
 
   constructor(
     message = "The data was changed by someone else; reload and try again",
+    override readonly reason?: string,
   ) {
     super(message);
   }

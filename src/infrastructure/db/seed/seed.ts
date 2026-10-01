@@ -21,7 +21,10 @@ import {
   scheduleVersionAssignments,
   scheduleVersions,
   shiftAssignments,
-  shiftChangeRequestItems,
+  legacyShiftChangeRequestItems,
+  legacyShiftChangeRequests,
+  scheduleChangeCells,
+  scheduleChanges,
   shiftChangeRequests,
   shiftTypes,
   supervisorAssignments,
@@ -36,12 +39,21 @@ import {
   DEMO_USERS,
 } from "./demo-data";
 
-/** Every application table except the `shift_types` reference data. */
+/**
+ * Every application table except reference data (`shift_types`,
+ * `change_reasons`). The legacy
+ * Phase 2 change-request tables are cleared too: they reference schedules and
+ * users, and this reset only ever runs on development, preview and test
+ * databases (never production, `assertSeedAllowed`).
+ */
 export const DATA_TABLES = [
   loginThrottles,
   auditEvents,
   notifications,
-  shiftChangeRequestItems,
+  legacyShiftChangeRequestItems,
+  legacyShiftChangeRequests,
+  scheduleChangeCells,
+  scheduleChanges,
   shiftChangeRequests,
   scheduleVersionAssignments,
   scheduleVersions,

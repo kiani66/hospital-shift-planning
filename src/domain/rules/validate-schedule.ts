@@ -1,8 +1,9 @@
-import { addDays, compareIsoDates } from "../shared/dates";
+import { addDays, compareIsoDates, type IsoDate } from "../shared/dates";
 import { isInPeriod, type DatePeriod } from "../shared/period";
 import type { Assignment } from "../shifts/assignment";
 import { findNightRestViolations } from "./night-rest";
-import type { Violation } from "./violation";
+import { findStaffingViolations, type StaffingRequirement } from "./staffing";
+import { violationFootprint, type Violation } from "./violation";
 
 export interface ScheduleValidationInput {
   readonly period: DatePeriod;
@@ -14,11 +15,17 @@ export interface ScheduleValidationInput {
    * context for cross-boundary rules; never reported on their own.
    */
   readonly adjacentAssignments?: readonly Assignment[];
+  /**
+   * Configured staffing bounds per day (D44); days without an entry are not
+   * checked. Staffing findings are warnings, never blocking.
+   */
+  readonly staffingRequirements?: ReadonlyMap<IsoDate, StaffingRequirement>;
 }
 
 /**
  * All rule violations that involve this schedule, sorted by date then nurse.
- * Violations may exist while planning; `hasBlockingViolations` gates FINALIZE/SUBMIT.
+ * Violations may exist while planning; `hasBlockingViolations` gates FINALIZE/SUBMIT
+ * (errors only; warnings such as staffing never block).
  */
 export function validateSchedule(input: ScheduleValidationInput): Violation[] {
   const { period, assignments } = input;
@@ -59,10 +66,23 @@ export function validateSchedule(input: ScheduleValidationInput): Violation[] {
       violations.push(v);
   }
 
+  if (input.staffingRequirements)
+    violations.push(
+      ...findStaffingViolations({
+        period,
+        assignments,
+        requirements: input.staffingRequirements,
+      }),
+    );
+
+  const nurseOf = (v: Violation) => violationFootprint(v).nurseId ?? "";
   return violations.sort(
     (a, b) =>
       compareIsoDates(a.date, b.date) ||
-      a.nurseId.localeCompare(b.nurseId) ||
-      a.rule.localeCompare(b.rule),
+      nurseOf(a).localeCompare(nurseOf(b)) ||
+      a.rule.localeCompare(b.rule) ||
+      (a.rule === "STAFFING" && b.rule === "STAFFING"
+        ? a.period.localeCompare(b.period)
+        : 0),
   );
 }

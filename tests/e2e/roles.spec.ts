@@ -44,16 +44,25 @@ test.describe("nurse", () => {
   }) => {
     await expectNotFound(page, "/departments/icu/schedule", ICU_NAME);
     await expectNotFound(page, "/departments/icu/history", ICU_NAME);
+    await expectNotFound(page, "/departments/icu/requests", ICU_NAME);
     await expectNotFound(page, "/review");
   });
 
   test("shows placeholders clearly marked as not implemented", async ({
     page,
   }) => {
-    await page.goto("/requests");
+    await page.goto("/my-shifts");
     await expect(
       page.getByRole("note", { name: "هنوز پیاده‌سازی نشده" }),
     ).toBeVisible();
+    // Requests are implemented (Phase 9): no placeholder there any more.
+    await page.goto("/requests");
+    await expect(
+      page.getByRole("heading", { level: 2, name: "درخواست‌های من" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("note", { name: "هنوز پیاده‌سازی نشده" }),
+    ).toHaveCount(0);
   });
 });
 
@@ -70,8 +79,15 @@ test.describe("head nurse", () => {
       page.getByRole("heading", { level: 1, name: /خوش آمدید/ }),
     ).toBeVisible();
     const nav = mainNav(page);
-    for (const label of ["شیفت‌های من", "برنامه بخش", "درخواست‌ها", "تاریخچه"])
-      await expect(nav.getByRole("link", { name: label })).toBeVisible();
+    for (const label of [
+      "شیفت‌های من",
+      "برنامه بخش",
+      "درخواست‌های بخش",
+      "درخواست‌ها",
+    ])
+      await expect(
+        nav.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
   });
 
   test("opens their own department", async ({ page }) => {
@@ -85,6 +101,7 @@ test.describe("head nurse", () => {
   test("is denied another department's pages", async ({ page }) => {
     await expectNotFound(page, "/departments/er/schedule", ER_NAME);
     await expectNotFound(page, "/departments/er/history", ER_NAME);
+    await expectNotFound(page, "/departments/er/requests", ER_NAME);
     await expectNotFound(page, "/departments/no-such-department/schedule");
   });
 });

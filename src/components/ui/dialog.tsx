@@ -61,7 +61,11 @@ export function Dialog({
       ref={ref}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      onClose={onClose}
+      onClose={(event) => {
+        // React events bubble through the component tree: a nested dialog's
+        // close (a confirmation inside a detail dialog) must not close this one.
+        if (event.target === event.currentTarget) onClose();
+      }}
       onClick={(event) => {
         // A click on the element itself (not its content) is the backdrop.
         if (event.target === event.currentTarget) event.currentTarget.close();

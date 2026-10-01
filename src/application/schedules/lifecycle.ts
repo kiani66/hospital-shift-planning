@@ -19,7 +19,10 @@ import {
 } from "../../infrastructure/repositories/memberships";
 import type { NewNotification } from "../../infrastructure/repositories/notifications";
 import { listPreferenceWindows } from "../../infrastructure/repositories/preference-windows";
-import { findOpenRevision } from "../../infrastructure/repositories/revisions";
+import {
+  closeRevision,
+  findOpenRevision,
+} from "../../infrastructure/repositories/revisions";
 import type { ScheduleRecord } from "../../infrastructure/repositories/schedules";
 import {
   createSubmission,
@@ -306,7 +309,9 @@ const headNurses = async (uow: UnitOfWork, schedule: ScheduleRecord) =>
 /**
  * SUBMITTED → APPROVED. Records the decision, snapshots the working copy as
  * the next immutable version (D17) and makes it the schedule's current
- * version, which nurses see from now on (D11). Does not start a revision.
+ * version, which nurses see from now on (D11): the newest approved version
+ * is the executable schedule. Approving a revision's submission closes that
+ * revision as APPROVED (kept as history). Does not start a revision.
  */
 export const approveSchedule = defineCommand({
   name: "schedule.approve",
@@ -324,6 +329,15 @@ export const approveSchedule = defineCommand({
       approvedBy: uow.actor.userId,
     });
     const assignments = await listAssignments(uow.tx, schedule.id);
+    const revision = submission.revisionId
+      ? await findOpenRevision(uow.tx, schedule.id)
+      : null;
+    if (revision)
+      await closeRevision(uow.tx, {
+        id: revision.id,
+        status: "APPROVED",
+        now: uow.now,
+      });
     const saved = await saveSchedule(uow, schedule, {
       status,
       currentVersionId: version.id,
@@ -341,10 +355,25 @@ export const approveSchedule = defineCommand({
         submittedBy: submission.submittedBy,
         versionId: version.id,
         versionNo: version.versionNo,
+        ...(revision && { revisionId: revision.id }),
         assignmentCount: assignments.length,
         assignmentsFingerprint: assignmentsFingerprint(assignments),
       },
     });
+    if (revision)
+      await uow.audit({
+        ...auditBase(schedule),
+        action: "revision.approved",
+        entityType: "revision",
+        entityId: revision.id,
+        data: {
+          revisionId: revision.id,
+          dates: revision.dates,
+          submissionId: submission.id,
+          versionId: version.id,
+          versionNo: version.versionNo,
+        },
+      });
     await notify(uow, await headNurses(uow, schedule), {
       type: "SCHEDULE_APPROVED",
       scheduleId: schedule.id,

@@ -21,7 +21,12 @@ const HEAD_NURSE_ACTIONS = [
   "schedule.discardRevision",
   "assignment.edit",
   "assignment.prefill",
+  /** The department's request queue: list, inspect, preview and reject. */
   "changeRequest.review",
+  /** Apply a request to the schedule (the only way a request changes it). */
+  "changeRequest.apply",
+  /** A direct operational change with a reason (no nurse request needed). */
+  "schedule.adjust",
 ] as const;
 
 type HeadNurseAction = (typeof HEAD_NURSE_ACTIONS)[number];
@@ -51,10 +56,18 @@ export interface ActionResources extends Record<
   "changeRequest.submit": DepartmentResource & {
     readonly status: ScheduleStatus;
   };
-  "changeRequest.view": DepartmentResource & { readonly requesterId: string };
-  /** Withdrawing (the only nurse-side change to) an existing request. */
-  "changeRequest.withdraw": DepartmentResource & {
+  "changeRequest.view": DepartmentResource & {
     readonly requesterId: string;
+    /** The swap partner of a SWAP request (who may read it to answer it). */
+    readonly counterpartId?: string | null;
+  };
+  /** Cancelling or refreshing one's own pending request (the requester's only changes to it). */
+  "changeRequest.cancel": DepartmentResource & {
+    readonly requesterId: string;
+  };
+  /** Consenting to (or declining) a swap one is named in. */
+  "changeRequest.consent": DepartmentResource & {
+    readonly counterpartId: string;
   };
   /**
    * The actor's own in-app notifications (list, count, mark read). Not tied
@@ -70,6 +83,7 @@ export type AuthzDenial =
   | "ACTOR_INACTIVE"
   | "NOT_HEAD_NURSE_OF_DEPARTMENT"
   | "NOT_MEMBER_OF_DEPARTMENT"
+  | "NOT_COUNTERPART"
   | "NOT_RECIPIENT"
   | "NOT_REQUESTER"
   | "NOT_SUPERVISOR_OF_DEPARTMENT"
@@ -154,16 +168,29 @@ export function decide<A extends Action>(
         : deny("SCHEDULE_NOT_YET_FINALIZED");
     }
     case "changeRequest.view": {
-      // Requesters keep read-only access to their own requests after leaving (D16).
-      const { requesterId } = r as ActionResources["changeRequest.view"];
-      return requesterId === actor.userId || headNurse || supervisor
+      // Requesters keep read-only access to their own requests after leaving
+      // (D16); a swap partner reads the request they are asked about.
+      const { requesterId, counterpartId } =
+        r as ActionResources["changeRequest.view"];
+      return requesterId === actor.userId ||
+        (counterpartId != null && counterpartId === actor.userId) ||
+        headNurse ||
+        supervisor
         ? allow
         : deny("NO_DEPARTMENT_ACCESS");
     }
-    case "changeRequest.withdraw": {
-      const { requesterId } = r as ActionResources["changeRequest.withdraw"];
+    case "changeRequest.cancel": {
+      const { requesterId } = r as ActionResources["changeRequest.cancel"];
       if (requesterId !== actor.userId) return deny("NOT_REQUESTER");
       // Changing a request needs active membership; history is read-only (D16).
+      return isMemberOf(actor, departmentId)
+        ? allow
+        : deny("NOT_MEMBER_OF_DEPARTMENT");
+    }
+    case "changeRequest.consent": {
+      // Only the named partner answers, and only for themselves.
+      const { counterpartId } = r as ActionResources["changeRequest.consent"];
+      if (counterpartId !== actor.userId) return deny("NOT_COUNTERPART");
       return isMemberOf(actor, departmentId)
         ? allow
         : deny("NOT_MEMBER_OF_DEPARTMENT");

@@ -75,12 +75,18 @@ function departmentSchedulePath(
  * - SCHEDULE_SUBMITTED: the Supervisor's read-only review of the schedule.
  * - SCHEDULE_APPROVED / SCHEDULE_RETURNED: the Head Nurse's schedule page
  *   (where a return comment is shown).
+ * - CHANGE_REQUEST_REVIEWED / SWAP_CONSENT_REQUESTED: the nurse's requests
+ *   page (Phase 9).
+ * - CHANGE_REQUEST_SUBMITTED: the Head Nurse's department request queue,
+ *   with the request open (the page authorizes it).
  * Types not created yet return null: opening them only marks them read.
  */
 export function notificationDestination(notification: {
   readonly type: NotificationType;
   readonly scheduleId: string | null;
   readonly departmentCode?: string | null;
+  /** CHANGE_REQUEST_SUBMITTED: the request to open in the queue. */
+  readonly requestId?: string | null;
 }): Route | null {
   const { scheduleId } = notification;
   switch (notification.type) {
@@ -94,6 +100,17 @@ export function notificationDestination(notification: {
     case "SCHEDULE_APPROVED":
     case "SCHEDULE_RETURNED":
       return departmentSchedulePath(notification.departmentCode, scheduleId);
+    case "CHANGE_REQUEST_REVIEWED":
+    case "SWAP_CONSENT_REQUESTED":
+      return "/requests";
+    case "CHANGE_REQUEST_SUBMITTED": {
+      const { departmentCode, requestId } = notification;
+      if (!departmentCode) return null;
+      const queue = `/departments/${encodeURIComponent(departmentCode)}/requests`;
+      return (
+        requestId ? `${queue}?request=${encodeURIComponent(requestId)}` : queue
+      ) as Route;
+    }
     default:
       return null;
   }
@@ -159,9 +176,34 @@ const RENDERERS: Record<NotificationType, Renderer> = {
     title: "درخواست تغییر شیفت ثبت شد",
     message: `یک درخواست تغییر شیفت برای ${forSchedule(item, "برنامه")} ثبت شد.`,
   }),
-  CHANGE_REQUEST_REVIEWED: (item) => ({
-    title: "درخواست تغییر شیفت بررسی شد",
-    message: `درخواست تغییر شیفت شما برای ${forSchedule(item, "برنامه")} بررسی شد.`,
+  CHANGE_REQUEST_REVIEWED: (item) => {
+    const schedule = forSchedule(item, "برنامه");
+    switch (item.data.outcome) {
+      case "APPLIED":
+        return {
+          title: "درخواست تغییر شیفت اعمال شد",
+          message: `سرپرستار درخواست تغییر شیفت شما را در ${schedule} اعمال کرد.`,
+        };
+      case "REVISION_DISCARDED":
+        return {
+          title: "تغییر درخواست شما کنار گذاشته شد",
+          message: `بازنگری ${schedule} که تغییر درخواست شما در آن اعمال شده بود کنار گذاشته شد؛ این تغییر دیگر بخشی از برنامه اجرایی نیست.`,
+        };
+      case "REJECTED":
+        return {
+          title: "درخواست تغییر شیفت رد شد",
+          message: `درخواست تغییر شیفت شما در ${schedule} رد شد؛ توضیح را در صفحه درخواست‌ها ببینید.`,
+        };
+      default:
+        return {
+          title: "درخواست تغییر شیفت بررسی شد",
+          message: `درخواست تغییر شیفت شما برای ${schedule} بررسی شد.`,
+        };
+    }
+  },
+  SWAP_CONSENT_REQUESTED: (item) => ({
+    title: "درخواست جابه‌جایی شیفت",
+    message: `یکی از همکاران در ${forSchedule(item, "برنامه")} از شما درخواست جابه‌جایی شیفت کرده است؛ موافقت یا مخالفت خود را ثبت کنید.`,
   }),
 };
 
@@ -180,6 +222,7 @@ export function describeNotification(item: NotificationItem): NotificationView {
       type: item.type,
       scheduleId: item.scheduleId,
       departmentCode: item.context?.departmentCode,
+      requestId: text(item.data.requestId),
     }),
   };
 }

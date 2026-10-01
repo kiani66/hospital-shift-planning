@@ -34,7 +34,10 @@ export class ForbiddenError extends DomainError {
   }
 }
 
-/** The action is not allowed in the schedule's current status. */
+/**
+ * The action is not allowed in the current status of the schedule (or of
+ * another stateful subject, such as a change request).
+ */
 export class InvalidStateError extends DomainError {
   override readonly name = "InvalidStateError";
   readonly code = "INVALID_STATE";
@@ -42,8 +45,9 @@ export class InvalidStateError extends DomainError {
   constructor(
     readonly status: string,
     readonly attempted: string,
+    subject = "the schedule",
   ) {
-    super(`Cannot ${attempted} while the schedule is ${status}`);
+    super(`Cannot ${attempted} while ${subject} is ${status}`);
   }
 }
 

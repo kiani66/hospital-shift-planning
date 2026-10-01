@@ -69,10 +69,16 @@ const describeFor = (
     violations?: Violation[];
     windows?: number;
     submissions?: SubmissionRecord[];
+    approvedVersion?: boolean;
   } = {},
 ) =>
   describeWorkflow(actor, {
-    schedule: { departmentId: DEPT, period: PERIOD, status },
+    schedule: {
+      departmentId: DEPT,
+      period: PERIOD,
+      status,
+      currentVersionId: options.approvedVersion ? "v1" : null,
+    },
     violations: options.violations ?? [],
     activePreferenceWindows: options.windows ?? 0,
     submissions: options.submissions ?? [],
@@ -119,8 +125,30 @@ describe("describeWorkflow: what each actor is offered", () => {
       withdraw: null,
       approve: { blockers: [] },
       return: { blockers: [] },
+      discardRevision: null,
     });
     expect(w.ownSubmission).toBe(false);
+  });
+
+  it.each([
+    ["REVISING", ["submit", "discardRevision"]],
+    ["RETURNED", ["submit", "discardRevision"]],
+    ["APPROVED", []],
+  ] as const)(
+    "Head Nurse in %s after an approval (a revision): %j",
+    (status, expected) => {
+      expect(
+        offered(describeFor(head, status, { approvedVersion: true })),
+      ).toEqual(expected);
+    },
+  );
+
+  it("never offers discarding to a Supervisor or a nurse", () => {
+    for (const actor of [supervisor, nurse])
+      expect(
+        describeFor(actor, "REVISING", { approvedVersion: true }).actions
+          .discardRevision,
+      ).toBeNull();
   });
 
   it("a nurse is offered nothing in any status", () => {

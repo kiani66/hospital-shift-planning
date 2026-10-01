@@ -10,6 +10,7 @@ import {
   submitSchedule,
   withdrawSubmission,
 } from "@/application/schedules/lifecycle";
+import { discardRevision } from "@/application/schedules/schedule-changes";
 import type { ScheduleFormState } from "@/features/schedule/actions";
 import { requireRequestContext } from "@/features/auth/guards";
 
@@ -37,6 +38,7 @@ const COMMANDS = {
   withdraw: withdrawSubmission,
   approve: approveSchedule,
   return: returnSchedule,
+  discard: discardRevision,
 } as const;
 
 async function run(
@@ -112,4 +114,11 @@ export async function returnScheduleAction(
   formData: FormData,
 ): Promise<ScheduleFormState> {
   return run("return", formData);
+}
+
+export async function discardRevisionAction(
+  _previous: ScheduleFormState,
+  formData: FormData,
+): Promise<ScheduleFormState> {
+  return run("discard", formData);
 }
