@@ -517,6 +517,41 @@ describe("swap consent", () => {
     expect(await auditActions()).toContain("changeRequest.swapRefreshed");
   });
 
+  it("flags a changed pending swap for both nurses; only the requester may refresh it", async () => {
+    const { id } = ok(await swap());
+    const flags = async (actor: Actor) => {
+      const r = (await getMyChangeRequests(as(actor))).find(
+        (x) => x.id === id,
+      )!;
+      return {
+        changed: r.swapContextChanged,
+        refresh: r.canRefresh,
+        respond: r.canRespond,
+      };
+    };
+    expect(await flags(actors.nurse1)).toEqual({
+      changed: false,
+      refresh: false,
+      respond: false,
+    });
+    await assign(U.icuNurse2.id, "2026-10-25", "N");
+    expect(await flags(actors.nurse1)).toEqual({
+      changed: true,
+      refresh: true,
+      respond: false,
+    });
+    expect(await flags(actors.nurse2)).toEqual({
+      changed: true,
+      refresh: false,
+      respond: true,
+    });
+    expect(
+      failure(await refreshSwapRequest(as(actors.nurse2), { requestId: id })),
+    ).toMatchObject({ code: "FORBIDDEN", reason: "NOT_REQUESTER" });
+    ok(await refreshSwapRequest(as(actors.nurse1), { requestId: id }));
+    expect((await flags(actors.nurse2)).changed).toBe(false);
+  });
+
   it("a partner cannot accept a swap whose context changed", async () => {
     const { id } = ok(await swap());
     await assign(U.icuNurse2.id, "2026-10-25", "N");

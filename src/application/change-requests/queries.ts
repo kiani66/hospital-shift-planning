@@ -13,7 +13,10 @@ import {
   type RequestResolution,
   type StaleRequestContext,
 } from "../../domain/change-requests/plan-change";
-import { decideChangeRequest } from "../../domain/change-requests/request";
+import {
+  decideChangeRequest,
+  swapContextChanged,
+} from "../../domain/change-requests/request";
 import { compareIsoDates, type IsoDate } from "../../domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
@@ -53,7 +56,7 @@ import {
 } from "../schedules/schedule-changes";
 import { NO_STAFFING_REQUIREMENTS } from "../schedules/staffing-requirements";
 import type { AppContext } from "../use-case";
-import { toRequestState, workingDayCells } from "./context";
+import { toRequestState, visibleDayCells, workingDayCells } from "./context";
 
 /**
  * Read side of Shift Change Requests. Scoping is enforced here, on the
@@ -179,6 +182,14 @@ export interface MyChangeRequestItem extends ChangeRequestView {
   readonly canCancel: boolean;
   /** The actor may answer the swap now (partner, consent pending). */
   readonly canRespond: boolean;
+  /**
+   * A pending swap whose participants' shifts (as nurses see them) differ
+   * from the request's snapshot: consent is refused and applying is blocked
+   * until the requester refreshes it.
+   */
+  readonly swapContextChanged: boolean;
+  /** The actor (the requester) may refresh the swap now. */
+  readonly canRefresh: boolean;
 }
 
 /**
@@ -201,20 +212,25 @@ export async function getMyChangeRequests(
       }).allowed,
   );
   const byId = new Map(records.map((r) => [r.id, r]));
+  const changedSwaps = await changedPendingSwaps(ctx, records);
   return (await toViews(ctx, records)).map((view) => {
     const r = byId.get(view.id)!;
     const role = r.requesterId === actor.userId ? "REQUESTER" : "COUNTERPART";
     const pending = r.status === "PENDING";
+    const mayChange =
+      role === "REQUESTER" &&
+      pending &&
+      decide(actor, "changeRequest.cancel", {
+        departmentId: r.departmentId,
+        requesterId: r.requesterId,
+      }).allowed;
+    const swapContextChanged = changedSwaps.has(r.id);
     return {
       ...view,
       role,
-      canCancel:
-        role === "REQUESTER" &&
-        pending &&
-        decide(actor, "changeRequest.cancel", {
-          departmentId: r.departmentId,
-          requesterId: r.requesterId,
-        }).allowed,
+      swapContextChanged,
+      canRefresh: mayChange && swapContextChanged,
+      canCancel: mayChange,
       canRespond:
         role === "COUNTERPART" &&
         pending &&
@@ -225,6 +241,35 @@ export async function getMyChangeRequests(
         }).allowed,
     };
   });
+}
+
+/** Pending swaps (one query per swap, only for those) whose context changed. */
+async function changedPendingSwaps(
+  ctx: AppContext,
+  records: readonly ChangeRequestRecord[],
+): Promise<Set<string>> {
+  const swaps = records.filter(
+    (r) => r.type === "SWAP" && r.status === "PENDING",
+  );
+  const changed = new Set<string>();
+  for (const r of swaps) {
+    const schedule = await findScheduleById(ctx.db, r.scheduleId);
+    if (!schedule) continue;
+    const { cells } = await visibleDayCells(
+      ctx.db,
+      schedule,
+      [r.requesterId, r.counterpartId!],
+      r.date,
+    );
+    if (
+      swapContextChanged(toRequestState(r), {
+        requester: cells.shiftOf(r.requesterId),
+        counterpart: cells.shiftOf(r.counterpartId),
+      })
+    )
+      changed.add(r.id);
+  }
+  return changed;
 }
 
 export interface RequestableAssignment {
