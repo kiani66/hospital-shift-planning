@@ -81,6 +81,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://hsp:hsp@localhost:5432/hsp_test
       DATABASE_URL_UNPOOLED: postgresql://hsp:hsp@localhost:5432/hsp_test
+      # The last-admin fixture creates/drops only its own disposable database.
+      # The service's POSTGRES_USER has CREATEDB authority.
+      TEST_DATABASE_URL: postgresql://hsp:hsp@localhost:5432/hsp_test
       AUTH_TRUST_HOST: "true"
     steps:
       # A throwaway session secret per run; never a committed value.

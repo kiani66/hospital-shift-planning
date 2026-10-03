@@ -95,7 +95,7 @@ cannot be chosen). `OTHER` always requires a note (check `change_reasons_other_n
   run a separate production server. That test role needs database-creation permission. The fixture
   shuts down its server and drops only its own database; shared E2E/demo Admins are untouched.
 
-## Phase 10 foundation
+## Phase 10 data model and lifecycle
 
 Migration `0008_hospital_admin` adds `users.is_hospital_admin boolean NOT NULL DEFAULT false`.
 Existing users remain unchanged and none becomes admin automatically. Membership roles remain
@@ -107,3 +107,9 @@ trigger. Existing date checks and exclusion constraints remain intact. Relation 
 and preserve predecessor rows; role transitions/transfers end on D-1 and insert a successor on D.
 New roster snapshots filter inactive users without changing old snapshots. Management events reuse
 the existing nullable-department/schedule, append-only audit schema and text action names.
+
+Management screens reuse these existing relations; Slices 2–4 require no further migration.
+Account deactivation neither ends relations nor alters approved versions; reactivation uses
+still-effective access. Historical and future relation correction is deliberately deferred.
+See [deployment.md](deployment.md#phase-10-production-upgrade-and-first-hospital-admin) for
+migration ordering, explicit first-admin bootstrap and rollback considerations.

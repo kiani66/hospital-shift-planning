@@ -96,7 +96,7 @@ address.
 | `transfer@demo.invalid`   | Nurse, ER until 2026-09-22, ICU from 2026-09-23 |
 | `inactive@demo.invalid`   | Deactivated former ICU nurse: cannot sign in    |
 
-## Hospital Admin foundation (Phase 10)
+## User and membership management (Phase 10)
 
 `is_hospital_admin` is system-level authority, independent of department roles and Supervisor
 assignments. Administrative policies deny Head Nurses, Supervisors, Nurses and inactive admins.
@@ -129,7 +129,8 @@ against both the request actor and freshly loaded effective relations, and expos
 local personnel names/roles/account status, including current Supervisors. They never expose
 global identity fields or links to global user detail. Unknown/denied management pages answer
 the same 404; inactive sessions still redirect to sign-in. Filter/pagination values confer no
-authority. No management write path, audit metadata or credentials are added to these screens.
+authority. Read DTOs include no audit metadata or credentials. Hospital Admin write adapters are
+described below; scoped department people screens remain read-only.
 
 Phase 10 Slice 3 adds ordinary Hospital Admin Server Actions for account creation/profile/status
 and membership add/end/transition only. Every action selects its allowed fields, validates dates
@@ -144,7 +145,7 @@ Expected profile and membership end values are captured when dialogs open. Statu
 the optional command-level expected active flag, rejecting stale forms under the same lock.
 Deactivation has explicit confirmation and preserves relations/old rosters. Last-active-admin
 protection applies to these UI calls too; deliberate self-deactivation redirects to sign-in after
-commit. Elevated authority and Supervisor mutation commands remain unavailable through UI actions.
+commit. Elevated authority and Supervisor mutation adapters, delivered in Slice 4, are described below.
 
 Phase 10 Slice 4 exposes only authenticated Hospital Admin adapters for system authority changes
 and Supervisor assignment/end commands. The person detail separates these from account status

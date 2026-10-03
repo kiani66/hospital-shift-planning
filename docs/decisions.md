@@ -987,7 +987,10 @@ past days; payroll and attendance integration; automatic swap matching or schedu
 
 ## User and department membership management decisions
 
-Phase 10, Slice 1 (foundation only). No management screens, department lifecycle or bulk import.
+Phase 10 is implemented through D78–D86: application foundations, scoped personnel reads,
+ordinary account/membership workflows, and elevated Hospital Admin/Supervisor workflows.
+D78–D83 record the foundation decisions; D84–D86 record the UI delivered in successive slices.
+Department lifecycle, bulk import and the historical correction workflows below remain deferred.
 
 ### D78 · Hospital Admin is system-level authority (supersedes D5)
 
@@ -1078,7 +1081,8 @@ existing account. Profile edits allow email/display name only, with expected val
 
 The provisioning CLI stays an explicit production bootstrap tool, not a UI command. Public
 registration, self-service recovery, bulk invitations/import, HR synchronization, department
-creation/editing/deactivation, general historical correction and the main management UI are deferred.
+creation/editing/deactivation and general historical correction remain deferred. The main management
+UI was deferred in Slice 1 and is delivered by D84–D86.
 
 ### D84 · Read-only personnel management (Phase 10 Slice 2)
 
@@ -1101,8 +1105,9 @@ existing 404 response. Every read rechecks database authority; navigation is a c
 
 Existing D25 sign-in destinations stay unchanged. Hospital Admin has a prominent directory
 entry, while scoped department entries use the existing mobile “more” navigation. Read-only
-screens have no mutation controls or Server Actions. Mutation UI and the other D83 deferred
-features remain deferred; this slice needs no migration and changes no historical records.
+screens initially had no mutation controls or Server Actions in Slice 2; Hospital Admin mutation
+controls are delivered by D85–D86. Scoped department screens remain read-only. Slice 2 needed no
+migration and changed no historical records; the other D83 deferred features remain deferred.
 
 ### D85 · Ordinary account and membership UI (Phase 10 Slice 3)
 
@@ -1131,8 +1136,9 @@ server/database messages. Successful mutations refresh the shell and affected vi
 self-deactivation redirects to sign-in, subject to D82's last-active-admin invariant.
 
 Head Nurse/Supervisor department screens stay read-only and Nurses gain no management access.
-Hospital Admin authority grants/removals, Supervisor assignment mutations, department lifecycle,
-bulk tools, deletion, recovery and arbitrary historical correction remain deferred. No migration,
+Hospital Admin authority grants/removals and Supervisor assignment mutations were deferred in
+Slice 3 and are delivered by D86. Department lifecycle, bulk tools, deletion, recovery and arbitrary
+historical correction remain deferred. No migration,
 new authority or additional audit event type is introduced in this slice.
 
 ### D86 · Elevated access UI and safety (Phase 10 Slice 4)
@@ -1165,4 +1171,9 @@ self-demotion, mutual revocation and mixed deactivation/removal cannot leave zer
 Audit failure rolls back the entire write. Value-based stale checks do not constitute a general
 revision counter or automatic conflict retry. No migration, bootstrap UI, department lifecycle,
 bulk import, deletion, recovery or arbitrary historical rewriting is introduced. This completes
-the authorized Phase 10 management UI without merging or deploying it.
+the authorized Phase 10 management UI.
+
+At the accepted pilot scale, the current department people list and each person's full access
+history remain unpaginated. The hospital directory is paginated (25 users plus one lookahead),
+with batched relation reads rather than a database query per person. Revisit list/history bounds
+if measured staff or history growth makes them slow; no speculative optimization is introduced.
