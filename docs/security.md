@@ -3,7 +3,7 @@
 ## Sign-in
 
 - **Auth.js v5**, Credentials provider (e-mail + password). No registration, password reset,
-  magic links, OAuth or SSO. Accounts are provisioned in the database (demo accounts by the seed).
+  magic links, OAuth or SSO. Accounts are provisioned explicitly by the production CLI or authorized Hospital Admin commands (demo accounts by the seed).
 - **Passwords**: Argon2id via `@node-rs/argon2` (prebuilt, no native build step), 19 MiB memory,
   2 iterations, 1 lane (OWASP minimum). Stored in `users.password_hash`; the parameters live in
   each hash, so they can be raised later. Verification runs only on the server
@@ -23,7 +23,7 @@
   never re-issues it, so a request in flight during sign-out cannot restore the session). No session tables: Credentials sign-in does not support database
   sessions, and the session carries nothing that needs revoking server-side (see below).
 - Content: **only the user id** (`sub`). The default name/e-mail/picture claims are dropped;
-  roles, memberships, supervisor assignments and active status are never stored in it.
+  roles, Hospital Admin authority, memberships, supervisor assignments and active status are never stored in it.
 - Sign-out (`خروج`) clears the cookie. A copied cookie stays cryptographically valid until it
   expires, but it grants nothing once the user is deactivated (next section).
 
@@ -37,7 +37,8 @@
 3. `users.is_active = false` → `null`, even though the cookie is still valid.
 4. Load memberships and supervisor assignments **effective today** (Asia/Tehran):
    `started_on <= today AND (ended_on IS NULL OR ended_on >= today)` (D19, `loadActor`).
-5. Return the Phase 1 `Actor`. Nothing else in the session is read.
+5. Load system-level `users.is_hospital_admin` as well; ignore any client/session admin claim.
+6. Return the trusted `Actor`. Nothing else in the session is read.
 
 `null` means "not signed in": pages redirect to `/login`. Use cases additionally deny an inactive
 actor (`ACTOR_INACTIVE`) as defense in depth.
@@ -94,3 +95,29 @@ address.
 | `supervisor@demo.invalid` | Supervisor of ICU and ER                        |
 | `transfer@demo.invalid`   | Nurse, ER until 2026-09-22, ICU from 2026-09-23 |
 | `inactive@demo.invalid`   | Deactivated former ICU nurse: cannot sign in    |
+
+## Hospital Admin foundation (Phase 10)
+
+`is_hospital_admin` is system-level authority, independent of department roles and Supervisor
+assignments. Administrative policies deny Head Nurses, Supervisors, Nurses and inactive admins.
+Head Nurses/Supervisors may read only relevant department personnel; no global identity/admin
+projection is exposed to them. Admins receive no implicit scheduling or approval privilege.
+
+All management writes use authenticated application commands, one transaction and safe audit
+projections. They serialize on the administration advisory lock and re-read the caller's database
+active/admin flags after locking. Removing authority or deactivating the last active admin is
+refused, including concurrent attempts. Bootstrap is an explicit operator-only first-admin action
+with privileged database access; it cannot be invoked repeatedly to grant more admins. See
+`docs/deployment.md`. Direct privileged database writes bypass application invariants and are not
+part of the supported administration workflow.
+
+Account creation hashes the initial password with the existing Argon2id implementation; returned
+records, list/search results and audit metadata omit credentials. No public registration,
+self-service password recovery, password reset UI or bulk invitations are added. Existing JWT
+expiration behavior is unchanged; authority changes and deactivation are enforced on the next
+request with the same cookie. Email/profile edits do not revoke an existing cookie.
+
+Inactive accounts cannot receive new or changed non-null scheduling assignments. New roster
+snapshots/additions and swap/replacement candidates exclude them. Historical rosters, memberships, assignments
+and approved versions remain intact; clearing a shift and restoring a prior approved version are
+still possible. Membership ending and account deactivation are distinct actions.

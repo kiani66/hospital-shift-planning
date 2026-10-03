@@ -8,6 +8,7 @@ export interface UserRecord {
   readonly email: string;
   readonly displayName: string;
   readonly isActive: boolean;
+  readonly isHospitalAdmin: boolean;
 }
 
 const columns = {
@@ -15,6 +16,7 @@ const columns = {
   email: users.email,
   displayName: users.displayName,
   isActive: users.isActive,
+  isHospitalAdmin: users.isHospitalAdmin,
 };
 
 export async function createUser(

@@ -181,6 +181,7 @@ describe("getActor boundary (actorFromSession)", () => {
     expect(await actorOf(U.icuHead.id)).toEqual({
       userId: U.icuHead.id,
       isActive: true,
+      isHospitalAdmin: false,
       memberships: [{ departmentId: DEMO_ICU.id, role: "HEAD_NURSE" }],
       supervisedDepartmentIds: [],
     });
@@ -198,12 +199,14 @@ describe("getActor boundary (actorFromSession)", () => {
     const forged = sessionFor(U.icuNurse1.id, {
       role: "HEAD_NURSE",
       isActive: true,
+      isHospitalAdmin: true,
       memberships: [{ departmentId: DEMO_ER.id, role: "HEAD_NURSE" }],
       supervisedDepartmentIds: [DEMO_ICU.id, DEMO_ER.id],
     });
     expect(await actorFromSession(db, forged, TODAY)).toEqual({
       userId: U.icuNurse1.id,
       isActive: true,
+      isHospitalAdmin: false,
       memberships: [{ departmentId: DEMO_ICU.id, role: "NURSE" }],
       supervisedDepartmentIds: [],
     });

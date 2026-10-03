@@ -165,7 +165,10 @@ export async function loadActor(
   onDate: IsoDate,
 ): Promise<Actor | null> {
   const [user] = await db
-    .select({ isActive: users.isActive })
+    .select({
+      isActive: users.isActive,
+      isHospitalAdmin: users.isHospitalAdmin,
+    })
     .from(users)
     .where(eq(users.id, userId));
   if (!user) return null;
@@ -197,6 +200,7 @@ export async function loadActor(
   return {
     userId,
     isActive: user.isActive,
+    isHospitalAdmin: user.isHospitalAdmin,
     memberships,
     supervisedDepartmentIds: supervised.map((s) => s.departmentId),
   };

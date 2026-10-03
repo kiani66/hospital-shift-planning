@@ -163,8 +163,9 @@ describe("migrations (applied to an empty database by the global setup)", () => 
       ).rows[0]!.n;
     const before = await count();
     // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login
-    // throttles, 0005 legacy change requests, 0006 Phase 9 schema, 0007 reasons
-    expect(before).toBe(8);
+    // throttles, 0005 legacy change requests, 0006 Phase 9 schema, 0007 reasons,
+    // 0008 system-level Hospital Admin flag
+    expect(before).toBe(9);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

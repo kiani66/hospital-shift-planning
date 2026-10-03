@@ -26,6 +26,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test",
     "test:coverage": "vitest run --project unit --coverage",
     "db:seed": "tsx scripts/db-seed.ts",
+    "db:bootstrap-admin": "tsx scripts/db-bootstrap-admin.ts",
     "db:provision-user": "tsx scripts/db-provision-user.ts",
     "test:integration": "vitest run --project integration"
   },

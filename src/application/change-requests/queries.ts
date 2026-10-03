@@ -43,7 +43,10 @@ import {
   listRevisionStatuses,
   findOpenRevision,
 } from "../../infrastructure/repositories/revisions";
-import { listRoster } from "../../infrastructure/repositories/roster";
+import {
+  listRoster,
+  listSchedulingRoster,
+} from "../../infrastructure/repositories/roster";
 import { listScheduleChanges } from "../../infrastructure/repositories/schedule-changes";
 import {
   findScheduleById,
@@ -411,7 +414,7 @@ export async function getChangeRequestOptions(
   const schedules = await Promise.all(
     open.map(async (s): Promise<RequestableSchedule> => {
       const [roster, cells] = await Promise.all([
-        listRoster(db, s.id),
+        listSchedulingRoster(db, s.id),
         // What nurses see (D11): the approved version, else the working copy.
         s.currentVersionId
           ? listVersionAssignments(db, s.currentVersionId)
@@ -627,10 +630,11 @@ export async function getChangeRequestReview(
   const schedule = (await findScheduleById(ctx.db, record.scheduleId))!;
   const resolution = input.resolution ?? {};
   const replacementId = resolution.replacementNurseId ?? null;
-  const [[request], roster, [applied], version, openRevision] =
+  const [[request], roster, candidates, [applied], version, openRevision] =
     await Promise.all([
       toViews(ctx, [record]),
       listRoster(ctx.db, schedule.id),
+      listSchedulingRoster(ctx.db, schedule.id),
       listScheduleChanges(ctx.db, { requestIds: [record.id] }),
       schedule.currentVersionId
         ? findVersionById(ctx.db, schedule.currentVersionId)
@@ -710,7 +714,7 @@ export async function getChangeRequestReview(
       pending && record.type === "SWAP" && swapContextChanged(state, current),
     replacementCandidates:
       pending && record.type === "UNAVAILABLE"
-        ? roster
+        ? candidates
             .filter(
               (r) =>
                 r.userId !== record.requesterId &&

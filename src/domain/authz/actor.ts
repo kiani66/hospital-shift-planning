@@ -17,6 +17,8 @@ export interface Membership {
 export interface Actor {
   readonly userId: string;
   readonly isActive: boolean;
+  /** System-level authority; never a department membership or a session claim. */
+  readonly isHospitalAdmin: boolean;
   readonly memberships: readonly Membership[];
   readonly supervisedDepartmentIds: readonly string[];
 }

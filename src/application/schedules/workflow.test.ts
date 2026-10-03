@@ -15,18 +15,21 @@ const PERIOD = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
 const head: Actor = {
   userId: HEAD,
   isActive: true,
+  isHospitalAdmin: false,
   memberships: [{ departmentId: DEPT, role: "HEAD_NURSE" }],
   supervisedDepartmentIds: [],
 };
 const nurse: Actor = {
   userId: "nurse",
   isActive: true,
+  isHospitalAdmin: false,
   memberships: [{ departmentId: DEPT, role: "NURSE" }],
   supervisedDepartmentIds: [],
 };
 const supervisor: Actor = {
   userId: SUPERVISOR,
   isActive: true,
+  isHospitalAdmin: false,
   memberships: [],
   supervisedDepartmentIds: [DEPT],
 };

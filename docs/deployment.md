@@ -126,3 +126,29 @@ Behavior:
 
 - Move Neon to a paid plan for longer point-in-time restore and no cold starts.
 - Confirm data-residency and retention requirements for staff data.
+
+## Phase 10 production upgrade and first Hospital Admin
+
+Slice 1 supplies application foundations, not management screens. Production migration/deployment
+must be performed separately by an operator; developing or testing this slice does not deploy it.
+
+1. Review migration `0008_hospital_admin`: one additive default-false boolean column, no grants,
+   no deletes, no membership-role changes. The previous deployment remains compatible.
+2. Through the normal production release process, apply migrations before the new application
+   starts (the existing `vercel-build` path does this). Do not run the demo seed in production.
+3. Choose an existing active password-provisioned account deliberately. If needed, use the
+   existing `db:provision-user` operator workflow first; it refreshes an existing password and
+   reactivates that account, so check its documented effects before running it.
+4. In a secure operator shell with the intended direct database connection configured, set
+   `BOOTSTRAP_ADMIN_EMAIL` to that exact account and `BOOTSTRAP_ADMIN_CONFIRM` to
+   `ESTABLISH_FIRST_HOSPITAL_ADMIN`, then explicitly run `pnpm db:bootstrap-admin`.
+5. Clear operator inputs afterward. Verify that the selected account is the sole initially
+   granted admin and that `user.hospitalAdminBootstrapped` exists. No credentials are printed or
+   audited. The selected user's next request loads system authority from the database.
+
+Bootstrap refuses unknown, inactive or passwordless accounts and any pre-existing admin,
+including inactive ones; simultaneous attempts establish only one. It cannot be used to promote
+additional accounts. Subsequent grants/removals use `setHospitalAdmin` as an authenticated admin
+command. Account deactivation/authority removal cannot remove the last active admin. This slice
+adds no HTTP endpoint or UI adapter for the foundation commands and no automatic admin grant to
+the seed, deployer, first user, Head Nurse or Supervisor.

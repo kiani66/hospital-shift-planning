@@ -55,6 +55,7 @@ import {
   findOpenRevision,
   startRevision,
 } from "../../infrastructure/repositories/revisions";
+import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { listRoster } from "../../infrastructure/repositories/roster";
 import { findChangeRequest } from "../../infrastructure/repositories/change-requests";
 import {
@@ -157,6 +158,15 @@ export async function evaluateScheduleChange(
       },
     }),
   );
+  const eligible = await lockActiveSchedulingUsers(
+    db,
+    changes.filter((c) => c.after !== null).map((c) => c.nurseId),
+  );
+  if (!eligible)
+    throw new ValidationError(
+      "Inactive accounts cannot receive new assignments",
+      "nurseId",
+    );
   if (changes.length === 0)
     throw new ValidationError(
       "The schedule already has these shifts; nothing would change",
