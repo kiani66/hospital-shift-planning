@@ -8,7 +8,7 @@ Approved decisions that shape the implementation. Update this file when a decisi
 | D2  | Hosting                | Vercel (Fluid compute, Node runtime) and Neon PostgreSQL, with a Neon branch per preview deployment. No other infrastructure.                                                                          |
 | D3  | Language and direction | Persian (`fa`) is the primary UI language; layout is RTL. Logical CSS properties only.                                                                                                                 |
 | D4  | Calendar               | The user-facing calendar is Solar Hijri (Jalali); the week starts on Saturday. The domain and database stay calendar-agnostic: ISO `YYYY-MM-DD` dates and `period_start`/`period_end`.                 |
-| D5  | Authentication         | Email and password via Auth.js. No public self-registration; users are provisioned by the seed. No Admin role. Isolated behind `getActor()`.                                                           |
+| D5  | Authentication         | Email/password via Auth.js. No public registration. Explicit account provisioning; system-level Hospital Admin (D78 supersedes “No Admin role”). Isolated behind `getActor()`.                         |
 | D6  | Password hashing       | argon2id.                                                                                                                                                                                              |
 | D7  | Night-rest rule        | A Night (`N`) on date D requires OFF on D+1 (`N→M`, `N→E`, `N→ME`, `N→N` are all invalid), across schedule boundaries. Temporarily allowed while editing; blocks FINALIZE and SUBMIT. Not overridable. |
 | D8  | Authorization          | Enforced in application use cases on the server. Roles are per department (membership); supervisors are assigned to departments. Roles are re-read from the database on every request.                 |
@@ -984,3 +984,203 @@ Cross-date swaps; a full `/my-shifts` calendar; reason administration UI; multi-
 in the UI (the command accepts several cells); a grouped count for the queue tabs; staffing
 numbers (D44); SMS, e-mail or push notifications; Schedule Copy / Clone; historical correction of
 past days; payroll and attendance integration; automatic swap matching or schedule repair.
+
+## User and department membership management decisions
+
+Phase 10 is implemented through D78–D86: application foundations, scoped personnel reads,
+ordinary account/membership workflows, and elevated Hospital Admin/Supervisor workflows.
+D78–D83 record the foundation decisions; D84–D86 record the UI delivered in successive slices.
+Department lifecycle, bulk import and the historical correction workflows below remain deferred.
+
+### D78 · Hospital Admin is system-level authority (supersedes D5)
+
+The original D5 “No Admin role” assumption is superseded explicitly. Hospital Admin is the
+`users.is_hospital_admin` flag, default false, loaded into the trusted Actor from PostgreSQL on
+every request. It is never a JWT claim or a `membership_role`. Department roles remain NURSE /
+HEAD_NURSE; Supervisor stays a separate effective-dated relation. Admin authority does not itself
+grant schedule editing, submission, approval or personal membership privileges. No generic RBAC
+framework and no new Personnel/HR table or speculative HR fields.
+
+### D79 · Personnel authority and scope
+
+- An active Hospital Admin may list/search hospital users, inspect membership/supervisor history,
+  create accounts, edit email/display name, activate/deactivate accounts, grant/remove Hospital
+  Admin authority, add/end memberships, transition department roles (including HEAD_NURSE), transfer
+  users, and assign/end Supervisor relations. Every write authorizes and audits server-side.
+- A Head Nurse may read personnel and relevant membership/account status in their own department.
+  A Supervisor may read personnel in supervised departments. These projections contain only local
+  membership history, display name and active status, not global identity/admin data.
+- Neither role provisions accounts, edits global identity, deactivates accounts, transfers people,
+  grants roles or manages memberships. A Nurse has no personnel administration rights.
+- New explicit policies implement this matrix; `department.manage` retains its schedule-workspace
+  meaning. Denied department reads use the same 404 as an unknown department.
+
+### D80 · Account lifecycle and new scheduling eligibility
+
+Accounts are deactivated, never deleted. Deactivation prevents sign-in and old-cookie access on
+the next request, excludes users from new roster snapshots, explicit roster additions and swap/replacement
+candidate generation, and refuses newly created or changed non-null assignments to inactive
+accounts in planning and post-finalization changes. Clearing an existing assignment remains
+possible; replaying an unchanged assignment is a no-op. Existing membership history, rosters,
+working assignments and approved versions are not rewritten by deactivation. Restoring a prior
+approved version when discarding a revision preserves historical cells, including inactive users.
+Reactivation restores access according to still-effective relations; it does not resnapshot old
+rosters. Membership termination is a separate explicit operation.
+
+New scheduling writes share-lock target accounts; deactivation waits for an already-authorized
+scheduling write to commit or wins first and makes it fail. General request revocation semantics
+remain D24 (next request); this phase does not revoke every in-flight scheduling actor.
+
+### D81 · Membership and supervisor lifecycle
+
+Membership addition accepts past starts for initial onboarding/history, today, future and fixed
+terms. End dates remain inclusive; null means open-ended. Database overlap constraints remain the
+final guard. Additions require an existing target account and an existing active department; account status
+is independent, so managing a relation never implicitly reactivates an inactive account.
+Ending operates on a named currently-effective relation, including fixed terms, with the expected
+end date for stale-form protection. It may shorten the term today or later, never extend it or
+rewrite already-ended history. Account deactivation does not prevent deliberate relation ending.
+
+Role transitions and transfers are one authorized transaction: load the current predecessor,
+validate destination, end predecessor on D-1, create successor starting D, audit and commit.
+They never overwrite the predecessor's role/department or change existing schedule rosters.
+Transitions take effect today or later; arbitrary backdated correction and edits/cancellation of
+future relations are deferred. The successor end date is explicit, so a fixed term is not
+silently extended. A predecessor must retain at least its first day; a same-day transition of a
+relation created today is refused rather than erasing it. No exactly-one Head Nurse or Supervisor
+rule is introduced. Supervisor assignments use their own table and the same end-date semantics.
+
+### D82 · Last active admin and explicit bootstrap
+
+Deactivation or authority removal must leave at least one usable Hospital Admin: active, with
+system authority and provisioned credentials. Passwordless legacy accounts do not count as
+replacements. Every management
+write and first-admin bootstrap takes the same transaction-scoped PostgreSQL advisory lock;
+account/authority checks count usable admins under that lock. Administrative commands recheck the
+caller's stored authority after acquiring it, so a waiting revoked/deactivated caller fails closed.
+This is an application invariant; privileged direct SQL is not an administration workflow.
+
+Migration 0008 only adds the default-false flag and preserves every production user. It grants
+nobody authority. Explicit operator-only `db:bootstrap-admin` establishes the first admin on a
+named existing active password-provisioned account, with a confirmation phrase, only when no
+admin exists (even inactive). It shares the safety lock and writes an append-only audit event
+identifying operator bootstrap and the named account. It is never exposed as a Server Action.
+Later authority changes require an authenticated Hospital Admin; bootstrap is not a general
+recovery or grant mechanism. Production upgrade steps are in docs/deployment.md.
+
+### D83 · Management audit and account scope
+
+Reuse `defineCommand` and append-only `audit_events`. Events: `user.created`, `user.activated`,
+`user.deactivated`, `user.profileChanged`, `user.hospitalAdminChanged`,
+`user.hospitalAdminBootstrapped`, `membership.added`, `membership.ended`,
+`membership.roleChanged`, `membership.transferred`, `supervisor.assigned`, `supervisor.ended`.
+Audit only explicit safe before/after projections; passwords, hashes, tokens and secrets are never
+passed to the audit writer. Failed writes leave no partial business/audit data. Unchanged account,
+profile or end-date operations are no-ops after authorization. No membership notifications are
+added in this slice. Account creation accepts a server-hashed initial password (12–256 characters),
+normalizes email like sign-in, and never implicitly grants admin authority or reactivates an
+existing account. Profile edits allow email/display name only, with expected values for concurrency.
+
+The provisioning CLI stays an explicit production bootstrap tool, not a UI command. Public
+registration, self-service recovery, bulk invitations/import, HR synchronization, department
+creation/editing/deactivation and general historical correction remain deferred. The main management
+UI was deferred in Slice 1 and is delivered by D84–D86.
+
+### D84 · Read-only personnel management (Phase 10 Slice 2)
+
+The management UI deferred in D83 now has read-only screens. Hospital Admin opens
+`/admin/personnel` and `/admin/personnel/[userId]` to inspect safe account fields, current
+relations and complete membership/supervisor histories. Name/email search is literal and
+case-insensitive; filters cover account status, system authority and current department/role.
+Department and role filters match the same effective membership; a department filter without
+a membership-role filter also includes its current Supervisors. Lists use 25 users per page,
+ordered by display name and id. Filter changes return to page one. Dates use D19's inclusive
+bounds; account status never changes relation status. Inactive-department history stays visible
+to Hospital Admin, labeled as such.
+
+`/departments/[code]/people` exposes current local members and Supervisors to that department's
+Head Nurse or current Supervisor (and Hospital Admin). It includes inactive accounts with a
+current relation, but excludes future and ended relations. It exposes names, local roles and
+account status only; no global email/admin flags, cross-department detail or user-detail links.
+Nurses receive no personnel navigation/access. Unknown and denied management URLs share the
+existing 404 response. Every read rechecks database authority; navigation is a convenience.
+
+Existing D25 sign-in destinations stay unchanged. Hospital Admin has a prominent directory
+entry, while scoped department entries use the existing mobile “more” navigation. Read-only
+screens initially had no mutation controls or Server Actions in Slice 2; Hospital Admin mutation
+controls are delivered by D85–D86. Scoped department screens remain read-only. Slice 2 needed no
+migration and changed no historical records; the other D83 deferred features remain deferred.
+
+### D85 · Ordinary account and membership UI (Phase 10 Slice 3)
+
+Hospital Admin now creates password-provisioned accounts at `/admin/personnel/new`, edits
+display name/email, activates/deactivates accounts and adds/ends/transfers/changes membership
+roles from person detail. Thin Server Actions parse presentation inputs, obtain the trusted
+actor and invoke the D79–D83 transactional commands; no business writes or audit logic live
+in UI. Creation returns only the new account id for navigation and never grants system authority.
+Initial passwords are cleared from the form after submission and never returned in action state.
+Membership date entry is typed Jalali year/month/day, accepting Persian, Arabic or Latin digits
+within the calendar adapter's supported years; conversion to ISO happens again on the server.
+
+Focused dialogs explain account status versus membership termination, inclusive end dates and
+predecessor/successor history. Deactivation requires explicit confirmation. Ending/transitions
+are offered only on currently-effective memberships, following D81; future/ended history stays
+read-only. A transition on a relation's first day is refused with specific Persian date feedback;
+a later effective date may be chosen. Successor end dates are explicit, with existing fixed-term
+ends prefilled and a deliberate blank meaning open-ended. Existing schedules/rosters are preserved.
+
+Forms freeze expected profile/status/end-date values when opened. Account-status commands now
+accept an optional expected active flag, checked after the existing administration lock; these
+Server Actions require it. Older explicit callers retain their idempotent behavior. Relevant
+stale changes fail with conflict feedback and an explicit refresh/review control, never an automatic
+overwrite. Stable validation/conflict reason codes support Persian feedback without exposing raw
+server/database messages. Successful mutations refresh the shell and affected views; deliberate
+self-deactivation redirects to sign-in, subject to D82's last-active-admin invariant.
+
+Head Nurse/Supervisor department screens stay read-only and Nurses gain no management access.
+Hospital Admin authority grants/removals and Supervisor assignment mutations were deferred in
+Slice 3 and are delivered by D86. Department lifecycle, bulk tools, deletion, recovery and arbitrary
+historical correction remain deferred. No migration,
+new authority or additional audit event type is introduced in this slice.
+
+### D86 · Elevated access UI and safety (Phase 10 Slice 4)
+
+Person detail now separates account status, system-level Hospital Admin authority, department
+memberships and Supervisor access. Active Hospital Admins grant/remove system authority and
+assign/end Supervisor relations through focused Persian RTL confirmations/forms and the existing
+transactional commands. Supervisor remains in its own effective-dated table; no membership role,
+schedule privilege, notification or audit event type is added. Complete access history stays visible.
+
+Authority changes freeze the target's expected admin and active flags when the dialog opens.
+`setHospitalAdmin` now accepts those optional expected values under D82's existing lock; UI actions
+require both and reject changed values before no-op handling. Existing explicit callers keep their
+idempotent behavior. The approved pre-merge credential-safety correction supersedes the former
+inactive-grant behavior: new grants require an active, credential-provisioned target. Missing
+credentials or inactive status produce specific safe Persian errors; granting never activates an
+account or provisions credentials. Existing stored authority survives deactivation and confers no
+access while inactive. Reactivation of stored admin authority requires provisioned credentials.
+Removal requires confirmation; self-removal has a prominent warning and succeeds only if another
+active credential-provisioned admin remains. After successful self-demotion, the action refreshes the shell and redirects
+through `/` to the caller's database-derived default page, removing admin controls/navigation.
+Other authority changes take effect on the next request using the same existing session cookie.
+
+Supervisor assignment accepts current/future/fixed-term periods through the Jalali presentation
+adapter, preserving D81's existing historical-onboarding capability. Ending addresses a named
+currently-effective assignment, checks its frozen expected end date, and shortens inclusively today
+or later; future/ended correction remains deferred. Account status, memberships and old schedules
+are untouched. Overlap and date rules remain in the commands/database, with safe Persian errors.
+
+Every management write retains the shared PostgreSQL administration lock, rechecks caller authority
+after locking, and enforces the last-active-admin invariant before deactivation/removal. Concurrent
+self-demotion, mutual revocation and mixed deactivation/removal cannot leave zero usable admins,
+even when legacy passwordless accounts have active admin flags. Eligibility uses the same
+repository credential predicate as bootstrap, returning only safe booleans/counts.
+Audit failure rolls back the entire write. Value-based stale checks do not constitute a general
+revision counter or automatic conflict retry. No migration, bootstrap UI, department lifecycle,
+bulk import, deletion, recovery or arbitrary historical rewriting is introduced. This completes
+the authorized Phase 10 management UI.
+
+At the accepted pilot scale, the current department people list and each person's full access
+history remain unpaginated. The hospital directory is paginated (25 users plus one lookahead),
+with batched relation reads rather than a database query per person. Revisit list/history bounds
+if measured staff or history growth makes them slow; no speculative optimization is introduced.

@@ -7,10 +7,11 @@ The UI is Persian (RTL) with a Solar Hijri calendar. The workflow runs from nurs
 head nurse scheduling and finalization, then supervisor review and approval, ending in a closed
 monthly schedule.
 
-> **Status: Phase 2 (persistence).** Tooling, CI, the RTL shell, the pure business rules
-> (`src/domain`), the database schema, repositories and the transactional use-case foundation are in
-> place. Features arrive in later phases. See [docs/decisions.md](docs/decisions.md) and
-> [docs/database.md](docs/database.md).
+> **Status: Phase 10 (user and department membership management).** Hospital Admin personnel
+> workflows and scoped Head Nurse/Supervisor personnel reads join the scheduling, approval and
+> schedule-change workflows. See [docs/decisions.md](docs/decisions.md),
+> [docs/database.md](docs/database.md) and the explicit first-admin initialization instructions
+> in [docs/deployment.md](docs/deployment.md#phase-10-production-upgrade-and-first-hospital-admin).
 
 ## Stack
 
@@ -55,6 +56,8 @@ database is unreachable or misconfigured, or `AUTH_SECRET` is missing).
 | `pnpm db:generate`             | Generate a SQL migration from the Drizzle schema                     |
 | `pnpm db:migrate`              | Apply migrations                                                     |
 | `pnpm db:seed`                 | Reset the database to deterministic demo data (never in production)  |
+| `pnpm db:provision-user`       | Explicit operator provisioning of a real account and membership      |
+| `pnpm db:bootstrap-admin`      | Establish the first Hospital Admin on a deliberately named account   |
 | `pnpm db:studio`               | Drizzle Studio                                                       |
 
 ## Project structure
@@ -62,12 +65,12 @@ database is unreachable or misconfigured, or `AUTH_SECRET` is missing).
 ```
 src/
   app/              routes (RSC pages, route handlers); thin
-  features/         UI by feature (auth, shell): components + Server Action adapters
+  features/         UI by feature: components + thin Server Action adapters
   components/       shared UI; components/ui holds shadcn/ui-style primitives
   application/      use cases: authorize → domain → persist → audit → notify
   domain/           pure business rules, no framework imports
   infrastructure/   auth (Auth.js, Argon2id, getActor), config (env), db, repositories
-  lib/              UI utilities (cn; Jalali calendar adapter in a later phase)
+  lib/              shared UI utilities (calendar adapter lives in features/calendar)
 scripts/            db-migrate (used locally, in CI and on Vercel)
 tests/              unit/, integration/ (real PostgreSQL), e2e/ (Playwright), support/
 eslint-rules/       project ESLint rules (RTL-safe classes)
@@ -86,6 +89,9 @@ Layer boundaries are enforced by ESLint; see [AGENTS.md](AGENTS.md) for the conv
   (`pnpm db:seed`) and `AUTH_SECRET` / `AUTH_TRUST_HOST=true`. Projects: `api`,
   `desktop-chromium`, `mobile-android`, `mobile-ios` (WebKit). Install browsers with
   `pnpm exec playwright install chromium webkit`.
+  Also set a designated `TEST_DATABASE_URL` whose name contains `test`; the isolated last-admin
+  fixture requires its role to create/drop its own disposable test database. It never changes
+  shared demo admins. See [docs/database.md](docs/database.md#local-data).
 - CI (GitHub Actions) runs all three on every PR and push to `main`.
 
 ## Deployment

@@ -14,7 +14,7 @@ const ICU = { id: "d1", code: "icu", name: "ICU" };
 const ER = { id: "d2", code: "er", name: "ER" };
 
 type Ctx = Pick<ShellContext, "memberships" | "supervised"> &
-  Partial<Pick<ShellContext, "unreadNotifications">>;
+  Partial<Pick<ShellContext, "unreadNotifications" | "isHospitalAdmin">>;
 const nurse: Ctx = {
   memberships: [{ department: ICU, role: "NURSE" }],
   supervised: [],
@@ -78,6 +78,7 @@ describe("buildNavigation", () => {
       null,
       "کارهای من",
       "ICU",
+      "افراد بخش‌ها",
     ]);
     expect(allItems(headNurse).map((i) => i.href)).toEqual([
       "/home",
@@ -88,16 +89,42 @@ describe("buildNavigation", () => {
       "/departments/icu/schedule",
       "/departments/icu/requests",
       "/departments/icu/history",
+      "/departments/icu/people",
     ]);
   });
 
-  it("gives a supervisor review pages only", () => {
+  it("gives a supervisor review and scoped people pages", () => {
     const nav = buildNavigation(supervisor);
-    expect(labels(nav.primary)).toEqual(["بررسی برنامه‌ها", "اعلان‌ها"]);
+    expect(labels(nav.primary)).toEqual([
+      "بررسی برنامه‌ها",
+      "اعلان‌ها",
+      "بیشتر",
+    ]);
     expect(allItems(supervisor).map((i) => i.href)).toEqual([
+      "/departments/icu/people",
+      "/departments/er/people",
       "/review",
       "/notifications",
     ]);
+  });
+
+  it("gives an admin a global entry without implicit department/schedule privileges", () => {
+    const ctx: Ctx = { ...nobody, isHospitalAdmin: true };
+    expect(buildNavigation(ctx).primary[0]?.href).toBe("/admin/personnel");
+    expect(allItems(ctx).map((i) => i.href)).toContain("/admin/personnel");
+    expect(allItems(ctx).some((i) => i.href.startsWith("/departments/"))).toBe(
+      false,
+    );
+    expect(homePath(ctx)).toBe("/my-shifts");
+  });
+
+  it("deduplicates shared head/supervisor people navigation and hides the global directory from both", () => {
+    const ctx: Ctx = { ...headNurse, supervised: [ICU, ER] };
+    expect(
+      allItems(ctx).filter((i) => String(i.href) === "/departments/icu/people"),
+    ).toHaveLength(1);
+    expect(allItems(ctx).map((i) => i.href)).not.toContain("/admin/personnel");
+    expect(allItems(nurse).some((i) => i.icon === "personnel")).toBe(false);
   });
 
   it("names each department for a Head Nurse of several", () => {

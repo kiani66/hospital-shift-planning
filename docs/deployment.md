@@ -126,3 +126,53 @@ Behavior:
 
 - Move Neon to a paid plan for longer point-in-time restore and no cold starts.
 - Confirm data-residency and retention requirements for staff data.
+
+## Phase 10 production upgrade and first Hospital Admin
+
+Phase 10 supplies application commands and the completed personnel management UI. Production
+migration/deployment must be performed separately through the normal release process; local
+review and tests do not migrate production or establish its first Hospital Admin.
+
+1. Review migration `0008_hospital_admin`: one additive default-false boolean column, no grants,
+   no deletes, no membership-role changes. The previous deployment remains compatible.
+2. Through the normal production release process, apply migrations before the new application
+   starts (the existing `vercel-build` path does this). Do not run the demo seed in production.
+3. Choose an existing active password-provisioned account deliberately. If needed, use the
+   existing `db:provision-user` operator workflow first; it refreshes an existing password and
+   reactivates that account, so check its documented effects before running it.
+4. In a secure operator shell with the intended direct database connection configured, set
+   `BOOTSTRAP_ADMIN_EMAIL` to that exact account and `BOOTSTRAP_ADMIN_CONFIRM` to
+   `ESTABLISH_FIRST_HOSPITAL_ADMIN`, then explicitly run `pnpm db:bootstrap-admin`.
+5. Clear operator inputs afterward. Verify that the selected account is the sole initially
+   granted admin and that `user.hospitalAdminBootstrapped` exists. No credentials are printed or
+   audited. The selected user's next request loads system authority from the database.
+
+Bootstrap refuses unknown, inactive or passwordless accounts and any pre-existing admin,
+including inactive ones; simultaneous attempts establish only one. It cannot be used to promote
+additional accounts. Subsequent grants/removals use `setHospitalAdmin` as an authenticated admin
+command through the Hospital Admin person-detail UI. Account deactivation/authority removal
+cannot remove the last active credential-provisioned admin; passwordless legacy admin flags do
+not count as replacements. New grants require an active account with credentials, and reactivating
+stored admin authority requires credentials provisioned through the explicit operator workflow.
+Bootstrap has no HTTP endpoint or UI adapter; no automatic
+admin grant goes to the seed, deployer, first user, Head Nurse or Supervisor.
+
+### Migration ordering and rollback
+
+`0008_hospital_admin` is an additive, non-null boolean with a constant false default. Existing
+accounts keep their identity, status, credentials and relations; the migration performs no data
+backfill or promotion. Apply it before any Phase 10 server starts: the new request actor reads
+the flag. The previous application can run against the expanded schema. Vercel's existing
+`vercel-build` migration-before-build ordering satisfies this; do not set `SKIP_DB_MIGRATIONS=1`
+on an unmigrated target. Confirm Preview URLs point to an isolated Neon branch.
+
+PostgreSQL still takes a table lock for `ALTER TABLE`; use the normal release window and inspect
+long-running transactions before release. Verify the migration journal and health endpoint,
+then deliberately bootstrap the selected account and smoke-test its management access. Verify
+Head Nurse/Supervisor scope and Nurse denial, and that existing schedules remain readable.
+
+For application rollback, retain the additive column and all audit/relation history and redeploy
+the previous application. The old app has no management UI; it does not undo completed account
+or relation changes, including deactivations. Do not drop the column while Phase 10 servers are
+running, or clear admin flags as a rollback shortcut. There is no automatic down migration or
+general recovery command; any data correction needs a separately reviewed operator procedure.

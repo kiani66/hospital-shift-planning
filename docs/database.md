@@ -19,19 +19,19 @@ TypeScript schema.
 
 ## Tables
 
-| Area                | Tables                                                                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| People and access   | `users`, `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments`                           |
-| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                 |
-| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role) |
-| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                           |
-| Working copy        | `shift_assignments`                                                                                                                        |
-| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                    |
-| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                           |
-| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)  |
-| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                   |
-| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                     |
-| Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                              |
+| Area                | Tables                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| People and access   | `users` (system-level `is_hospital_admin`, default false), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments` |
+| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                         |
+| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role)                         |
+| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                   |
+| Working copy        | `shift_assignments`                                                                                                                                                |
+| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                                            |
+| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                                                   |
+| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                          |
+| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                           |
+| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                             |
+| Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                                                      |
 
 ## Where each rule is enforced
 
@@ -90,3 +90,30 @@ cannot be chosen). `OTHER` always requires a note (check `change_reasons_other_n
   automatically.
 - `pnpm test:integration` wipes and migrates `TEST_DATABASE_URL`, whose database name must
   contain `test`.
+- The last-active-admin browser fixture uses the designated `TEST_DATABASE_URL` role to create
+  a uniquely named disposable `hsp_authority_e2e_test_*` database, apply existing migrations and
+  run a separate production server. That test role needs database-creation permission. The fixture
+  shuts down its server and drops only its own database; shared E2E/demo Admins are untouched.
+
+## Phase 10 data model and lifecycle
+
+Migration `0008_hospital_admin` adds `users.is_hospital_admin boolean NOT NULL DEFAULT false`.
+Existing users remain unchanged and none becomes admin automatically. Membership roles remain
+NURSE/HEAD_NURSE; Supervisor history stays in `supervisor_assignments`. No new table is added.
+
+The last-usable-admin invariant counts only active Hospital Admins with provisioned credentials;
+passwordless legacy admin flags cannot permit removing/deactivating the last usable admin.
+New grants require an active credential-provisioned target, and activating stored admin authority
+requires credentials. These checks reuse a safe repository predicate and require no migration.
+The invariant is enforced by application commands under PostgreSQL
+transaction-scoped advisory lock 7310423 (shared with first-admin bootstrap), not a new database
+trigger. Existing date checks and exclusion constraints remain intact. Relation writes address IDs
+and preserve predecessor rows; role transitions/transfers end on D-1 and insert a successor on D.
+New roster snapshots filter inactive users without changing old snapshots. Management events reuse
+the existing nullable-department/schedule, append-only audit schema and text action names.
+
+Management screens reuse these existing relations; Slices 2–4 require no further migration.
+Account deactivation neither ends relations nor alters approved versions; reactivation uses
+still-effective access. Historical and future relation correction is deliberately deferred.
+See [deployment.md](deployment.md#phase-10-production-upgrade-and-first-hospital-admin) for
+migration ordering, explicit first-admin bootstrap and rollback considerations.

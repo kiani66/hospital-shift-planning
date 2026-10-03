@@ -6,6 +6,8 @@ import {
   type AssignmentChange,
 } from "../../domain/schedule/assignment-editing";
 import { isIsoDate, type IsoDate } from "../../domain/shared/dates";
+import { ValidationError } from "../../domain/shared/errors";
+import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { MAX_PERIOD_DAYS } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
 import { SHIFT_CODES } from "../../domain/shifts/shift-type";
@@ -115,6 +117,16 @@ export const setAssignments = defineCommand({
       }),
     );
     if (changes.length === 0) return { revision: schedule.revision, changes };
+    if (
+      !(await lockActiveSchedulingUsers(
+        uow.tx,
+        changes.filter((c) => c.after !== null).map((c) => c.nurseId),
+      ))
+    )
+      throw new ValidationError(
+        "Inactive accounts cannot receive new assignments",
+        "nurseId",
+      );
     // Checked after authorizing, so an outsider learns nothing from CONFLICT.
     if (schedule.revision !== input.expectedRevision) throw new ConflictError();
 

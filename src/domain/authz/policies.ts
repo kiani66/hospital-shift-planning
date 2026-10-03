@@ -29,6 +29,21 @@ const HEAD_NURSE_ACTIONS = [
   "schedule.adjust",
 ] as const;
 
+/** Administrative writes are system-scoped, never inferred from department.manage. */
+export const HOSPITAL_ADMIN_ACTIONS = [
+  "user.list",
+  "user.create",
+  "user.updateProfile",
+  "user.setActive",
+  "user.setHospitalAdmin",
+  "membership.add",
+  "membership.end",
+  "membership.transition",
+  "supervisor.assign",
+  "supervisor.end",
+] as const;
+export type HospitalAdminAction = (typeof HOSPITAL_ADMIN_ACTIONS)[number];
+
 type HeadNurseAction = (typeof HEAD_NURSE_ACTIONS)[number];
 
 interface DepartmentResource {
@@ -36,10 +51,11 @@ interface DepartmentResource {
 }
 
 /** The resource each action is decided against. Status gating is the state machine's job. */
-export interface ActionResources extends Record<
-  HeadNurseAction,
-  DepartmentResource
-> {
+export interface ActionResources
+  extends
+    Record<HeadNurseAction, DepartmentResource>,
+    Record<HospitalAdminAction, Record<string, never>> {
+  "personnel.view": DepartmentResource;
   /** Department grid: every nurse's preferences and assignments. */
   "schedule.viewDepartment": DepartmentResource & {
     readonly status: ScheduleStatus;
@@ -81,6 +97,7 @@ export type Action = keyof ActionResources;
 
 export type AuthzDenial =
   | "ACTOR_INACTIVE"
+  | "NOT_HOSPITAL_ADMIN"
   | "NOT_HEAD_NURSE_OF_DEPARTMENT"
   | "NOT_MEMBER_OF_DEPARTMENT"
   | "NOT_COUNTERPART"
@@ -117,6 +134,16 @@ export function decide<A extends Action>(
     const { recipientId } = resource as ActionResources["notification.access"];
     return recipientId === actor.userId ? allow : deny("NOT_RECIPIENT");
   }
+  if ((HOSPITAL_ADMIN_ACTIONS as readonly string[]).includes(action))
+    return actor.isHospitalAdmin ? allow : deny("NOT_HOSPITAL_ADMIN");
+  if (action === "personnel.view") {
+    const { departmentId } = resource as DepartmentResource;
+    return actor.isHospitalAdmin ||
+      isHeadNurseOf(actor, departmentId) ||
+      isSupervisorOf(actor, departmentId)
+      ? allow
+      : deny("NO_DEPARTMENT_ACCESS");
+  }
   const { departmentId } = resource as DepartmentResource;
   const headNurse = isHeadNurseOf(actor, departmentId);
   const supervisor = isSupervisorOf(actor, departmentId);
@@ -127,7 +154,10 @@ export function decide<A extends Action>(
   // Narrow the resource by action for the remaining, resource-specific rules.
   type DepartmentAction = Exclude<
     Action,
-    HeadNurseAction | "notification.access"
+    | HeadNurseAction
+    | HospitalAdminAction
+    | "personnel.view"
+    | "notification.access"
   >;
   const r = resource as ActionResources[DepartmentAction];
   switch (action as DepartmentAction) {

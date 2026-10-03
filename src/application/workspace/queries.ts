@@ -17,6 +17,7 @@ export interface DepartmentSummary {
 
 /** What the authenticated shell shows: all of it derived from the trusted actor. */
 export interface ShellContext {
+  readonly isHospitalAdmin: boolean;
   readonly user: { readonly displayName: string; readonly email: string };
   /** Current memberships (a HEAD_NURSE is also a nurse), ordered by department code. */
   readonly memberships: readonly {
@@ -52,6 +53,7 @@ export async function getShellContext(ctx: AppContext): Promise<ShellContext> {
     a.code.localeCompare(b.code);
 
   return {
+    isHospitalAdmin: actor.isHospitalAdmin,
     user: { displayName: user.displayName, email: user.email },
     memberships: actor.memberships
       .flatMap((m) => {

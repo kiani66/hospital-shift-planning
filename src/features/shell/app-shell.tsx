@@ -19,6 +19,7 @@ const ROLE_LABELS = { NURSE: "پرستار", HEAD_NURSE: "سرپرستار" } as
 /** One line per department relation, e.g. "سرپرستار · ICU". */
 export function describeRoles(ctx: ShellContext): string[] {
   return [
+    ...(ctx.isHospitalAdmin ? ["مدیر بیمارستان"] : []),
     ...ctx.memberships.map(
       (m) => `${ROLE_LABELS[m.role]} · ${m.department.name}`,
     ),

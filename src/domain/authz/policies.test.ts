@@ -16,42 +16,49 @@ const actors = {
   nurse: {
     userId: "nurse",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [{ departmentId: DEPT, role: "NURSE" }],
     supervisedDepartmentIds: [],
   },
   headNurse: {
     userId: "head",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [{ departmentId: DEPT, role: "HEAD_NURSE" }],
     supervisedDepartmentIds: [],
   },
   otherHeadNurse: {
     userId: "head-er",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [{ departmentId: "er", role: "HEAD_NURSE" }],
     supervisedDepartmentIds: [],
   },
   otherNurse: {
     userId: "nurse-er",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [{ departmentId: "er", role: "NURSE" }],
     supervisedDepartmentIds: [],
   },
   supervisor: {
     userId: "sup",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [],
     supervisedDepartmentIds: ["er", DEPT],
   },
   otherSupervisor: {
     userId: "sup-er",
     isActive: true,
+    isHospitalAdmin: false,
     memberships: [],
     supervisedDepartmentIds: ["er"],
   },
   inactiveHeadNurse: {
     userId: "head-old",
     isActive: false,
+    isHospitalAdmin: false,
     memberships: [{ departmentId: DEPT, role: "HEAD_NURSE" }],
     supervisedDepartmentIds: [DEPT],
   },
@@ -403,6 +410,7 @@ describe("notifications", () => {
     const former: Actor = {
       userId: "former",
       isActive: true,
+      isHospitalAdmin: false,
       memberships: [],
       supervisedDepartmentIds: [],
     };
@@ -571,5 +579,96 @@ describe("change-request cancellation and consent", () => {
       allowed: false,
       reason: "NOT_HEAD_NURSE_OF_DEPARTMENT",
     });
+  });
+});
+
+describe("Phase 10 Hospital Admin policies", () => {
+  it.each([
+    "user.setHospitalAdmin",
+    "supervisor.assign",
+    "supervisor.end",
+  ] as const)(
+    "requires active system authority even for combined department roles: %s",
+    (action) => {
+      const combined = {
+        ...actors.headNurse,
+        supervisedDepartmentIds: [DEPT],
+        isHospitalAdmin: true,
+      };
+      expect(decide(combined, action, {})).toEqual({ allowed: true });
+      expect(
+        decide({ ...combined, isHospitalAdmin: false }, action, {}).allowed,
+      ).toBe(false);
+      expect(decide({ ...combined, isActive: false }, action, {}).allowed).toBe(
+        false,
+      );
+    },
+  );
+  const admin: Actor = {
+    userId: "admin",
+    isActive: true,
+    isHospitalAdmin: true,
+    memberships: [],
+    supervisedDepartmentIds: [],
+  };
+  const actions = [
+    "user.list",
+    "user.create",
+    "user.updateProfile",
+    "user.setActive",
+    "user.setHospitalAdmin",
+    "membership.add",
+    "membership.end",
+    "membership.transition",
+    "supervisor.assign",
+    "supervisor.end",
+  ] as const;
+  it.each(actions)(
+    "allows system admin for %s without department membership",
+    (action) => {
+      expect(decide(admin, action, {})).toEqual({ allowed: true });
+    },
+  );
+  it.each(actions)("denies every department role for %s", (action) => {
+    for (const actor of [actors.nurse, actors.headNurse, actors.supervisor])
+      expect(decide(actor, action, {})).toEqual({
+        allowed: false,
+        reason: "NOT_HOSPITAL_ADMIN",
+      });
+    expect(decide({ ...admin, isActive: false }, action, {})).toEqual({
+      allowed: false,
+      reason: "ACTOR_INACTIVE",
+    });
+  });
+  it.each([admin, actors.headNurse, actors.supervisor])(
+    "allows scoped personnel reads %#",
+    (actor) => {
+      expect(decide(actor, "personnel.view", { departmentId: DEPT })).toEqual({
+        allowed: true,
+      });
+    },
+  );
+  it.each([actors.nurse, actors.otherHeadNurse, actors.otherSupervisor])(
+    "denies unscoped personnel reads %#",
+    (actor) => {
+      expect(decide(actor, "personnel.view", { departmentId: DEPT })).toEqual({
+        allowed: false,
+        reason: "NO_DEPARTMENT_ACCESS",
+      });
+    },
+  );
+  it("does not grant Hospital Admin schedule editing or approval powers", () => {
+    expect(
+      decide(admin, "department.manage", { departmentId: DEPT }).allowed,
+    ).toBe(false);
+    expect(
+      decide(admin, "assignment.edit", { departmentId: DEPT }).allowed,
+    ).toBe(false);
+    expect(
+      decide(admin, "schedule.approve", {
+        departmentId: DEPT,
+        submittedBy: "someone",
+      }).allowed,
+    ).toBe(false);
   });
 });

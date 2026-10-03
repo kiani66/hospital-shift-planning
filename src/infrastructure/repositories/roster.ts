@@ -1,6 +1,8 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { MembershipRole } from "../../domain/authz/actor";
+import { ValidationError } from "../../domain/shared/errors";
+import { lockActiveSchedulingUsers } from "./management";
 import type { IsoDate } from "../../domain/shared/dates";
 import type { DbExecutor, Transaction } from "../db/database";
 import {
@@ -31,6 +33,19 @@ export async function snapshotRosterFromMemberships(
   input: { scheduleId: string; addedBy: string },
 ): Promise<number> {
   const m = departmentMemberships;
+  // Locks candidate accounts until the surrounding schedule-creation transaction
+  // commits. Deactivation either wins first or waits for this snapshot.
+  const candidates = await db.execute<{ id: string }>(sql`
+    select ${users.id} from ${users}
+    where ${users.isActive} = true and exists (
+      select 1 from ${m} join ${schedules} on ${m.departmentId} = ${schedules.departmentId}
+      where ${schedules.id} = ${input.scheduleId} and ${m.userId} = ${users.id}
+        and ${m.startedOn} <= ${schedules.periodEnd}
+        and (${m.endedOn} is null or ${m.endedOn} >= ${schedules.periodStart})
+    ) order by ${users.id} for share
+  `);
+  const ids = candidates.rows.map((row) => row.id);
+  if (ids.length === 0) return 0;
   const result = await db.execute(sql`
     insert into ${scheduleRoster} (schedule_id, user_id, role, added_by)
     select distinct on (${m.userId}) ${schedules.id}, ${m.userId}, ${m.role}, ${input.addedBy}::uuid
@@ -38,7 +53,8 @@ export async function snapshotRosterFromMemberships(
     join ${m} on ${m.departmentId} = ${schedules.departmentId}
       and ${m.startedOn} <= ${schedules.periodEnd}
       and (${m.endedOn} is null or ${m.endedOn} >= ${schedules.periodStart})
-    where ${schedules.id} = ${input.scheduleId}
+    join ${users} on ${users.id} = ${m.userId} and ${users.isActive} = true
+    where ${schedules.id} = ${input.scheduleId} and ${inArray(users.id, ids)}
     order by ${m.userId}, ${m.startedOn} desc
     on conflict do nothing
   `);
@@ -54,6 +70,11 @@ export async function addToRoster(
     addedBy: string;
   },
 ): Promise<void> {
+  if (!(await lockActiveSchedulingUsers(db, [input.userId])))
+    throw new ValidationError(
+      "Inactive account cannot join a new roster",
+      "userId",
+    );
   await db.insert(scheduleRoster).values(input);
 }
 
@@ -160,4 +181,23 @@ export async function listFormerMembersOnRoster(
     )
     .orderBy(scheduleRoster.userId);
   return rows.map((r) => r.userId);
+}
+
+/** Active candidates only; listRoster remains the unchanged historical snapshot. */
+export async function listSchedulingRoster(
+  db: DbExecutor,
+  scheduleId: string,
+): Promise<RosterEntry[]> {
+  return db
+    .select({
+      userId: scheduleRoster.userId,
+      displayName: users.displayName,
+      role: scheduleRoster.role,
+    })
+    .from(scheduleRoster)
+    .innerJoin(users, eq(users.id, scheduleRoster.userId))
+    .where(
+      and(eq(scheduleRoster.scheduleId, scheduleId), eq(users.isActive, true)),
+    )
+    .orderBy(asc(users.displayName));
 }

@@ -75,6 +75,7 @@ describe("memberships and the domain actor", () => {
     expect(await loadActor(db, U.icuHead.id, TODAY)).toEqual({
       userId: U.icuHead.id,
       isActive: true,
+      isHospitalAdmin: false,
       memberships: [{ departmentId: DEMO_ICU.id, role: "HEAD_NURSE" }],
       supervisedDepartmentIds: [],
     });

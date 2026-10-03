@@ -19,6 +19,7 @@ export class ValidationError extends DomainError {
   constructor(
     message: string,
     readonly field?: string,
+    readonly reason?: string,
   ) {
     super(message);
   }

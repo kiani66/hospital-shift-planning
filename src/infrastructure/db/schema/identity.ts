@@ -21,6 +21,8 @@ export const users = pgTable(
     /** argon2id hash; set in Phase 3. Never written to audit or notifications. */
     passwordHash: text(),
     isActive: boolean().notNull().default(true),
+    /** System-level Phase 10 authority; existing users default to no authority. */
+    isHospitalAdmin: boolean().notNull().default(false),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),
   },

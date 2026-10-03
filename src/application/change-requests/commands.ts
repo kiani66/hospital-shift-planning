@@ -31,7 +31,10 @@ import {
 } from "../../infrastructure/repositories/change-requests";
 import { listActiveHeadNurseIds } from "../../infrastructure/repositories/memberships";
 import type { NewNotification } from "../../infrastructure/repositories/notifications";
-import { listRoster } from "../../infrastructure/repositories/roster";
+import {
+  listRoster,
+  listSchedulingRoster,
+} from "../../infrastructure/repositories/roster";
 import {
   findScheduleById,
   lockScheduleForShare,
@@ -161,7 +164,7 @@ export const createChangeRequest = defineCommand({
     const requesterId = uow.actor.userId;
     const counterpartId = input.counterpartId ?? null;
     const [roster, reason, visible] = await Promise.all([
-      listRoster(uow.tx, schedule.id),
+      listSchedulingRoster(uow.tx, schedule.id),
       findChangeReason(uow.tx, input.reasonCode),
       visibleDayCells(
         uow.tx,

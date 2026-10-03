@@ -57,6 +57,13 @@
       "when": 1790857578348,
       "tag": "0007_change_reasons_reference_data",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791012736492,
+      "tag": "0008_hospital_admin",
+      "breakpoints": true
     }
   ]
 }
