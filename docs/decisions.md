@@ -1103,3 +1103,34 @@ Existing D25 sign-in destinations stay unchanged. Hospital Admin has a prominent
 entry, while scoped department entries use the existing mobile “more” navigation. Read-only
 screens have no mutation controls or Server Actions. Mutation UI and the other D83 deferred
 features remain deferred; this slice needs no migration and changes no historical records.
+
+### D85 · Ordinary account and membership UI (Phase 10 Slice 3)
+
+Hospital Admin now creates password-provisioned accounts at `/admin/personnel/new`, edits
+display name/email, activates/deactivates accounts and adds/ends/transfers/changes membership
+roles from person detail. Thin Server Actions parse presentation inputs, obtain the trusted
+actor and invoke the D79–D83 transactional commands; no business writes or audit logic live
+in UI. Creation returns only the new account id for navigation and never grants system authority.
+Initial passwords are cleared from the form after submission and never returned in action state.
+Membership date entry is typed Jalali year/month/day, accepting Persian, Arabic or Latin digits
+within the calendar adapter's supported years; conversion to ISO happens again on the server.
+
+Focused dialogs explain account status versus membership termination, inclusive end dates and
+predecessor/successor history. Deactivation requires explicit confirmation. Ending/transitions
+are offered only on currently-effective memberships, following D81; future/ended history stays
+read-only. A transition on a relation's first day is refused with specific Persian date feedback;
+a later effective date may be chosen. Successor end dates are explicit, with existing fixed-term
+ends prefilled and a deliberate blank meaning open-ended. Existing schedules/rosters are preserved.
+
+Forms freeze expected profile/status/end-date values when opened. Account-status commands now
+accept an optional expected active flag, checked after the existing administration lock; these
+Server Actions require it. Older explicit callers retain their idempotent behavior. Relevant
+stale changes fail with conflict feedback and an explicit refresh/review control, never an automatic
+overwrite. Stable validation/conflict reason codes support Persian feedback without exposing raw
+server/database messages. Successful mutations refresh the shell and affected views; deliberate
+self-deactivation redirects to sign-in, subject to D82's last-active-admin invariant.
+
+Head Nurse/Supervisor department screens stay read-only and Nurses gain no management access.
+Hospital Admin authority grants/removals, Supervisor assignment mutations, department lifecycle,
+bulk tools, deletion, recovery and arbitrary historical correction remain deferred. No migration,
+new authority or additional audit event type is introduced in this slice.

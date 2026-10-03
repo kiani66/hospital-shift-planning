@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getPersonnelDirectory } from "@/application/management/personnel-queries";
+import { buttonClasses } from "@/components/ui/button";
 import { requireRequestContext } from "@/features/auth/guards";
 import { DirectoryView } from "@/features/management/directory-view";
 import { managementPageRead } from "@/features/management/page-read";
@@ -21,8 +23,13 @@ export default async function PersonnelPage({
     <>
       <PageHeader
         title="کاربران بیمارستان"
-        description="مشاهده حساب‌ها و دسترسی جاری افراد؛ فقط خواندنی."
+        description="حساب‌ها، دسترسی جاری افراد و مدیریت عضویت بخش‌ها."
       />
+      <div className="mb-5">
+        <Link href="/admin/personnel/new" className={buttonClasses()}>
+          ایجاد کاربر
+        </Link>
+      </div>
       <DirectoryView directory={directory} />
     </>
   );

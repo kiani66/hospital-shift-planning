@@ -27,6 +27,7 @@ export function Dialog({
   headerActions,
   stickyHeader = false,
   focusTitle = false,
+  preventClose = false,
   children,
   className,
 }: {
@@ -38,6 +39,8 @@ export function Dialog({
   headerActions?: ReactNode;
   stickyHeader?: boolean;
   focusTitle?: boolean;
+  /** Keep an in-flight write's confirmation visible until the server responds. */
+  preventClose?: boolean;
   children: ReactNode;
   className?: string;
 }) {
@@ -66,9 +69,13 @@ export function Dialog({
         // close (a confirmation inside a detail dialog) must not close this one.
         if (event.target === event.currentTarget) onClose();
       }}
+      onCancel={(event) => {
+        if (preventClose) event.preventDefault();
+      }}
       onClick={(event) => {
         // A click on the element itself (not its content) is the backdrop.
-        if (event.target === event.currentTarget) event.currentTarget.close();
+        if (!preventClose && event.target === event.currentTarget)
+          event.currentTarget.close();
       }}
       className={cn(
         "m-auto w-[min(calc(100vw-2rem),32rem)] max-w-none rounded-xl border bg-background p-0 text-foreground shadow-xl",
@@ -108,6 +115,7 @@ export function Dialog({
             <button
               type="button"
               aria-label={closeLabel}
+              disabled={preventClose}
               onClick={() => ref.current?.close()}
               className="-me-2 -mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
             >

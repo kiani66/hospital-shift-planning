@@ -80,6 +80,18 @@ export async function getPersonnelDirectory(
   };
 }
 
+/** Safe active-department options and calendar day for admin lifecycle forms. */
+export async function getMembershipFormOptions(ctx: AppContext) {
+  const today = await requirePersonnelReadAccess(ctx);
+  const departments = await listDepartments(ctx.db);
+  return {
+    today,
+    departments: departments
+      .filter((d) => d.isActive)
+      .map((d) => ({ id: d.id, code: d.code, name: d.name })),
+  };
+}
+
 export async function getPersonnelDetail(
   ctx: AppContext,
   userId: string,

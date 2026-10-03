@@ -50,7 +50,7 @@ export const updateAccountProfile = defineCommand({
       user.email !== input.expectedEmail ||
       user.displayName !== input.expectedDisplayName
     )
-      throw new ConflictError();
+      throw new ConflictError(undefined, "PROFILE_CHANGED");
     const after = { email: input.email, displayName: input.displayName };
     if (user.email === after.email && user.displayName === after.displayName)
       return user;
@@ -70,10 +70,19 @@ export const updateAccountProfile = defineCommand({
 
 export const setAccountActive = defineCommand({
   name: "user.setActive",
-  input: z.object({ userId: z.uuid(), isActive: z.boolean() }),
+  input: z.object({
+    userId: z.uuid(),
+    isActive: z.boolean(),
+    expectedIsActive: z.boolean().optional(),
+  }),
   async handler(uow, input) {
     await authorizeAdministration(uow, "user.setActive");
     const user = await requireUser(uow, input.userId);
+    if (
+      input.expectedIsActive !== undefined &&
+      user.isActive !== input.expectedIsActive
+    )
+      throw new ConflictError(undefined, "ACCOUNT_STATUS_CHANGED");
     if (user.isActive === input.isActive) return user;
     assertActiveAdminRemains({
       wasActiveAdmin: user.isActive && user.isHospitalAdmin,

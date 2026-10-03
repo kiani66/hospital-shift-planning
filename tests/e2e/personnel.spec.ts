@@ -67,7 +67,7 @@ test("Hospital Admin reaches the directory, searches/filters, and reads Jalali h
   }
   await expect(
     page.locator("main").getByRole("button", {
-      name: /ایجاد کاربر|ویرایش|فعال‌سازی|غیرفعال‌سازی|انتقال|تغییر نقش|افزودن عضویت/,
+      name: /اعطای نقش مدیر|حذف نقش مدیر|افزودن سوپروایزر|پایان نظارت/,
     }),
   ).toHaveCount(0);
   expect(

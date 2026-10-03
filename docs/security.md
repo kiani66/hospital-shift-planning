@@ -130,3 +130,18 @@ local personnel names/roles/account status, including current Supervisors. They 
 global identity fields or links to global user detail. Unknown/denied management pages answer
 the same 404; inactive sessions still redirect to sign-in. Filter/pagination values confer no
 authority. No management write path, audit metadata or credentials are added to these screens.
+
+Phase 10 Slice 3 adds ordinary Hospital Admin Server Actions for account creation/profile/status
+and membership add/end/transition only. Every action selects its allowed fields, validates dates
+through the Jalali presentation adapter, gets the trusted request context and invokes the existing
+command, which authorizes again under the administration lock. Extra submitted admin authority,
+Supervisor, password-hash/token and other security fields are discarded. Successful action DTOs
+contain fixed Persian feedback and, for creation only, a validated destination user id; submitted
+values and command records are not echoed. Password inputs are cleared immediately after the
+browser captures the submission. Public provisioning/recovery or a CLI bridge is not added.
+
+Expected profile and membership end values are captured when dialogs open. Status actions require
+the optional command-level expected active flag, rejecting stale forms under the same lock.
+Deactivation has explicit confirmation and preserves relations/old rosters. Last-active-admin
+protection applies to these UI calls too; deliberate self-deactivation redirects to sign-in after
+commit. Elevated authority and Supervisor mutation commands remain unavailable through UI actions.

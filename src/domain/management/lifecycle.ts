@@ -8,7 +8,11 @@ export interface RelationDates {
 
 export function validateRelationDates(dates: RelationDates): void {
   if (dates.endedOn !== null && dates.endedOn < dates.startedOn)
-    throw new ValidationError("End date precedes start date", "endedOn");
+    throw new ValidationError(
+      "End date precedes start date",
+      "endedOn",
+      "INVALID_RELATION_RANGE",
+    );
 }
 
 /** Phase 10 ends current relations; arbitrary historical corrections are deferred. */
@@ -24,13 +28,19 @@ export function validateRelationEnd(
     throw new ValidationError(
       "The relation must be effective today",
       "relationId",
+      "RELATION_NOT_CURRENT",
     );
   if (endedOn < today)
-    throw new ValidationError("Cannot end a relation in the past", "endedOn");
+    throw new ValidationError(
+      "Cannot end a relation in the past",
+      "endedOn",
+      "END_IN_PAST",
+    );
   if (relation.endedOn !== null && endedOn > relation.endedOn)
     throw new ValidationError(
       "Ending cannot extend a fixed-term relation",
       "endedOn",
+      "TERM_EXTENSION",
     );
 }
 
@@ -44,6 +54,7 @@ export function predecessorEnd(
     throw new ValidationError(
       "Transition must preserve the predecessor's history",
       "startedOn",
+      "TRANSITION_HISTORY_BOUNDARY",
     );
   // A transition today normally ends its predecessor yesterday. Validate its
   // current effectiveness separately rather than treating it as an ordinary end.
@@ -54,11 +65,13 @@ export function predecessorEnd(
     throw new ValidationError(
       "The predecessor must be effective today",
       "relationId",
+      "RELATION_NOT_CURRENT",
     );
   if (relation.endedOn !== null && endedOn > relation.endedOn)
     throw new ValidationError(
       "Transition cannot extend the predecessor",
       "startedOn",
+      "TERM_EXTENSION",
     );
   return endedOn;
 }
@@ -77,5 +90,6 @@ export function assertActiveAdminRemains(input: {
     throw new ValidationError(
       "Cannot remove the last active Hospital Admin",
       "hospitalAdmin",
+      "LAST_ACTIVE_ADMIN",
     );
 }

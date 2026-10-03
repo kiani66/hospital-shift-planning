@@ -47,7 +47,8 @@ export const endDepartmentMembership = defineCommand({
     await authorizeAdministration(uow, "membership.end");
     const before = await findMembership(uow.tx, input.relationId);
     if (!before) throw new NotFoundError("Membership");
-    if (before.endedOn !== input.expectedEndedOn) throw new ConflictError();
+    if (before.endedOn !== input.expectedEndedOn)
+      throw new ConflictError(undefined, "MEMBERSHIP_CHANGED");
     validateRelationEnd(before, input.endedOn, todayIn(APP_TIMEZONE, uow.now));
     if (before.endedOn === input.endedOn) return before;
     await updateMembershipEnd(uow.tx, before.id, input.endedOn);
@@ -78,7 +79,8 @@ export const transitionDepartmentMembership = defineCommand({
     await authorizeAdministration(uow, "membership.transition");
     const before = await findMembership(uow.tx, input.relationId);
     if (!before) throw new NotFoundError("Membership");
-    if (before.endedOn !== input.expectedEndedOn) throw new ConflictError();
+    if (before.endedOn !== input.expectedEndedOn)
+      throw new ConflictError(undefined, "MEMBERSHIP_CHANGED");
     if (
       before.departmentId === input.departmentId &&
       before.role === input.role
@@ -86,6 +88,7 @@ export const transitionDepartmentMembership = defineCommand({
       throw new ValidationError(
         "Transition must change department or role",
         "role",
+        "UNCHANGED_TRANSITION",
       );
     validateRelationDates(input);
     const endedOn = predecessorEnd(

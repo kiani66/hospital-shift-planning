@@ -1,4 +1,5 @@
 import { Users } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type {
   AccessRelation,
@@ -58,10 +59,14 @@ export function RelationsSection({
   id,
   title,
   relations,
+  actions,
+  relationActions,
 }: {
   id: string;
   title: string;
   relations: readonly (AccessRelation | MembershipView)[];
+  actions?: ReactNode;
+  relationActions?: Readonly<Record<string, ReactNode>>;
 }) {
   return (
     <section aria-labelledby={id} className="space-y-4">
@@ -69,6 +74,7 @@ export function RelationsSection({
         id={id}
         title={title}
         icon={<Users aria-hidden="true" />}
+        actions={actions}
       />
       {relations.length === 0 ? (
         <EmptyState
@@ -121,6 +127,11 @@ export function RelationsSection({
                   )}
                 </dd>
               </dl>
+              {relationActions?.[r.id] && (
+                <div className="mt-4 border-t pt-3">
+                  {relationActions[r.id]}
+                </div>
+              )}
             </li>
           ))}
         </ol>

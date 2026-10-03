@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getMembershipFormOptions } from "@/application/management/personnel-queries";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { requireRequestContext } from "@/features/auth/guards";
 import { formatJalaliDateTime } from "@/features/calendar/jalali";
 import { readPersonPage } from "@/features/management/page-queries";
+import { AccountControls } from "@/features/management/account-controls";
+import { managementPageRead } from "@/features/management/page-read";
+import { MembershipControls } from "@/features/management/membership-controls";
 import {
   AccountStatus,
   RelationsSection,
@@ -19,8 +23,9 @@ export default async function PersonPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  await requireRequestContext();
+  const ctx = await requireRequestContext();
   const user = await readPersonPage((await params).userId);
+  const options = await managementPageRead(getMembershipFormOptions(ctx));
   return (
     <div className="space-y-6">
       <Link href="/admin/personnel" className={buttonClasses("outline")}>
@@ -28,7 +33,7 @@ export default async function PersonPage({
       </Link>
       <PageHeader
         title={user.displayName}
-        description="اطلاعات حساب و تاریخچه دسترسی؛ فقط خواندنی."
+        description="اطلاعات حساب، مدیریت عضویت و تاریخچه دسترسی."
       />
       <section
         aria-label="اطلاعات حساب"
@@ -73,11 +78,19 @@ export default async function PersonPage({
         <p className="text-sm text-muted-foreground">
           وضعیت حساب مستقل از روابط است؛ حساب غیرفعال دسترسی ورود ندارد.
         </p>
+        <AccountControls
+          user={{
+            id: user.id,
+            displayName: user.displayName,
+            email: user.email,
+            isActive: user.isActive,
+          }}
+        />
       </section>
-      <RelationsSection
-        id="current-memberships"
-        title="عضویت‌های جاری"
-        relations={user.memberships.filter((r) => r.status === "CURRENT")}
+      <MembershipControls
+        userId={user.id}
+        memberships={user.memberships.filter((r) => r.status === "CURRENT")}
+        options={options}
       />
       <RelationsSection
         id="current-supervisors"

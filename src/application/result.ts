@@ -47,6 +47,7 @@ export function toActionError(error: unknown): ActionError {
       return {
         code: "VALIDATION",
         message: error.message,
+        ...(error.reason && { reason: error.reason }),
         ...(error.field && { fieldErrors: { [error.field]: [error.message] } }),
       };
     }
