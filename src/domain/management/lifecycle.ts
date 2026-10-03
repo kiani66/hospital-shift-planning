@@ -76,7 +76,7 @@ export function predecessorEnd(
   return endedOn;
 }
 
-/** All callers count under the same database transaction lock. */
+/** Active admins here are credential-provisioned; callers count under one transaction lock. */
 export function assertActiveAdminRemains(input: {
   wasActiveAdmin: boolean;
   willBeActiveAdmin: boolean;

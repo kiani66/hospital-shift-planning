@@ -1,15 +1,19 @@
 import { z } from "zod";
 
-import { assertActiveAdminRemains } from "../../domain/management/lifecycle";
+import { ValidationError } from "../../domain/shared/errors";
 import { hashPassword } from "../../infrastructure/auth/password";
 import {
-  countHospitalAdmins,
+  hasAccountCredentials,
   updateAccount,
 } from "../../infrastructure/repositories/management";
 import { createUser } from "../../infrastructure/repositories/users";
 import { ConflictError } from "../errors";
 import { defineCommand } from "../use-case";
-import { authorizeAdministration, requireUser } from "./context";
+import {
+  assertUsableAdminRemains,
+  authorizeAdministration,
+  requireUser,
+} from "./context";
 import { accountProfileInput } from "./input";
 
 export const createAccount = defineCommand({
@@ -84,11 +88,19 @@ export const setAccountActive = defineCommand({
     )
       throw new ConflictError(undefined, "ACCOUNT_STATUS_CHANGED");
     if (user.isActive === input.isActive) return user;
-    assertActiveAdminRemains({
-      wasActiveAdmin: user.isActive && user.isHospitalAdmin,
-      willBeActiveAdmin: input.isActive && user.isHospitalAdmin,
-      activeAdminCount: await countHospitalAdmins(uow.tx),
-    });
+    const hasCredentials = await hasAccountCredentials(uow.tx, user.id);
+    if (input.isActive && user.isHospitalAdmin && !hasCredentials)
+      throw new ValidationError(
+        "Stored Hospital Admin authority requires provisioned credentials before activation",
+        "hospitalAdmin",
+        "ADMIN_ACTIVATION_REQUIRES_CREDENTIALS",
+      );
+    await assertUsableAdminRemains(
+      uow,
+      user,
+      { ...user, isActive: input.isActive },
+      hasCredentials,
+    );
     await updateAccount(uow.tx, user.id, { isActive: input.isActive }, uow.now);
     await uow.audit({
       action: input.isActive ? "user.activated" : "user.deactivated",
@@ -119,11 +131,27 @@ export const setHospitalAdmin = defineCommand({
     )
       throw new ConflictError(undefined, "ADMIN_AUTHORITY_CHANGED");
     if (user.isHospitalAdmin === input.isHospitalAdmin) return user;
-    assertActiveAdminRemains({
-      wasActiveAdmin: user.isActive && user.isHospitalAdmin,
-      willBeActiveAdmin: user.isActive && input.isHospitalAdmin,
-      activeAdminCount: await countHospitalAdmins(uow.tx),
-    });
+    const hasCredentials = await hasAccountCredentials(uow.tx, user.id);
+    if (input.isHospitalAdmin) {
+      if (!hasCredentials)
+        throw new ValidationError(
+          "Hospital Admin grants require provisioned credentials",
+          "hospitalAdmin",
+          "ADMIN_GRANT_REQUIRES_CREDENTIALS",
+        );
+      if (!user.isActive)
+        throw new ValidationError(
+          "Hospital Admin grants require an active target account",
+          "hospitalAdmin",
+          "ADMIN_GRANT_REQUIRES_ACTIVE_ACCOUNT",
+        );
+    }
+    await assertUsableAdminRemains(
+      uow,
+      user,
+      { ...user, isHospitalAdmin: input.isHospitalAdmin },
+      hasCredentials,
+    );
     await updateAccount(
       uow.tx,
       user.id,

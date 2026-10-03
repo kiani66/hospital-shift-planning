@@ -151,7 +151,10 @@ Bootstrap refuses unknown, inactive or passwordless accounts and any pre-existin
 including inactive ones; simultaneous attempts establish only one. It cannot be used to promote
 additional accounts. Subsequent grants/removals use `setHospitalAdmin` as an authenticated admin
 command through the Hospital Admin person-detail UI. Account deactivation/authority removal
-cannot remove the last active admin. Bootstrap has no HTTP endpoint or UI adapter; no automatic
+cannot remove the last active credential-provisioned admin; passwordless legacy admin flags do
+not count as replacements. New grants require an active account with credentials, and reactivating
+stored admin authority requires credentials provisioned through the explicit operator workflow.
+Bootstrap has no HTTP endpoint or UI adapter; no automatic
 admin grant goes to the seed, deployer, first user, Head Nurse or Supervisor.
 
 ### Migration ordering and rollback

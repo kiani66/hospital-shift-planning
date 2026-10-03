@@ -5,7 +5,10 @@ import { formatJalaliInput } from "../../src/features/calendar/jalali-input";
 import { mainNav, signInAndWait } from "./support/auth";
 import { lastAdminTest } from "./support/last-admin";
 import { provisionPersonnel } from "./support/personnel";
-import { readPersonMutationState } from "./support/personnel-mutations";
+import {
+  makePersonnelPasswordless,
+  readPersonMutationState,
+} from "./support/personnel-mutations";
 
 let fixture: Awaited<ReturnType<typeof provisionPersonnel>>;
 test.beforeEach(async () => {
@@ -97,17 +100,45 @@ test("admin grants/removes authority; the target's existing session gains/loses 
   }
 });
 
-test("inactive authority is visibly stored and does not activate the account", async ({
+test("new authority on an inactive account is refused without activation", async ({
   page,
 }) => {
   const target = fixture.people.timeline;
   await adminDetail(page, target.id);
   const dialog = await authority(page, true);
   await expect(
-    dialog.getByText(/تا فعال‌سازی صریح حساب هیچ دسترسی/),
+    dialog.getByText(/صریحاً فعال و دارای امکان ورود/),
   ).toBeVisible();
   await dialog
     .getByRole("button", { name: "اعطای نقش مدیر بیمارستان", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "ابتدا باید حساب کاربر فعال",
+  );
+  expect(
+    (await readPersonMutationState(fixture, target.id)).user,
+  ).toMatchObject({ isActive: false, isHospitalAdmin: false });
+  expect((await readPersonMutationState(fixture, target.id)).events).toEqual(
+    [],
+  );
+});
+
+test("deactivation retains previously granted authority visibly without granting access", async ({
+  page,
+}) => {
+  const target = fixture.people.nurse;
+  await adminDetail(page, target.id);
+  let dialog = await authority(page, true);
+  await dialog
+    .getByRole("button", { name: "اعطای نقش مدیر بیمارستان", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole("button", { name: "غیرفعال‌سازی حساب", exact: true })
+    .click();
+  dialog = page.getByRole("dialog", { name: "غیرفعال‌سازی حساب" });
+  await dialog
+    .getByRole("button", { name: "غیرفعال‌سازی حساب", exact: true })
     .click();
   await expect(dialog).not.toBeVisible();
   await expect(
@@ -121,6 +152,46 @@ test("inactive authority is visibly stored and does not activate the account", a
   await expect(
     page.getByRole("button", { name: "فعال‌سازی حساب", exact: true }),
   ).toBeVisible();
+});
+
+test("passwordless admin grant shows a Persian error with no account, history or audit changes", async ({
+  page,
+}) => {
+  await makePersonnelPasswordless(fixture);
+  const target = fixture.people.nurse;
+  const before = await readPersonMutationState(fixture, target.id);
+  await adminDetail(page, target.id);
+  const dialog = await authority(page, true);
+  await dialog
+    .getByRole("button", { name: "اعطای نقش مدیر بیمارستان", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "برای اعطای دسترسی مدیر بیمارستان، ابتدا باید حساب کاربر دارای امکان ورود باشد.",
+  );
+  await expect(dialog).not.toContainText(/password_hash|token|argon2/);
+  expect(await readPersonMutationState(fixture, target.id)).toEqual(before);
+  await noOverflow(page);
+});
+
+test("activating stored passwordless admin authority is refused with specific Persian feedback", async ({
+  page,
+}) => {
+  await makePersonnelPasswordless(fixture, true);
+  const target = fixture.people.nurse;
+  const before = await readPersonMutationState(fixture, target.id);
+  await adminDetail(page, target.id);
+  await page
+    .getByRole("button", { name: "فعال‌سازی حساب", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "فعال‌سازی حساب" });
+  await dialog
+    .getByRole("button", { name: "فعال‌سازی حساب", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "برای فعال‌سازی حساب دارای نقش مدیر بیمارستان، ابتدا باید امکان ورود کاربر فراهم شود.",
+  );
+  expect(await readPersonMutationState(fixture, target.id)).toEqual(before);
+  await noOverflow(page);
 });
 
 test("self-demotion warns, redirects, removes controls/navigation and denies an old admin tab", async ({

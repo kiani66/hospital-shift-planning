@@ -105,7 +105,8 @@ projection is exposed to them. Admins receive no implicit scheduling or approval
 
 All management writes use authenticated application commands, one transaction and safe audit
 projections. They serialize on the administration advisory lock and re-read the caller's database
-active/admin flags after locking. Removing authority or deactivating the last active admin is
+active/admin flags after locking. Removing authority or deactivating the last usable admin
+(active, system authority present, credentials provisioned) is
 refused, including concurrent attempts. Bootstrap is an explicit operator-only first-admin action
 with privileged database access; it cannot be invoked repeatedly to grant more admins. See
 `docs/deployment.md`. Direct privileged database writes bypass application invariants and are not
@@ -154,8 +155,13 @@ the command checks these after caller reauthorization under the existing shared 
 lock. Stale changes fail before idempotent handling. Last-active-admin removal/deactivation remains
 refused under that lock, including simultaneous self-removal, mutual revocation and mixed writes.
 
-Inactive accounts may store admin authority but cannot use it or sign in until an explicit account
-reactivation. Granting authority never activates an account. Removal has a confirmation, and
+New Hospital Admin grants require an active, credential-provisioned account. Passwordless legacy
+admins never count as replacements for the last usable admin. Inactive accounts may retain stored
+admin authority but cannot use it or sign in until explicit reactivation; reactivation of stored
+admin authority is rejected until credentials are provisioned. Credential queries return only
+booleans/counts; hashes are not added to DTOs or audit events. Specific Persian errors explain
+blocked grants/activations without exposing database details. Granting authority never activates
+an account or provisions credentials. Removal has a confirmation, and
 self-demotion additionally warns and redirects through the trusted default-page route after commit
 and shell revalidation. Admin navigation/access is derived again on the next request, using the
 same cookie; old loaded controls cannot authorize a write after revocation. Supervisor periods

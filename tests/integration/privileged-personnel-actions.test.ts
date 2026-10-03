@@ -20,7 +20,11 @@ import { formatJalaliInput } from "../../src/features/calendar/jalali-input";
 import type { ManagementFormState } from "../../src/features/management/mutation-result";
 import { actorFromSession } from "../../src/infrastructure/auth/actor";
 import { bootstrapHospitalAdmin } from "../../src/application/management/bootstrap";
-import { auditEvents, departments } from "../../src/infrastructure/db/schema";
+import {
+  auditEvents,
+  departments,
+  users,
+} from "../../src/infrastructure/db/schema";
 import {
   DEMO_ER,
   DEMO_ICU,
@@ -108,6 +112,53 @@ async function secondAdmin() {
 }
 
 describe("Hospital Admin authority actions", () => {
+  it("returns a safe Persian error for a passwordless grant without write, audit or revalidation", async () => {
+    await db
+      .update(users)
+      .set({ passwordHash: null })
+      .where(eq(users.id, U.icuNurse1.id));
+    const before = await events();
+    const result = await setHospitalAdminAction(idle, authorityForm());
+    expect(result).toMatchObject({
+      status: "error",
+      message:
+        "برای اعطای دسترسی مدیر بیمارستان، ابتدا باید حساب کاربر دارای امکان ورود باشد.",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/password|hash|token|secret/);
+    expect(await findUserById(db, U.icuNurse1.id)).toMatchObject({
+      isActive: true,
+      isHospitalAdmin: false,
+    });
+    expect(await events()).toEqual(before);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  it("returns a specific safe Persian error when activating stored passwordless admin authority", async () => {
+    await db
+      .update(users)
+      .set({ passwordHash: null, isHospitalAdmin: true })
+      .where(eq(users.id, U.inactiveNurse.id));
+    const before = await events();
+    const result = await setAccountActiveAction(
+      idle,
+      form({
+        userId: U.inactiveNurse.id,
+        isActive: "true",
+        expectedIsActive: "false",
+      }),
+    );
+    expect(result).toMatchObject({
+      status: "error",
+      message:
+        "برای فعال‌سازی حساب دارای نقش مدیر بیمارستان، ابتدا باید امکان ورود کاربر فراهم شود.",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/password|hash|token|secret/);
+    expect(await findUserById(db, U.inactiveNurse.id)).toMatchObject({
+      isActive: false,
+      isHospitalAdmin: true,
+    });
+    expect(await events()).toEqual(before);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
   it("grants/removes system authority independently, with safe audit and fresh same-cookie reads", async () => {
     const history = await listUserAccessHistory(db, U.icuNurse1.id);
     expect(
@@ -161,7 +212,8 @@ describe("Hospital Admin authority actions", () => {
     );
     expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
-  it("stores authority on an inactive account without activation or access until explicit reactivation", async () => {
+  it("refuses a new grant to an inactive account without activating it", async () => {
+    const before = await events();
     expect(
       await setHospitalAdminAction(
         idle,
@@ -171,26 +223,53 @@ describe("Hospital Admin authority actions", () => {
           isActive: "true",
         }),
       ),
-    ).toMatchObject({ status: "success" });
+    ).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("ابتدا باید حساب کاربر فعال"),
+    });
     expect(await findUserById(db, U.inactiveNurse.id)).toMatchObject({
+      isActive: false,
+      isHospitalAdmin: false,
+    });
+    expect(await events()).toEqual(before);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  it("retains previously granted authority during deactivation and restores access on explicit reactivation", async () => {
+    expect(
+      (
+        await setHospitalAdmin(admin, {
+          userId: U.icuNurse1.id,
+          isHospitalAdmin: true,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await setAccountActive(admin, {
+          userId: U.icuNurse1.id,
+          isActive: false,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(await findUserById(db, U.icuNurse1.id)).toMatchObject({
       isActive: false,
       isHospitalAdmin: true,
     });
     expect(
-      await actorFromSession(db, { user: { id: U.inactiveNurse.id } }, today),
+      await actorFromSession(db, { user: { id: U.icuNurse1.id } }, today),
     ).toBeNull();
     expect(await countHospitalAdmins(db)).toBe(1);
     expect(
       (
         await setAccountActive(admin, {
-          userId: U.inactiveNurse.id,
+          userId: U.icuNurse1.id,
           isActive: true,
           expectedIsActive: false,
         })
       ).ok,
     ).toBe(true);
     expect(
-      (await actorFromSession(db, { user: { id: U.inactiveNurse.id } }, today))
+      (await actorFromSession(db, { user: { id: U.icuNurse1.id } }, today))
         ?.isHospitalAdmin,
     ).toBe(true);
   });
@@ -309,10 +388,10 @@ describe("Hospital Admin authority actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
   it("refuses self-demotion when the only other stored admin is inactive", async () => {
-    await setHospitalAdmin(admin, {
-      userId: U.inactiveNurse.id,
-      isHospitalAdmin: true,
-    });
+    await db
+      .update(users)
+      .set({ isHospitalAdmin: true })
+      .where(eq(users.id, U.inactiveNurse.id));
     expect(
       await setHospitalAdminAction(
         idle,
@@ -597,10 +676,10 @@ describe("elevated action denial", () => {
     "denies all elevated actions to $email without writes",
     async (person) => {
       if (person.id === U.inactiveNurse.id)
-        await setHospitalAdmin(admin, {
-          userId: person.id,
-          isHospitalAdmin: true,
-        });
+        await db
+          .update(users)
+          .set({ isHospitalAdmin: true })
+          .where(eq(users.id, person.id));
       adapter.ctx = await as(person.id);
       const relation = (await listUserAccessHistory(db, U.supervisor.id))
         .supervisors[0]!;

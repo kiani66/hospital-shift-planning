@@ -31,12 +31,32 @@ export async function countHospitalAdmins(
   return row!.count;
 }
 
+// Reuse bootstrap's credential eligibility without selecting a password hash.
+const credentialsProvisioned = sql<boolean>`${users.passwordHash} is not null`;
+
+/** Replacement admins must be able to sign in, not merely carry active/admin flags. */
+export async function countUsableHospitalAdmins(
+  db: DbExecutor,
+): Promise<number> {
+  const [row] = await db
+    .select({ count: count() })
+    .from(users)
+    .where(
+      and(
+        eq(users.isHospitalAdmin, true),
+        eq(users.isActive, true),
+        credentialsProvisioned,
+      ),
+    );
+  return row!.count;
+}
+
 export async function hasAccountCredentials(
   db: DbExecutor,
   userId: string,
 ): Promise<boolean> {
   const [row] = await db
-    .select({ configured: sql<boolean>`${users.passwordHash} is not null` })
+    .select({ configured: credentialsProvisioned })
     .from(users)
     .where(eq(users.id, userId));
   return row?.configured ?? false;

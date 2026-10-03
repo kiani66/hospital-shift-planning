@@ -101,7 +101,11 @@ Migration `0008_hospital_admin` adds `users.is_hospital_admin boolean NOT NULL D
 Existing users remain unchanged and none becomes admin automatically. Membership roles remain
 NURSE/HEAD_NURSE; Supervisor history stays in `supervisor_assignments`. No new table is added.
 
-The last-active-admin invariant is enforced by application commands under PostgreSQL
+The last-usable-admin invariant counts only active Hospital Admins with provisioned credentials;
+passwordless legacy admin flags cannot permit removing/deactivating the last usable admin.
+New grants require an active credential-provisioned target, and activating stored admin authority
+requires credentials. These checks reuse a safe repository predicate and require no migration.
+The invariant is enforced by application commands under PostgreSQL
 transaction-scoped advisory lock 7310423 (shared with first-admin bootstrap), not a new database
 trigger. Existing date checks and exclusion constraints remain intact. Relation writes address IDs
 and preserve predecessor rows; role transitions/transfers end on D-1 and insert a successor on D.

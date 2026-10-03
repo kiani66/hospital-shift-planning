@@ -12,6 +12,45 @@ import {
 
 describe("safe Persian management feedback", () => {
   it.each([
+    [
+      "authority",
+      "ADMIN_GRANT_REQUIRES_CREDENTIALS",
+      "برای اعطای دسترسی مدیر بیمارستان، ابتدا باید حساب کاربر دارای امکان ورود باشد.",
+    ],
+    [
+      "authority",
+      "ADMIN_GRANT_REQUIRES_ACTIVE_ACCOUNT",
+      "برای اعطای دسترسی مدیر بیمارستان، ابتدا باید حساب کاربر فعال باشد.",
+    ],
+    [
+      "status",
+      "ADMIN_ACTIVATION_REQUIRES_CREDENTIALS",
+      "برای فعال‌سازی حساب دارای نقش مدیر بیمارستان، ابتدا باید امکان ورود کاربر فراهم شود.",
+    ],
+  ] as const)(
+    "explains %s eligibility failure %s safely",
+    (operation, reason, message) => {
+      const state = managementFailure(
+        operation,
+        toActionError(
+          new ValidationError(
+            "password_hash=null; token=secret",
+            "hospitalAdmin",
+            reason,
+          ),
+        ),
+      );
+      expect(state).toMatchObject({
+        status: "error",
+        message,
+        fields: { hospitalAdmin: message },
+      });
+      expect(JSON.stringify(state)).not.toMatch(
+        /password|hash|token|secret|null/,
+      );
+    },
+  );
+  it.each([
     "PROFILE_CHANGED",
     "ACCOUNT_STATUS_CHANGED",
     "MEMBERSHIP_CHANGED",

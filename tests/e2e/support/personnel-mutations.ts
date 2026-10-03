@@ -7,7 +7,7 @@ import {
   createDatabase,
   type Database,
 } from "../../../src/infrastructure/db/database";
-import { auditEvents } from "../../../src/infrastructure/db/schema";
+import { auditEvents, users } from "../../../src/infrastructure/db/schema";
 import { listUserAccessHistory } from "../../../src/infrastructure/repositories/management";
 import { loadActor } from "../../../src/infrastructure/repositories/memberships";
 import { listRoster } from "../../../src/infrastructure/repositories/roster";
@@ -19,6 +19,24 @@ import {
 import type { provisionPersonnel } from "./personnel";
 
 type Fixture = Awaited<ReturnType<typeof provisionPersonnel>>;
+
+/** Arrange a legacy passwordless account only on this test's isolated nurse fixture. */
+export function makePersonnelPasswordless(
+  fixture: Fixture,
+  storedInactiveAdmin = false,
+) {
+  return withDatabase(async (db) => {
+    await db
+      .update(users)
+      .set({
+        passwordHash: null,
+        ...(storedInactiveAdmin
+          ? { isHospitalAdmin: true, isActive: false }
+          : {}),
+      })
+      .where(eq(users.id, fixture.people.nurse.id));
+  });
+}
 
 function safeAccount(user: Awaited<ReturnType<typeof findUserById>>) {
   return user

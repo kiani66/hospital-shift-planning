@@ -26,14 +26,14 @@ describe("authority confirmations", () => {
     expect(copy.description).toContain("آخرین مدیر فعال");
     expect(copy.description).toContain("تغییر نمی‌کنند");
   });
-  it("explains stored inactive authority and separate explicit reactivation", () => {
+  it("explains the active account and sign-in prerequisites for a new grant", () => {
     const copy = authorityConfirmation({
       isHospitalAdmin: false,
       isActive: false,
       self: false,
     });
     expect(copy.removing).toBe(false);
-    expect(copy.description).toContain("تا فعال‌سازی صریح حساب");
+    expect(copy.description).toContain("صریحاً فعال و دارای امکان ورود");
     expect(copy.description).toContain("حساب را فعال نمی‌کند");
   });
   it("does not describe admin authority as department or schedule privilege", () => {

@@ -1052,9 +1052,11 @@ rule is introduced. Supervisor assignments use their own table and the same end-
 
 ### D82 · Last active admin and explicit bootstrap
 
-Deactivation or authority removal must leave at least one active Hospital Admin. Every management
+Deactivation or authority removal must leave at least one usable Hospital Admin: active, with
+system authority and provisioned credentials. Passwordless legacy accounts do not count as
+replacements. Every management
 write and first-admin bootstrap takes the same transaction-scoped PostgreSQL advisory lock;
-account/authority checks count active admins under that lock. Administrative commands recheck the
+account/authority checks count usable admins under that lock. Administrative commands recheck the
 caller's stored authority after acquiring it, so a waiting revoked/deactivated caller fails closed.
 This is an application invariant; privileged direct SQL is not an administration workflow.
 
@@ -1152,10 +1154,13 @@ schedule privilege, notification or audit event type is added. Complete access h
 Authority changes freeze the target's expected admin and active flags when the dialog opens.
 `setHospitalAdmin` now accepts those optional expected values under D82's existing lock; UI actions
 require both and reject changed values before no-op handling. Existing explicit callers keep their
-idempotent behavior. Grants to inactive accounts store authority but confer no access until explicit
-reactivation; the confirmation and status explain this, and granting never activates the account.
+idempotent behavior. The approved pre-merge credential-safety correction supersedes the former
+inactive-grant behavior: new grants require an active, credential-provisioned target. Missing
+credentials or inactive status produce specific safe Persian errors; granting never activates an
+account or provisions credentials. Existing stored authority survives deactivation and confers no
+access while inactive. Reactivation of stored admin authority requires provisioned credentials.
 Removal requires confirmation; self-removal has a prominent warning and succeeds only if another
-active admin remains. After successful self-demotion, the action refreshes the shell and redirects
+active credential-provisioned admin remains. After successful self-demotion, the action refreshes the shell and redirects
 through `/` to the caller's database-derived default page, removing admin controls/navigation.
 Other authority changes take effect on the next request using the same existing session cookie.
 
@@ -1167,7 +1172,9 @@ are untouched. Overlap and date rules remain in the commands/database, with safe
 
 Every management write retains the shared PostgreSQL administration lock, rechecks caller authority
 after locking, and enforces the last-active-admin invariant before deactivation/removal. Concurrent
-self-demotion, mutual revocation and mixed deactivation/removal cannot leave zero active admins.
+self-demotion, mutual revocation and mixed deactivation/removal cannot leave zero usable admins,
+even when legacy passwordless accounts have active admin flags. Eligibility uses the same
+repository credential predicate as bootstrap, returning only safe booleans/counts.
 Audit failure rolls back the entire write. Value-based stale checks do not constitute a general
 revision counter or automatic conflict retry. No migration, bootstrap UI, department lifecycle,
 bulk import, deletion, recovery or arbitrary historical rewriting is introduced. This completes
