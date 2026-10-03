@@ -1,5 +1,6 @@
 import {
   Bell,
+  Users,
   CalendarDays,
   CalendarRange,
   ClipboardCheck,
@@ -15,6 +16,7 @@ import {
 import type { NavIcon as NavIconName } from "./navigation";
 
 const ICONS: Record<NavIconName, LucideIcon> = {
+  personnel: Users,
   home: House,
   myShifts: CalendarDays,
   preferences: SlidersHorizontal,

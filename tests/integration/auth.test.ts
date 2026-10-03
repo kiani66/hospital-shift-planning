@@ -275,6 +275,7 @@ describe("shell and page queries", () => {
 
   it("describes a Head Nurse's departments by name", async () => {
     expect(await getShellContext(await ctx(U.icuHead.id))).toEqual({
+      isHospitalAdmin: false,
       user: { displayName: U.icuHead.displayName, email: U.icuHead.email },
       memberships: [
         {

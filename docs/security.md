@@ -121,3 +121,12 @@ Inactive accounts cannot receive new or changed non-null scheduling assignments.
 snapshots/additions and swap/replacement candidates exclude them. Historical rosters, memberships, assignments
 and approved versions remain intact; clearing a shift and restoring a prior approved version are
 still possible. Membership ending and account deactivation are distinct actions.
+
+The Phase 10 read-only directory/detail queries authorize `user.list` and reload the caller's
+stored authority before selecting explicit safe DTOs. Only Hospital Admin receives email,
+system authority and full access histories. Department people queries authorize `personnel.view`
+against both the request actor and freshly loaded effective relations, and expose only current
+local personnel names/roles/account status, including current Supervisors. They never expose
+global identity fields or links to global user detail. Unknown/denied management pages answer
+the same 404; inactive sessions still redirect to sign-in. Filter/pagination values confer no
+authority. No management write path, audit metadata or credentials are added to these screens.

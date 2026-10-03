@@ -1079,3 +1079,27 @@ existing account. Profile edits allow email/display name only, with expected val
 The provisioning CLI stays an explicit production bootstrap tool, not a UI command. Public
 registration, self-service recovery, bulk invitations/import, HR synchronization, department
 creation/editing/deactivation, general historical correction and the main management UI are deferred.
+
+### D84 · Read-only personnel management (Phase 10 Slice 2)
+
+The management UI deferred in D83 now has read-only screens. Hospital Admin opens
+`/admin/personnel` and `/admin/personnel/[userId]` to inspect safe account fields, current
+relations and complete membership/supervisor histories. Name/email search is literal and
+case-insensitive; filters cover account status, system authority and current department/role.
+Department and role filters match the same effective membership; a department filter without
+a membership-role filter also includes its current Supervisors. Lists use 25 users per page,
+ordered by display name and id. Filter changes return to page one. Dates use D19's inclusive
+bounds; account status never changes relation status. Inactive-department history stays visible
+to Hospital Admin, labeled as such.
+
+`/departments/[code]/people` exposes current local members and Supervisors to that department's
+Head Nurse or current Supervisor (and Hospital Admin). It includes inactive accounts with a
+current relation, but excludes future and ended relations. It exposes names, local roles and
+account status only; no global email/admin flags, cross-department detail or user-detail links.
+Nurses receive no personnel navigation/access. Unknown and denied management URLs share the
+existing 404 response. Every read rechecks database authority; navigation is a convenience.
+
+Existing D25 sign-in destinations stay unchanged. Hospital Admin has a prominent directory
+entry, while scoped department entries use the existing mobile “more” navigation. Read-only
+screens have no mutation controls or Server Actions. Mutation UI and the other D83 deferred
+features remain deferred; this slice needs no migration and changes no historical records.

@@ -18,6 +18,7 @@ export type NavIcon =
   | "departmentRequests"
   | "history"
   | "review"
+  | "personnel"
   | "more";
 
 export interface NavItem {
@@ -49,11 +50,11 @@ export interface Navigation {
 export const MAX_PRIMARY = 5;
 
 type Capabilities = Pick<ShellContext, "memberships" | "supervised"> &
-  Partial<Pick<ShellContext, "unreadNotifications">>;
+  Partial<Pick<ShellContext, "unreadNotifications" | "isHospitalAdmin">>;
 
 const departmentPath = (
   code: string,
-  page: "schedule" | "requests" | "history",
+  page: "schedule" | "requests" | "history" | "people",
 ) => `/departments/${encodeURIComponent(code)}/${page}` as Route;
 
 /**
@@ -72,6 +73,12 @@ export function homePath(ctx: Capabilities): Route {
 }
 
 const ITEMS = {
+  personnel: {
+    id: "personnel",
+    href: "/admin/personnel",
+    label: "کاربران بیمارستان",
+    icon: "personnel",
+  },
   home: { id: "home", href: "/home", label: "نمای کلی", icon: "home" },
   myShifts: {
     id: "my-shifts",
@@ -166,6 +173,26 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       ],
     }),
   );
+  const scopedPeople = [
+    ...new Map([...headOf, ...ctx.supervised].map((d) => [d.id, d])).values(),
+  ];
+  if (scopedPeople.length > 0)
+    sections.push({
+      id: "people",
+      title: "افراد بخش‌ها",
+      items: scopedPeople.map((d) => ({
+        id: `department-people-${d.code}`,
+        href: departmentPath(d.code, "people"),
+        label: `افراد بخش (${d.name})`,
+        icon: "personnel",
+      })),
+    });
+  if (ctx.isHospitalAdmin)
+    sections.push({
+      id: "administration",
+      title: "مدیریت بیمارستان",
+      items: [ITEMS.personnel],
+    });
   if (supervisor)
     sections.push({
       id: "review",
@@ -176,6 +203,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
   // Bottom bar priorities (mobile): Head Nurse, else nurse, then supervisor.
   const firstDepartment = departmentItems[0];
   const candidates: NavItem[] = [
+    ...(ctx.isHospitalAdmin ? [ITEMS.personnel] : []),
     ...(firstDepartment
       ? [
           ITEMS.myShifts,
