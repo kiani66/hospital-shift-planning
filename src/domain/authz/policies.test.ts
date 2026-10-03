@@ -583,6 +583,27 @@ describe("change-request cancellation and consent", () => {
 });
 
 describe("Phase 10 Hospital Admin policies", () => {
+  it.each([
+    "user.setHospitalAdmin",
+    "supervisor.assign",
+    "supervisor.end",
+  ] as const)(
+    "requires active system authority even for combined department roles: %s",
+    (action) => {
+      const combined = {
+        ...actors.headNurse,
+        supervisedDepartmentIds: [DEPT],
+        isHospitalAdmin: true,
+      };
+      expect(decide(combined, action, {})).toEqual({ allowed: true });
+      expect(
+        decide({ ...combined, isHospitalAdmin: false }, action, {}).allowed,
+      ).toBe(false);
+      expect(decide({ ...combined, isActive: false }, action, {}).allowed).toBe(
+        false,
+      );
+    },
+  );
   const admin: Actor = {
     userId: "admin",
     isActive: true,

@@ -20,6 +20,18 @@ import type { provisionPersonnel } from "./personnel";
 
 type Fixture = Awaited<ReturnType<typeof provisionPersonnel>>;
 
+function safeAccount(user: Awaited<ReturnType<typeof findUserById>>) {
+  return user
+    ? {
+        id: user.id,
+        displayName: user.displayName,
+        email: user.email,
+        isActive: user.isActive,
+        isHospitalAdmin: user.isHospitalAdmin,
+      }
+    : null;
+}
+
 async function withDatabase<T>(read: (db: Database) => Promise<T>): Promise<T> {
   loadEnvConfig(process.cwd());
   const url = process.env.DATABASE_URL;
@@ -38,7 +50,7 @@ export async function readPersonMutationState(
   userId: string,
 ) {
   return withDatabase(async (db) => ({
-    user: await findUserById(db, userId),
+    user: safeAccount(await findUserById(db, userId)),
     history: await listUserAccessHistory(db, userId),
     events: await db
       .select({
@@ -53,7 +65,9 @@ export async function readPersonMutationState(
 }
 
 export function personByEmail(email: string) {
-  return withDatabase((db) => findUserByEmail(db, email));
+  return withDatabase(async (db) =>
+    safeAccount(await findUserByEmail(db, email)),
+  );
 }
 export function readPersonnelRoster(scheduleId: string) {
   return withDatabase((db) => listRoster(db, scheduleId));

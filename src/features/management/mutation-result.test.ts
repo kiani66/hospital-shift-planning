@@ -11,18 +11,21 @@ import {
 } from "./mutation-result";
 
 describe("safe Persian management feedback", () => {
-  it.each(["PROFILE_CHANGED", "ACCOUNT_STATUS_CHANGED", "MEMBERSHIP_CHANGED"])(
-    "explains stale %s without raw server messages",
-    (reason) => {
-      const state = managementFailure("profile", {
-        code: "CONFLICT",
-        message: "password hash secret",
-        reason,
-      });
-      expect(state.message).toContain("صفحه را تازه کنید");
-      expect(JSON.stringify(state)).not.toMatch(/password|hash|secret/);
-    },
-  );
+  it.each([
+    "PROFILE_CHANGED",
+    "ACCOUNT_STATUS_CHANGED",
+    "MEMBERSHIP_CHANGED",
+    "ADMIN_AUTHORITY_CHANGED",
+    "SUPERVISOR_CHANGED",
+  ])("explains stale %s without raw server messages", (reason) => {
+    const state = managementFailure("profile", {
+      code: "CONFLICT",
+      message: "password hash secret",
+      reason,
+    });
+    expect(state.message).toContain("صفحه را تازه کنید");
+    expect(JSON.stringify(state)).not.toMatch(/password|hash|secret/);
+  });
   it.each([
     "INVALID_RELATION_RANGE",
     "RELATION_NOT_CURRENT",
@@ -118,6 +121,9 @@ describe("safe Persian management feedback", () => {
     "end",
     "transfer",
     "role",
+    "authority",
+    "supervisorAdd",
+    "supervisorEnd",
   ] as ManagementOperation[])(
     "drops successful command data for %s",
     (operation) => {

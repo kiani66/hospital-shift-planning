@@ -42,7 +42,8 @@ export const endDepartmentSupervisor = defineCommand({
     await authorizeAdministration(uow, "supervisor.end");
     const before = await findSupervisorRelation(uow.tx, input.relationId);
     if (!before) throw new NotFoundError("Supervisor assignment");
-    if (before.endedOn !== input.expectedEndedOn) throw new ConflictError();
+    if (before.endedOn !== input.expectedEndedOn)
+      throw new ConflictError(undefined, "SUPERVISOR_CHANGED");
     validateRelationEnd(before, input.endedOn, todayIn(APP_TIMEZONE, uow.now));
     if (before.endedOn === input.endedOn) return before;
     await updateSupervisorEnd(uow.tx, before.id, input.endedOn);

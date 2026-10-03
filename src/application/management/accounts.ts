@@ -102,10 +102,22 @@ export const setAccountActive = defineCommand({
 
 export const setHospitalAdmin = defineCommand({
   name: "user.setHospitalAdmin",
-  input: z.object({ userId: z.uuid(), isHospitalAdmin: z.boolean() }),
+  input: z.object({
+    userId: z.uuid(),
+    isHospitalAdmin: z.boolean(),
+    expectedIsHospitalAdmin: z.boolean().optional(),
+    expectedIsActive: z.boolean().optional(),
+  }),
   async handler(uow, input) {
     await authorizeAdministration(uow, "user.setHospitalAdmin");
     const user = await requireUser(uow, input.userId);
+    if (
+      (input.expectedIsHospitalAdmin !== undefined &&
+        user.isHospitalAdmin !== input.expectedIsHospitalAdmin) ||
+      (input.expectedIsActive !== undefined &&
+        user.isActive !== input.expectedIsActive)
+    )
+      throw new ConflictError(undefined, "ADMIN_AUTHORITY_CHANGED");
     if (user.isHospitalAdmin === input.isHospitalAdmin) return user;
     assertActiveAdminRemains({
       wasActiveAdmin: user.isActive && user.isHospitalAdmin,

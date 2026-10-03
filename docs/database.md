@@ -90,6 +90,10 @@ cannot be chosen). `OTHER` always requires a note (check `change_reasons_other_n
   automatically.
 - `pnpm test:integration` wipes and migrates `TEST_DATABASE_URL`, whose database name must
   contain `test`.
+- The last-active-admin browser fixture uses the designated `TEST_DATABASE_URL` role to create
+  a uniquely named disposable `hsp_authority_e2e_test_*` database, apply existing migrations and
+  run a separate production server. That test role needs database-creation permission. The fixture
+  shuts down its server and drops only its own database; shared E2E/demo Admins are untouched.
 
 ## Phase 10 foundation
 

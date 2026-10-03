@@ -171,22 +171,43 @@ test.describe("notification isolation", () => {
 
     // Tamper with the form: submit user B's notification id as user A.
     const ids = main(page).locator('input[name="notificationId"]');
-    await ids.evaluateAll(
-      (inputs, id) =>
-        inputs.forEach((input) => ((input as HTMLInputElement).value = id)),
-      theirs!.id,
+    const tamper = () =>
+      ids.evaluateAll(
+        (inputs, id) =>
+          inputs.forEach((input) => {
+            const hidden = input as HTMLInputElement;
+            hidden.value = id;
+            // React may restore controlled hidden inputs during submission on WebKit.
+            // Tamper with the captured form payload too, so the server actually receives B's id.
+            hidden.form?.addEventListener("formdata", (event) =>
+              event.formData.set("notificationId", id),
+            );
+          }),
+        theirs!.id,
+      );
+    await tamper();
+    let submitted = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && !!request.headers()["next-action"],
     );
     await items(page)
       .nth(0)
       .getByRole("button", { name: /^علامت/ })
       .click();
+    expect((await submitted).postData()?.includes(theirs!.id)).toBe(true);
     await expect(main(page).getByRole("alert")).toHaveText(
       "این اعلان پیدا نشد.",
+    );
+    await tamper();
+    submitted = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && !!request.headers()["next-action"],
     );
     await items(page)
       .nth(0)
       .getByRole("button", { name: /^ثبت ترجیحات باز شد/ })
       .click();
+    expect((await submitted).postData()?.includes(theirs!.id)).toBe(true);
     await expect(main(page).getByRole("alert").first()).toHaveText(
       "این اعلان پیدا نشد.",
     );

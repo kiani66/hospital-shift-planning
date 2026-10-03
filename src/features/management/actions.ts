@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   createAccount,
   setAccountActive,
+  setHospitalAdmin,
   updateAccountProfile,
 } from "@/application/management/accounts";
 import {
@@ -13,6 +14,10 @@ import {
   endDepartmentMembership,
   transitionDepartmentMembership,
 } from "@/application/management/memberships";
+import {
+  assignDepartmentSupervisor,
+  endDepartmentSupervisor,
+} from "@/application/management/supervisors";
 import type { ActionResult } from "@/application/result";
 import { requireRequestContext } from "@/features/auth/guards";
 
@@ -31,6 +36,9 @@ const commands = {
   end: endDepartmentMembership,
   transfer: transitionDepartmentMembership,
   role: transitionDepartmentMembership,
+  authority: setHospitalAdmin,
+  supervisorAdd: assignDepartmentSupervisor,
+  supervisorEnd: endDepartmentSupervisor,
 } as const;
 
 /** Parse presentation inputs, load trusted actor, invoke the existing transactional command. */
@@ -56,6 +64,14 @@ async function submit(
       !parsed.data.isActive
     )
       redirect("/login");
+    if (
+      operation === "authority" &&
+      "userId" in parsed.data &&
+      "isHospitalAdmin" in parsed.data &&
+      parsed.data.userId === ctx.actor.userId &&
+      !parsed.data.isHospitalAdmin
+    )
+      redirect("/");
   }
   const userId =
     operation === "create" && result.ok
@@ -105,4 +121,23 @@ export async function changeMembershipRoleAction(
   formData: FormData,
 ) {
   return submit("role", formData);
+}
+
+export async function setHospitalAdminAction(
+  _previous: ManagementFormState,
+  formData: FormData,
+) {
+  return submit("authority", formData);
+}
+export async function assignSupervisorAction(
+  _previous: ManagementFormState,
+  formData: FormData,
+) {
+  return submit("supervisorAdd", formData);
+}
+export async function endSupervisorAction(
+  _previous: ManagementFormState,
+  formData: FormData,
+) {
+  return submit("supervisorEnd", formData);
 }

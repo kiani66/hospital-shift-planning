@@ -66,9 +66,17 @@ test("Hospital Admin reaches the directory, searches/filters, and reads Jalali h
     ).toBeVisible();
   }
   await expect(
-    page.locator("main").getByRole("button", {
-      name: /اعطای نقش مدیر|حذف نقش مدیر|افزودن سوپروایزر|پایان نظارت/,
-    }),
+    page.getByRole("region", { name: "نقش مدیریتی سیستم" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "اعطای نقش مدیر بیمارستان", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "افزودن سوپروایزر", exact: true }),
+  ).toBeVisible();
+  // History itself retains the prior slice's read-only guarantees.
+  await expect(
+    page.getByRole("region", { name: "تاریخچه نظارت" }).getByRole("button"),
   ).toHaveCount(0);
   expect(
     await page.evaluate(

@@ -37,6 +37,9 @@ export default defineConfig({
     {
       name: "mobile-ios",
       testIgnore: /api\//,
+      // Multi-session workflows take longer on WebKit in the cloud runner.
+      // Assertions retain the same auto-wait limits; only the whole-test budget grows.
+      timeout: 60_000,
       use: { ...devices["iPhone 14"], ...locale },
     },
   ],

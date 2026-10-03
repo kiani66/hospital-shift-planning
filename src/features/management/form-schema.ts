@@ -80,6 +80,23 @@ export const managementFormSchemas = {
   end: z.object({ relationId: id, expectedEndedOn: expectedEnd, endedOn: day }),
   transfer: transition,
   role: transition,
+  authority: z.object({
+    userId: id,
+    isHospitalAdmin: active,
+    expectedIsHospitalAdmin: active,
+    expectedIsActive: active,
+  }),
+  supervisorAdd: z.object({
+    userId: id,
+    departmentId: department,
+    startedOn: day,
+    endedOn: optionalDay,
+  }),
+  supervisorEnd: z.object({
+    relationId: id,
+    expectedEndedOn: expectedEnd,
+    endedOn: day,
+  }),
 } as const;
 
 export type ManagementOperation = keyof typeof managementFormSchemas;

@@ -21,6 +21,10 @@ export const MANAGEMENT_SUCCESS: Record<ManagementOperation, string> = {
   end: "تاریخ پایان عضویت ثبت شد؛ سابقه حفظ می‌شود.",
   transfer: "انتقال ثبت شد؛ عضویت قبلی و برنامه‌های تاریخی حفظ شدند.",
   role: "تغییر نقش ثبت شد؛ سابقه نقش قبلی حفظ شد.",
+  authority:
+    "نقش مدیریتی سیستم به‌روز شد؛ وضعیت حساب و روابط بخش تغییر نکردند.",
+  supervisorAdd: "دسترسی سوپروایزر ثبت شد؛ عضویت‌های بخش تغییر نکردند.",
+  supervisorEnd: "تاریخ پایان دسترسی سوپروایزر ثبت شد؛ سابقه حفظ می‌شود.",
 };
 const refreshMessage =
   "اطلاعات از زمان باز شدن فرم تغییر کرده است. صفحه را تازه کنید و وضعیت جدید را بررسی کنید.";
@@ -28,16 +32,19 @@ const reasonMessages: Record<string, string> = {
   PROFILE_CHANGED: refreshMessage,
   ACCOUNT_STATUS_CHANGED: refreshMessage,
   MEMBERSHIP_CHANGED: refreshMessage,
+  ADMIN_AUTHORITY_CHANGED: refreshMessage,
+  SUPERVISOR_CHANGED: refreshMessage,
   INVALID_RELATION_RANGE: "تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد.",
   RELATION_NOT_CURRENT:
-    "این عضویت امروز جاری نیست. اطلاعات جدید را بررسی کنید؛ تغییر روابط آینده یا پایان‌یافته در این مرحله مجاز نیست.",
+    "این رابطه امروز جاری نیست. اطلاعات جدید را بررسی کنید؛ تغییر روابط آینده یا پایان‌یافته در این مرحله مجاز نیست.",
   END_IN_PAST:
     "تاریخ پایان باید امروز یا بعد از امروز باشد؛ سابقه گذشته قابل بازنویسی نیست.",
   TERM_EXTENSION:
     "این عملیات نمی‌تواند مدت عضویت قبلی را تمدید کند. تاریخ را در محدوده مدت ثبت‌شده انتخاب کنید.",
   TRANSITION_HISTORY_BOUNDARY:
     "تاریخ تغییر باید امروز یا بعد از امروز و بعد از اولین روز عضویت قبلی باشد. عضویتی که امروز شروع شده، امروز قابل انتقال یا تغییر نقش نیست.",
-  LAST_ACTIVE_ADMIN: "حساب آخرین مدیر فعال بیمارستان را نمی‌توان غیرفعال کرد.",
+  LAST_ACTIVE_ADMIN:
+    "آخرین مدیر فعال بیمارستان باید باقی بماند؛ حذف نقش مدیریتی یا غیرفعال‌سازی حساب او مجاز نیست.",
   UNCHANGED_TRANSITION: "بخش یا نقش جدید باید با عضویت فعلی متفاوت باشد.",
 };
 const fieldMessages: Record<string, string> = {
@@ -48,7 +55,7 @@ const fieldMessages: Record<string, string> = {
   role: "نقش عضویت را انتخاب کنید.",
   startedOn: "تاریخ شروع یا تغییر را بررسی کنید.",
   endedOn: "تاریخ پایان را بررسی کنید.",
-  relationId: "عضویت تغییر کرده یا دیگر جاری نیست. صفحه را تازه کنید.",
+  relationId: "رابطه تغییر کرده یا دیگر جاری نیست. صفحه را تازه کنید.",
   hospitalAdmin: reasonMessages.LAST_ACTIVE_ADMIN!,
 };
 
@@ -65,7 +72,11 @@ export function managementFailure(
             ? "این ایمیل قبلاً ثبت شده است."
             : operation === "profile"
               ? "ایمیل تکراری است یا اطلاعات حساب تغییر کرده است. صفحه را تازه کنید و دوباره بررسی کنید."
-              : "این بازه با عضویت دیگری هم‌پوشانی دارد یا عضویت تغییر کرده است. صفحه را تازه کنید و روابط را بررسی کنید.";
+              : operation === "authority"
+                ? refreshMessage
+                : operation === "supervisorAdd" || operation === "supervisorEnd"
+                  ? "این بازه با دسترسی سوپروایزر دیگری هم‌پوشانی دارد یا رابطه تغییر کرده است. صفحه را تازه کنید و روابط را بررسی کنید."
+                  : "این بازه با عضویت دیگری هم‌پوشانی دارد یا عضویت تغییر کرده است. صفحه را تازه کنید و روابط را بررسی کنید.";
         break;
       case "FORBIDDEN":
         message =

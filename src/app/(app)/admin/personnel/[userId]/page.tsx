@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getMembershipFormOptions } from "@/application/management/personnel-queries";
 
-import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { requireRequestContext } from "@/features/auth/guards";
 import { formatJalaliDateTime } from "@/features/calendar/jalali";
@@ -10,6 +9,8 @@ import { readPersonPage } from "@/features/management/page-queries";
 import { AccountControls } from "@/features/management/account-controls";
 import { managementPageRead } from "@/features/management/page-read";
 import { MembershipControls } from "@/features/management/membership-controls";
+import { AuthorityControls } from "@/features/management/authority-controls";
+import { SupervisorControls } from "@/features/management/supervisor-controls";
 import {
   AccountStatus,
   RelationsSection,
@@ -41,11 +42,6 @@ export default async function PersonPage({
       >
         <div className="flex flex-wrap gap-2">
           <AccountStatus active={user.isActive} />
-          <Badge tone="brand-soft">
-            {user.isHospitalAdmin
-              ? "مدیر بیمارستان"
-              : "بدون نقش مدیر بیمارستان"}
-          </Badge>
         </div>
         <dl className="grid gap-4 sm:grid-cols-3">
           <div>
@@ -87,15 +83,24 @@ export default async function PersonPage({
           }}
         />
       </section>
+      <AuthorityControls
+        user={{
+          id: user.id,
+          displayName: user.displayName,
+          isActive: user.isActive,
+          isHospitalAdmin: user.isHospitalAdmin,
+        }}
+        actorId={ctx.actor.userId}
+      />
       <MembershipControls
         userId={user.id}
         memberships={user.memberships.filter((r) => r.status === "CURRENT")}
         options={options}
       />
-      <RelationsSection
-        id="current-supervisors"
-        title="نظارت‌های جاری"
+      <SupervisorControls
+        userId={user.id}
         relations={user.supervisors.filter((r) => r.status === "CURRENT")}
+        options={options}
       />
       <RelationsSection
         id="membership-history"

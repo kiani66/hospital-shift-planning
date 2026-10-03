@@ -1134,3 +1134,35 @@ Head Nurse/Supervisor department screens stay read-only and Nurses gain no manag
 Hospital Admin authority grants/removals, Supervisor assignment mutations, department lifecycle,
 bulk tools, deletion, recovery and arbitrary historical correction remain deferred. No migration,
 new authority or additional audit event type is introduced in this slice.
+
+### D86 · Elevated access UI and safety (Phase 10 Slice 4)
+
+Person detail now separates account status, system-level Hospital Admin authority, department
+memberships and Supervisor access. Active Hospital Admins grant/remove system authority and
+assign/end Supervisor relations through focused Persian RTL confirmations/forms and the existing
+transactional commands. Supervisor remains in its own effective-dated table; no membership role,
+schedule privilege, notification or audit event type is added. Complete access history stays visible.
+
+Authority changes freeze the target's expected admin and active flags when the dialog opens.
+`setHospitalAdmin` now accepts those optional expected values under D82's existing lock; UI actions
+require both and reject changed values before no-op handling. Existing explicit callers keep their
+idempotent behavior. Grants to inactive accounts store authority but confer no access until explicit
+reactivation; the confirmation and status explain this, and granting never activates the account.
+Removal requires confirmation; self-removal has a prominent warning and succeeds only if another
+active admin remains. After successful self-demotion, the action refreshes the shell and redirects
+through `/` to the caller's database-derived default page, removing admin controls/navigation.
+Other authority changes take effect on the next request using the same existing session cookie.
+
+Supervisor assignment accepts current/future/fixed-term periods through the Jalali presentation
+adapter, preserving D81's existing historical-onboarding capability. Ending addresses a named
+currently-effective assignment, checks its frozen expected end date, and shortens inclusively today
+or later; future/ended correction remains deferred. Account status, memberships and old schedules
+are untouched. Overlap and date rules remain in the commands/database, with safe Persian errors.
+
+Every management write retains the shared PostgreSQL administration lock, rechecks caller authority
+after locking, and enforces the last-active-admin invariant before deactivation/removal. Concurrent
+self-demotion, mutual revocation and mixed deactivation/removal cannot leave zero active admins.
+Audit failure rolls back the entire write. Value-based stale checks do not constitute a general
+revision counter or automatic conflict retry. No migration, bootstrap UI, department lifecycle,
+bulk import, deletion, recovery or arbitrary historical rewriting is introduced. This completes
+the authorized Phase 10 management UI without merging or deploying it.

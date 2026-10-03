@@ -14,6 +14,80 @@ const member = {
 };
 
 describe("management form schemas", () => {
+  it("requires expected authority and active flags and never accepts activation as a grant side effect", () => {
+    const values = {
+      userId,
+      isHospitalAdmin: "true",
+      expectedIsHospitalAdmin: "false",
+      expectedIsActive: "false",
+      isActive: "true",
+      passwordHash: "ignored",
+    };
+    expect(managementFormSchemas.authority.parse(values)).toEqual({
+      userId,
+      isHospitalAdmin: true,
+      expectedIsHospitalAdmin: false,
+      expectedIsActive: false,
+    });
+    for (const field of [
+      "isHospitalAdmin",
+      "expectedIsHospitalAdmin",
+      "expectedIsActive",
+    ])
+      for (const invalid of [true, "yes", "", undefined])
+        expect(
+          managementFormSchemas.authority.safeParse({
+            ...values,
+            [field]: invalid,
+          }).success,
+        ).toBe(false);
+  });
+  it("converts separate Supervisor assignment dates without creating a membership role", () => {
+    const parsed = managementFormSchemas.supervisorAdd.parse({
+      ...member,
+      role: "HEAD_NURSE",
+      endedOn: "۱۴۰۵/۰۷/۱۲",
+    });
+    expect(parsed).toEqual({
+      userId,
+      departmentId,
+      startedOn: "2026-10-03",
+      endedOn: "2026-10-04",
+    });
+    expect(
+      managementFormSchemas.supervisorAdd.parse(member).endedOn,
+    ).toBeNull();
+  });
+  it.each<Record<string, unknown>>([
+    { departmentId: "unknown" },
+    { userId: "unknown" },
+    { startedOn: "1405/07/31" },
+    { endedOn: "not a date" },
+    { endedOn: undefined },
+  ])("rejects invalid Supervisor form fields %#", (extra) => {
+    expect(
+      managementFormSchemas.supervisorAdd.safeParse({ ...member, ...extra })
+        .success,
+    ).toBe(false);
+  });
+  it("requires the Supervisor expected end separately from its Jalali ending date", () => {
+    const input = {
+      relationId: userId,
+      expectedEndedOn: "",
+      endedOn: "۱۴۰۵/۰۷/۱۲",
+    };
+    expect(managementFormSchemas.supervisorEnd.parse(input)).toEqual({
+      relationId: userId,
+      expectedEndedOn: null,
+      endedOn: "2026-10-04",
+    });
+    expect(
+      managementFormSchemas.supervisorEnd.safeParse({
+        ...input,
+        expectedEndedOn: undefined,
+      }).success,
+    ).toBe(false);
+  });
   it("normalizes profile fields, strips unapproved fields, and retains the exact password", () => {
     expect(
       managementFormSchemas.create.parse({

@@ -145,3 +145,18 @@ the optional command-level expected active flag, rejecting stale forms under the
 Deactivation has explicit confirmation and preserves relations/old rosters. Last-active-admin
 protection applies to these UI calls too; deliberate self-deactivation redirects to sign-in after
 commit. Elevated authority and Supervisor mutation commands remain unavailable through UI actions.
+
+Phase 10 Slice 4 exposes only authenticated Hospital Admin adapters for system authority changes
+and Supervisor assignment/end commands. The person detail separates these from account status
+and department membership roles. Authority forms require frozen expected admin and active flags;
+the command checks these after caller reauthorization under the existing shared administration
+lock. Stale changes fail before idempotent handling. Last-active-admin removal/deactivation remains
+refused under that lock, including simultaneous self-removal, mutual revocation and mixed writes.
+
+Inactive accounts may store admin authority but cannot use it or sign in until an explicit account
+reactivation. Granting authority never activates an account. Removal has a confirmation, and
+self-demotion additionally warns and redirects through the trusted default-page route after commit
+and shell revalidation. Admin navigation/access is derived again on the next request, using the
+same cookie; old loaded controls cannot authorize a write after revocation. Supervisor periods
+remain separate effective-dated relations, with current-only inclusive ending and expected-end
+stale checks. No secrets, bootstrap/recovery adapter or extra audit metadata are introduced.
