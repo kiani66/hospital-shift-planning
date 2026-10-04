@@ -81,3 +81,62 @@ export const issueTemporaryPassword = defineCommand({
     };
   },
 });
+
+export type InitialCredentialResult =
+  | {
+      readonly userId: string;
+      readonly personnelNumber: string | null;
+      readonly displayName: string;
+      readonly status: "ISSUED";
+      readonly temporaryPassword: string;
+    }
+  | {
+      readonly userId: string;
+      readonly personnelNumber: string | null;
+      readonly displayName: string;
+      readonly status: "HAS_CREDENTIALS" | "INACTIVE" | "SELF";
+    };
+
+/** Argon2 hashing per account bounds the batch size per request. */
+export const INITIAL_CREDENTIALS_BATCH_LIMIT = 100;
+
+/**
+ * Issues first temporary passwords to accounts that have none yet (typically
+ * just imported). An account that already has credentials, is inactive, or is
+ * the caller's own is skipped and reported, never reset: resetting is the
+ * explicit single-account action. All or nothing: one transaction.
+ */
+export const issueInitialTemporaryPasswords = defineCommand({
+  name: "user.issueInitialTemporaryPasswords",
+  input: z.object({
+    userIds: z.array(z.uuid()).min(1).max(INITIAL_CREDENTIALS_BATCH_LIMIT),
+  }),
+  async handler(uow, input): Promise<InitialCredentialResult[]> {
+    await authorizeAdministration(uow, "user.issueTemporaryPassword");
+    const results: InitialCredentialResult[] = [];
+    for (const userId of [...new Set(input.userIds)]) {
+      const user = await requireUser(uow, userId);
+      const base = {
+        userId: user.id,
+        personnelNumber: user.personnelNumber,
+        displayName: user.displayName,
+      };
+      if (user.id === uow.actor.userId)
+        results.push({ ...base, status: "SELF" });
+      else if (!user.isActive) results.push({ ...base, status: "INACTIVE" });
+      else if (await hasAccountCredentials(uow.tx, user.id))
+        results.push({ ...base, status: "HAS_CREDENTIALS" });
+      else
+        results.push({
+          ...base,
+          status: "ISSUED",
+          temporaryPassword: await issueTemporaryPasswordFor(
+            uow,
+            user,
+            "afterImport",
+          ),
+        });
+    }
+    return results;
+  },
+});
