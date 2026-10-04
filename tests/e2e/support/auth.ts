@@ -18,7 +18,14 @@ export async function signIn(
   identifier: string,
   password: string = DEMO_PASSWORD,
 ) {
-  if (!page.url().includes("/login")) await page.goto("/login");
+  if (!page.url().includes("/login")) {
+    await page.goto("/login");
+    // /login sends a still-signed-in browser home: sign out with signOut()
+    // first, never by clicking «خروج» and moving on.
+    await expect(page, "signIn() needs a signed-out browser").toHaveURL(
+      /\/login/,
+    );
+  }
   await page.getByLabel(IDENTIFIER_LABEL).fill(identifier);
   await page.getByLabel("رمز عبور").fill(password);
   await page.getByRole("button", { name: "ورود" }).click();
@@ -37,6 +44,18 @@ export async function signInAndWait(page: Page, email: string) {
   await expect(page).toHaveURL(HOME);
   await expect(page.getByRole("button", { name: "خروج" })).toBeVisible();
   await page.waitForLoadState("networkidle");
+}
+
+/**
+ * Signs out and waits until it has taken effect. «خروج» submits a Server
+ * Action whose response clears the session cookie; navigating before that
+ * response arrives cancels it and the browser stays signed in (on WebKit
+ * in CI that race was lost on every attempt).
+ */
+export async function signOut(page: Page) {
+  await page.getByRole("button", { name: "خروج" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByLabel(IDENTIFIER_LABEL)).toBeVisible();
 }
 
 export const isDesktop = (page: Page) =>

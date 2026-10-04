@@ -5,6 +5,7 @@ import {
   GENERIC_ERROR,
   signIn,
   signInAndWait,
+  signOut,
 } from "./support/auth";
 import { provisionPersonnel } from "./support/personnel";
 import {
@@ -78,8 +79,7 @@ test("a temporary password forces a change before any other page, then ends olde
   await expect(other.page).toHaveURL(/\/login/);
   await other.context.close();
 
-  await page.getByRole("button", { name: "خروج" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await signOut(page);
   await signIn(page, nurse.personnelNumber!, DEMO_PASSWORD);
   await expect(page.locator("#login-error")).toHaveText(GENERIC_ERROR);
   await signIn(page, nurse.email, NEW_PASSWORD);
@@ -164,7 +164,7 @@ test("admin imports nurses from CSV; the Head Nurse adds one to a draft schedule
   // Imported people are not added to existing schedules automatically.
   expect(await rosterOf(scheduleId)).toEqual(rosterBefore);
 
-  await page.getByRole("button", { name: "خروج" }).click();
+  await signOut(page);
   await signInAndWait(page, fixture.people.head.email);
   await page.goto(
     `/departments/${fixture.own.code}/schedule?schedule=${scheduleId}`,
