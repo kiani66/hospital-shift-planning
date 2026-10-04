@@ -48,13 +48,15 @@ test.describe("nurse", () => {
     await expectNotFound(page, "/review");
   });
 
-  test("shows placeholders clearly marked as not implemented", async ({
+  test("shows no not-implemented placeholder on the nurse pages", async ({
     page,
   }) => {
+    // My shifts is implemented: the month heading, no placeholder.
     await page.goto("/my-shifts");
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
     await expect(
       page.getByRole("note", { name: "هنوز پیاده‌سازی نشده" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     // Requests are implemented (Phase 9): no placeholder there any more.
     await page.goto("/requests");
     await expect(

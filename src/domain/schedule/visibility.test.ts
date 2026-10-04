@@ -11,14 +11,14 @@ const revisionDates = [
 ];
 const pending = [isoDate("2026-04-08"), isoDate("2026-04-09")];
 
-describe("nurseScheduleView", () => {
+describe("nurseScheduleView (D11 as amended)", () => {
   it.each<[ScheduleStatus, boolean, NurseScheduleView]>([
-    // Before the first approval
-    ["DRAFT", false, { source: "NONE" }],
-    ["PLANNING", false, { source: "NONE" }],
-    ["FINALIZED", false, { source: "WORKING_COPY", pendingApproval: true }],
-    ["SUBMITTED", false, { source: "WORKING_COPY", pendingApproval: true }],
-    ["RETURNED", false, { source: "WORKING_COPY", pendingApproval: true }],
+    // Before the first approval: the working copy, planning included.
+    ["DRAFT", false, { source: "WORKING_COPY" }],
+    ["PLANNING", false, { source: "WORKING_COPY" }],
+    ["FINALIZED", false, { source: "WORKING_COPY" }],
+    ["SUBMITTED", false, { source: "WORKING_COPY" }],
+    ["RETURNED", false, { source: "WORKING_COPY" }],
     // After approval: always the approved snapshot
     ["APPROVED", true, { source: "APPROVED_VERSION", pendingChangeDates: [] }],
     [
@@ -71,5 +71,13 @@ describe("nurseScheduleView", () => {
       source: "APPROVED_VERSION",
       pendingChangeDates: [],
     });
+  });
+
+  it("never shows the working copy once a version is approved", () => {
+    for (const status of ["REVISING", "SUBMITTED", "RETURNED"] as const)
+      expect(
+        nurseScheduleView({ status, hasApprovedVersion: true, revisionDates })
+          .source,
+      ).toBe("APPROVED_VERSION");
   });
 });

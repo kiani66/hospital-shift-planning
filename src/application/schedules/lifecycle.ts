@@ -156,7 +156,8 @@ const today = (uow: UnitOfWork) => todayIn(APP_TIMEZONE, uow.now);
  * PLANNING → FINALIZED. Blocked while the working copy has a blocking
  * finding (D7). Open preference windows are left as they are: the state
  * machine lets a FINALIZED schedule keep windows, and only SUBMIT needs them
- * closed (D58). Nurses see the working copy from FINALIZED on (D11).
+ * closed (D58). Nurses see their own working assignments marked finalized
+ * from here on (temporary before, D11 as amended).
  */
 export const finalizeSchedule = defineCommand({
   name: "schedule.finalize",

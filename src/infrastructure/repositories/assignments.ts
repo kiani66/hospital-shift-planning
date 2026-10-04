@@ -78,15 +78,21 @@ const toAssignment = (r: {
   shift: asShiftCode(r.shift),
 });
 
-/** The schedule's working copy, as domain assignments. */
+/** The schedule's working copy (optionally one nurse's), as domain assignments. */
 export async function listAssignments(
   db: DbExecutor,
   scheduleId: string,
+  filter: { userId?: string } = {},
 ): Promise<Assignment[]> {
   const rows = await db
     .select(assignmentColumns)
     .from(shiftAssignments)
-    .where(eq(shiftAssignments.scheduleId, scheduleId))
+    .where(
+      and(
+        eq(shiftAssignments.scheduleId, scheduleId),
+        filter.userId ? eq(shiftAssignments.userId, filter.userId) : undefined,
+      ),
+    )
     .orderBy(asc(shiftAssignments.date), asc(shiftAssignments.userId));
   return rows.map(toAssignment);
 }

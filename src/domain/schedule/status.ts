@@ -11,7 +11,7 @@ export const SCHEDULE_STATUSES = [
 /**
  * DRAFT      created; only the Head Nurse works on it
  * PLANNING   preference collection and/or scheduling in progress
- * FINALIZED  locked by the Head Nurse (corrections still possible); visible to nurses
+ * FINALIZED  locked by the Head Nurse (corrections still possible); change requests open
  * SUBMITTED  awaiting Supervisor review; frozen
  * RETURNED   rejected by the Supervisor; Head Nurse edits (nurses do NOT regain editing)
  * APPROVED   closed; changes only through a revision

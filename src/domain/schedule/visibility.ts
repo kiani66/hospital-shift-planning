@@ -2,17 +2,19 @@ import { uniqueSortedDates, type IsoDate } from "../shared/dates";
 import type { ScheduleStatus } from "./status";
 
 /**
- * Which assignments a nurse sees for a schedule.
+ * Which assignments a nurse sees of their own shifts in a schedule (D11 as
+ * amended for the NICU pilot, D98). It never widens what anyone sees of
+ * other nurses: callers read only the nurse's own cells.
  *
- * - NONE: the schedule is still being planned (draft assignments are hidden).
- * - WORKING_COPY: finalized but never approved; shown as "pending approval".
- * - APPROVED_VERSION: the latest approved snapshot; dates under an in-progress
- *   revision are flagged as "change pending". Nurses never see unapproved edits
- *   to an approved schedule.
+ * - WORKING_COPY: never approved yet, in every status from DRAFT on; the
+ *   nurse sees their current working assignments, which may still change
+ *   (how settled they are is `shiftPublication`'s concern).
+ * - APPROVED_VERSION: the latest approved snapshot; dates under an
+ *   in-progress revision are flagged as "change pending". Nurses never see
+ *   unapproved edits to an approved schedule.
  */
 export type NurseScheduleView =
-  | { readonly source: "NONE" }
-  | { readonly source: "WORKING_COPY"; readonly pendingApproval: true }
+  | { readonly source: "WORKING_COPY" }
   | {
       readonly source: "APPROVED_VERSION";
       readonly pendingChangeDates: readonly IsoDate[];
@@ -36,12 +38,5 @@ export function nurseScheduleView(
         : uniqueSortedDates(ctx.revisionDates ?? []);
     return { source: "APPROVED_VERSION", pendingChangeDates: pending };
   }
-  switch (ctx.status) {
-    case "FINALIZED":
-    case "SUBMITTED":
-    case "RETURNED":
-      return { source: "WORKING_COPY", pendingApproval: true };
-    default:
-      return { source: "NONE" };
-  }
+  return { source: "WORKING_COPY" };
 }
