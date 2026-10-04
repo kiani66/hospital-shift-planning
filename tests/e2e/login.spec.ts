@@ -6,6 +6,7 @@ import {
   IDENTIFIER_LABEL,
   signIn,
   signInAndWait,
+  signOut,
   wrongPasswordAccount,
 } from "./support/auth";
 
@@ -149,9 +150,7 @@ test.describe("session", () => {
 
   test("logs out", async ({ page }) => {
     await signInAndWait(page, DEMO_USERS.icuNurse1.email);
-    await page.getByRole("button", { name: "خروج" }).click();
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByLabel(IDENTIFIER_LABEL)).toBeVisible();
+    await signOut(page);
     await page.waitForLoadState("networkidle");
     await page.goto("/my-shifts");
     await expect(page).toHaveURL(/\/login/);
