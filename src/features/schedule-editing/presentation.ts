@@ -1,11 +1,12 @@
 import type { ActionError } from "@/application/result";
+import { conflictsWithPreference } from "@/domain/preferences/preference-alignment";
 import type { PreferenceFit } from "@/domain/preferences/preference-fit";
 import type {
   AssignmentChange,
   AssignmentEditDenial,
 } from "@/domain/schedule/assignment-editing";
 import { ASSIGNMENT_EDIT_REFUSALS } from "@/domain/schedule/assignment-editing";
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { PreferenceValue, ShiftCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 
@@ -122,16 +123,102 @@ export function editDenialLabel(
 
 /**
  * The preference beside a nurse's shift. A wish is context, never an
- * assignment and never an error (D35): DIFFERS is a neutral note.
+ * assignment and never an error (D35): DIFFERS is a neutral note. NONE has
+ * no fit: the row says «ترجیحی ثبت نشده» instead (`NO_PREFERENCE_LABEL`).
  */
 export function preferenceFitLabel(fit: PreferenceFit): string | null {
   switch (fit) {
     case "NONE":
-    case "PENDING":
       return null;
     case "MATCHES":
       return "مطابق ترجیح";
     case "DIFFERS":
-      return "متفاوت با ترجیح";
+      return "مغایر ترجیح";
+    case "PENDING":
+      // A shift or OFF wish without an assignment decision yet (D99).
+      return "در انتظار تخصیص";
   }
+}
+
+/** No preference recorded for the day: not the same as an explicit OFF (D35). */
+export const NO_PREFERENCE_LABEL = "ترجیحی ثبت نشده";
+
+/** The editor's list filters. They only choose rows; they never change assignments. */
+export type ShiftFilter = "ALL" | "UNASSIGNED" | ShiftCode;
+
+export interface EditorFilters {
+  readonly shift: ShiftFilter;
+  /** «فقط مغایر ترجیح»: only assignments that conflict with a recorded preference. */
+  readonly conflictsOnly: boolean;
+  readonly query: string;
+}
+
+export const NO_FILTERS: EditorFilters = {
+  shift: "ALL",
+  conflictsOnly: false,
+  query: "",
+};
+
+/** Arabic ي/ك typed on some keyboards match Persian ی/ک in names. */
+export const normalizeName = (text: string) =>
+  text.replace(/ي/g, "ی").replace(/ك/g, "ک").trim();
+
+export const matchesShiftFilter = (
+  filter: ShiftFilter,
+  shift: ShiftCode | null,
+) =>
+  filter === "ALL" ||
+  (filter === "UNASSIGNED" ? shift === null : shift === filter);
+
+/**
+ * The rows to list: every filter applies together (AND). A row the Head Nurse
+ * just edited (`kept`) stays in view although the shift or conflict filter no
+ * longer matches it (D50); the name search always applies.
+ */
+export function filterEditorNurses<
+  N extends {
+    readonly userId: string;
+    readonly displayName: string;
+    readonly preference: PreferenceValue | null;
+  },
+>(
+  nurses: readonly N[],
+  shiftOf: (userId: string) => ShiftCode | null,
+  filters: EditorFilters,
+  kept: ReadonlySet<string> = new Set(),
+): N[] {
+  const needle = normalizeName(filters.query);
+  return nurses.filter((n) => {
+    if (needle !== "" && !normalizeName(n.displayName).includes(needle))
+      return false;
+    if (kept.has(n.userId)) return true;
+    const shift = shiftOf(n.userId);
+    return (
+      matchesShiftFilter(filters.shift, shift) &&
+      (!filters.conflictsOnly ||
+        conflictsWithPreference({ preference: n.preference, shift }))
+    );
+  });
+}
+
+export const hasActiveFilters = (filters: EditorFilters) =>
+  filters.shift !== "ALL" ||
+  filters.conflictsOnly ||
+  normalizeName(filters.query) !== "";
+
+/** What an empty list says, so "nothing matches" never reads as "no conflicts". */
+export function emptyListMessage(input: {
+  readonly rostered: number;
+  /** Rostered nurses with a recorded preference for the day. */
+  readonly withPreference: number;
+  /** Assignments of the day that conflict with a recorded preference. */
+  readonly conflicts: number;
+  readonly filters: EditorFilters;
+}): string {
+  if (input.rostered === 0) return "فهرست پرسنل این برنامه خالی است.";
+  if (input.filters.conflictsOnly && input.conflicts === 0)
+    return input.withPreference === 0
+      ? "برای این روز هیچ ترجیحی ثبت نشده است؛ موردی مغایر ترجیح برای نمایش نیست."
+      : "در این روز هیچ شیفتی مغایر ترجیحات ثبت‌شده نیست.";
+  return "هیچ پرستاری با این فیلتر یا جستجو پیدا نشد.";
 }

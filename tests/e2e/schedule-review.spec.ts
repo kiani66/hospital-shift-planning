@@ -209,7 +209,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       hasText: department.nurseNames[1]!,
     });
     await expect(nurse2).toContainText("ترجیح: شب");
-    await expect(nurse2).toContainText("متفاوت با ترجیح");
+    await expect(nurse2).toContainText("مغایر ترجیح");
     // ME counts toward Morning coverage; staffing numbers are not invented.
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
     await expect(coverage.locator('[data-period="M"]')).toHaveText(

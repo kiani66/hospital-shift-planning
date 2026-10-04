@@ -4,11 +4,17 @@ import type { ActionError } from "@/application/result";
 import { isoDate } from "@/domain/shared/dates";
 
 import {
+  NETWORK_FAILURE,
+  NO_FILTERS,
+  NO_PREFERENCE_LABEL,
   editDenialLabel,
   editFailure,
-  NETWORK_FAILURE,
+  emptyListMessage,
+  filterEditorNurses,
+  hasActiveFilters,
   preferenceFitLabel,
   savedMessage,
+  type EditorFilters,
 } from "./presentation";
 
 const PERSIAN = /^[؀-ۿ«]/;
@@ -125,14 +131,151 @@ describe("editDenialLabel and preferenceFitLabel", () => {
       expect(editDenialLabel(reason)).toMatch(PERSIAN);
   });
 
-  it("words a differing wish neutrally and shows nothing without a decision", () => {
-    expect(preferenceFitLabel("DIFFERS")).toBe("متفاوت با ترجیح");
+  it("words every fit neutrally; no preference has its own words", () => {
     expect(preferenceFitLabel("MATCHES")).toBe("مطابق ترجیح");
+    expect(preferenceFitLabel("DIFFERS")).toBe("مغایر ترجیح");
+    expect(preferenceFitLabel("PENDING")).toBe("در انتظار تخصیص");
+    // No preference is not a fit: the row says so instead.
     expect(preferenceFitLabel("NONE")).toBeNull();
-    expect(preferenceFitLabel("PENDING")).toBeNull();
-    // Never worded as an error or a rule.
-    expect(preferenceFitLabel("DIFFERS")).not.toMatch(
-      /خطا|نامعتبر|ایراد|غیرمجاز/,
+    expect(NO_PREFERENCE_LABEL).toBe("ترجیحی ثبت نشده");
+    // A wish is never worded as an error, a rule or an approval (D35).
+    for (const fit of ["MATCHES", "DIFFERS", "PENDING"] as const)
+      expect(preferenceFitLabel(fit)).not.toMatch(
+        /خطا|نامعتبر|ایراد|غیرمجاز|تأیید|الزام/,
+      );
+  });
+});
+
+describe("filterEditorNurses: filters combine and never change assignments", () => {
+  const nurses = [
+    { userId: "a", displayName: "سارا احمدی", preference: "N" as const },
+    { userId: "b", displayName: "مریم کریمی", preference: "OFF" as const },
+    { userId: "c", displayName: "زهرا کاظمی", preference: null },
+    { userId: "d", displayName: "سمیرا رضایی", preference: "M" as const },
+    { userId: "e", displayName: "نرگس یزدی", preference: "E" as const },
+  ];
+  // a: M (conflict), b: E (conflict with OFF), c: N (no preference),
+  // d: M (matches), e: no shift (wish pending).
+  const shifts = new Map([
+    ["a", "M"],
+    ["b", "E"],
+    ["c", "N"],
+    ["d", "M"],
+  ] as const);
+  const shiftOf = (id: string) => shifts.get(id as "a") ?? null;
+  const ids = (filters: Partial<EditorFilters>, kept?: Set<string>) =>
+    filterEditorNurses(
+      nurses,
+      shiftOf,
+      { ...NO_FILTERS, ...filters },
+      kept,
+    ).map((n) => n.userId);
+
+  it("lists everyone without filters, in roster order", () => {
+    expect(ids({})).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("«فقط مغایر ترجیح» lists only assignments that conflict with a recorded preference", () => {
+    // Not the nurse without a preference, the match, or the pending wish.
+    expect(ids({ conflictsOnly: true })).toEqual(["a", "b"]);
+  });
+
+  it("never lists an OFF wish without an assignment: no decision, no conflict", () => {
+    const off = [
+      { userId: "x", displayName: "رها", preference: "OFF" as const },
+    ];
+    expect(
+      filterEditorNurses(off, () => null, {
+        ...NO_FILTERS,
+        conflictsOnly: true,
+      }),
+    ).toEqual([]);
+    expect(
+      filterEditorNurses(off, () => "N", {
+        ...NO_FILTERS,
+        conflictsOnly: true,
+      }),
+    ).toEqual(off);
+  });
+
+  it("combines the conflict filter with a shift filter (AND)", () => {
+    expect(ids({ conflictsOnly: true, shift: "M" })).toEqual(["a"]);
+    expect(ids({ conflictsOnly: true, shift: "E" })).toEqual(["b"]);
+    expect(ids({ conflictsOnly: true, shift: "N" })).toEqual([]);
+    expect(ids({ conflictsOnly: true, shift: "UNASSIGNED" })).toEqual([]);
+    expect(ids({ shift: "UNASSIGNED" })).toEqual(["e"]);
+  });
+
+  it("combines the conflict filter with the name search (Arabic ي/ك typed)", () => {
+    expect(ids({ conflictsOnly: true, query: "مريم" })).toEqual(["b"]);
+    expect(ids({ conflictsOnly: true, query: "  سارا " })).toEqual(["a"]);
+    expect(ids({ conflictsOnly: true, query: "زهرا" })).toEqual([]);
+    expect(ids({ conflictsOnly: true, shift: "M", query: "سمیرا" })).toEqual(
+      [],
     );
+  });
+
+  it("keeps a just-edited row in view under the shift and conflict filters, not under search", () => {
+    const kept = new Set(["d"]);
+    expect(ids({ conflictsOnly: true }, kept)).toEqual(["a", "b", "d"]);
+    expect(ids({ conflictsOnly: true, shift: "E" }, kept)).toEqual(["b", "d"]);
+    expect(ids({ conflictsOnly: true, query: "سارا" }, kept)).toEqual(["a"]);
+  });
+
+  it("reads assignments without changing them", () => {
+    const before = [...shifts];
+    ids({ conflictsOnly: true, shift: "M", query: "س" });
+    expect([...shifts]).toEqual(before);
+  });
+
+  it("knows when any filter is active", () => {
+    expect(hasActiveFilters(NO_FILTERS)).toBe(false);
+    expect(hasActiveFilters({ ...NO_FILTERS, query: "   " })).toBe(false);
+    expect(hasActiveFilters({ ...NO_FILTERS, query: "س" })).toBe(true);
+    expect(hasActiveFilters({ ...NO_FILTERS, shift: "N" })).toBe(true);
+    expect(hasActiveFilters({ ...NO_FILTERS, conflictsOnly: true })).toBe(true);
+  });
+});
+
+describe("emptyListMessage: an empty list says why", () => {
+  const base = { rostered: 4, withPreference: 2, conflicts: 0 };
+  it("an empty roster", () => {
+    expect(
+      emptyListMessage({ ...base, rostered: 0, filters: NO_FILTERS }),
+    ).toBe("فهرست پرسنل این برنامه خالی است.");
+  });
+
+  it("no conflict exists on the day", () => {
+    expect(
+      emptyListMessage({
+        ...base,
+        filters: { ...NO_FILTERS, conflictsOnly: true },
+      }),
+    ).toBe("در این روز هیچ شیفتی مغایر ترجیحات ثبت‌شده نیست.");
+  });
+
+  it("no preference is recorded for the day: nothing to conflict with", () => {
+    expect(
+      emptyListMessage({
+        ...base,
+        withPreference: 0,
+        filters: { ...NO_FILTERS, conflictsOnly: true },
+      }),
+    ).toBe(
+      "برای این روز هیچ ترجیحی ثبت نشده است؛ موردی مغایر ترجیح برای نمایش نیست.",
+    );
+  });
+
+  it("conflicts exist but the other filters hide them", () => {
+    expect(
+      emptyListMessage({
+        ...base,
+        conflicts: 2,
+        filters: { ...NO_FILTERS, conflictsOnly: true, shift: "N" },
+      }),
+    ).toBe("هیچ پرستاری با این فیلتر یا جستجو پیدا نشد.");
+    expect(
+      emptyListMessage({ ...base, filters: { ...NO_FILTERS, query: "x" } }),
+    ).toBe("هیچ پرستاری با این فیلتر یا جستجو پیدا نشد.");
   });
 });

@@ -1,7 +1,11 @@
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   CircleAlert,
+  Equal,
   Eye,
+  Info,
   Link2,
   Lock,
   Pencil,
@@ -19,13 +23,12 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Callout } from "@/components/ui/callout";
 import { IconWell } from "@/components/ui/icon-well";
-import { preferenceFit } from "@/domain/preferences/preference-fit";
+import { summarizePreferenceAlignment } from "@/domain/preferences/preference-alignment";
 import type { ShiftCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import {
   editDenialLabel,
   nurseRowId,
-  preferenceFitLabel,
 } from "@/features/schedule-editing/presentation";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import {
@@ -39,15 +42,22 @@ import { cn } from "@/lib/utils";
 import { HealthBadge, HealthIcon } from "./health-icon";
 import { NurseAvatar } from "./nurse-avatar";
 import {
+  PreferenceAlignmentSummary,
+  PreferenceContext,
+} from "./preference-alignment";
+import {
   HEALTH_PRESENTATION,
   HOLIDAY_LABEL,
   RULE_TITLES,
+  STAFFING_NOT_EVALUATED,
   findingFacts,
   findingMessage,
   findingResolution,
   findingSeverityLabel,
-  preferenceLabel,
-  staffingStatusLabel,
+  staffingBoundsLabel,
+  staffingIndicator,
+  staffingIndicatorLabel,
+  type StaffingIndicator,
 } from "./presentation";
 
 /** The day's health, holiday and edit mode as independent badges (icon + text). */
@@ -258,13 +268,41 @@ function RelatedFindings({ day, linked }: { day: DayReview; linked: boolean }) {
   );
 }
 
+/** A period's staffing status: icon + words, never color alone and never green. */
+function StaffingMark({ indicator }: { indicator: StaffingIndicator }) {
+  const style = {
+    NOT_EVALUATED: { icon: Info, className: "text-muted-foreground" },
+    WITHIN: { icon: Equal, className: "text-muted-foreground" },
+    SHORTAGE: {
+      icon: ArrowDown,
+      className: "font-medium text-health-attention-foreground",
+    },
+    EXCESS: {
+      icon: ArrowUp,
+      className: "font-medium text-status-warning-foreground",
+    },
+  }[indicator.kind];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-[0.6875rem] leading-snug",
+        style.className,
+      )}
+    >
+      <style.icon aria-hidden="true" className="size-3 shrink-0" />
+      {staffingIndicatorLabel(indicator)}
+    </span>
+  );
+}
+
 /**
- * Coverage per period (ME counts toward M and E), with the staffing status
- * once for the day when every period has the same one (D44).
+ * Coverage per period (ME counts toward M and E). Where a staffing source
+ * configures bounds, each period shows its minimum / maximum and a shortage
+ * or excess mark; where none does, the day says once that staffing was not
+ * evaluated (D44). Nothing here reads as "adequately staffed".
  */
-function CoverageSummary({ day }: { day: DayReview }) {
-  const status = day.coverage[0]!;
-  const sameStatus = day.coverage.every((c) => c.status === status.status);
+export function CoverageSummary({ day }: { day: DayReview }) {
+  const evaluated = day.coverage.some((c) => c.status !== "NOT_CONFIGURED");
   return (
     <section
       aria-labelledby="day-coverage"
@@ -284,10 +322,12 @@ function CoverageSummary({ day }: { day: DayReview }) {
           const direct = day.shifts.find((s) => s.code === c.period)!.nurses
             .length;
           const fromLong = c.covered - direct;
+          const indicator = staffingIndicator(c);
           return (
             <li
               key={c.period}
               data-period={c.period}
+              data-staffing={indicator.kind}
               className={cn(
                 "flex min-w-0 flex-col gap-0.5 rounded-lg px-2 py-1.5",
                 SHIFT_PRESENTATION[c.period].softClass,
@@ -316,18 +356,23 @@ function CoverageSummary({ day }: { day: DayReview }) {
                   {faNumber(fromLong)} نفر از شیفت طولانی
                 </span>
               )}
-              {!sameStatus && (
-                <span className="text-[0.6875rem] leading-snug text-muted-foreground">
-                  {staffingStatusLabel(c.status, c.bounds)}
+              {evaluated && c.bounds && (
+                <span className="text-[0.6875rem] leading-snug text-muted-foreground tabular-nums">
+                  {staffingBoundsLabel(c.bounds)}
                 </span>
               )}
+              {evaluated && <StaffingMark indicator={indicator} />}
             </li>
           );
         })}
       </ul>
-      {sameStatus && (
-        <p className="text-xs text-muted-foreground">
-          {staffingStatusLabel(status.status, status.bounds)}
+      {!evaluated && (
+        <p
+          role="note"
+          className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground"
+        >
+          <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          {STAFFING_NOT_EVALUATED}
         </p>
       )}
     </section>
@@ -343,11 +388,15 @@ function ReadOnlyNurseRow({
   shift: ShiftCode | null;
   flagged: boolean;
 }) {
-  const fitLabel = preferenceFitLabel(preferenceFit(nurse.preference, shift));
   return (
     <li className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
       <NurseAvatar displayName={nurse.displayName} />
-      <span className="min-w-0 truncate text-sm">{nurse.displayName}</span>
+      <span
+        title={nurse.displayName}
+        className="max-w-full min-w-0 truncate text-sm"
+      >
+        {nurse.displayName}
+      </span>
       {nurse.role === "HEAD_NURSE" && (
         <Badge tone="muted" size="sm">
           {ROLE_LABELS.HEAD_NURSE}
@@ -360,11 +409,8 @@ function ReadOnlyNurseRow({
         </span>
       )}
       {nurse.preference && (
-        <span className="ms-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="rounded border border-primary/15 bg-brand-soft/70 px-1.5 text-brand-soft-foreground">
-            {preferenceLabel(nurse.preference)}
-          </span>
-          {shift && fitLabel && <span>{fitLabel}</span>}
+        <span className="ms-auto min-w-0">
+          <PreferenceContext preference={nurse.preference} shift={shift} />
         </span>
       )}
     </li>
@@ -450,6 +496,9 @@ export function DayDetail({
         <Findings day={day} linked={!!editor} />
         <RelatedFindings day={day} linked={!!editor} />
         <CoverageSummary day={day} />
+        <PreferenceAlignmentSummary
+          alignment={summarizePreferenceAlignment(day.roster)}
+        />
       </div>
 
       <div className="min-w-0">

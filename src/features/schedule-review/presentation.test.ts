@@ -7,9 +7,16 @@ import { DAY_HEALTH_STATES } from "@/domain/schedule/day-health";
 import { isoDate } from "@/domain/shared/dates";
 
 import {
+  ALIGNMENT_ADVISORY_NOTE,
+  ALIGNMENT_LABELS,
   HEALTH_PRESENTATION,
   RULE_TITLES,
+  STAFFING_NOT_EVALUATED,
   VALID_CAVEAT,
+  alignmentPartitionNote,
+  staffingBoundsLabel,
+  staffingIndicator,
+  staffingIndicatorLabel,
   dayCellLabel,
   findingFacts,
   findingMessage,
@@ -252,5 +259,73 @@ describe("staffing, preferences and avatars", () => {
   it("builds initials for the avatar fallback", () => {
     expect(initials("سارا نمونه")).toBe("س‌ن");
     expect(initials("  مریم  ")).toBe("م");
+  });
+});
+
+describe("staffing coverage presentation (reads staffingStatus, D44)", () => {
+  it.each([
+    [{ covered: 2, bounds: null, status: "NOT_CONFIGURED" }, "ارزیابی نشده"],
+    [
+      { covered: 1, bounds: { min: 3, max: 5 }, status: "BELOW_MINIMUM" },
+      "کمبود ۲ نفر",
+    ],
+    [
+      { covered: 7, bounds: { min: 3, max: 5 }, status: "ABOVE_MAXIMUM" },
+      "مازاد ۲ نفر",
+    ],
+    [
+      { covered: 4, bounds: { min: 3, max: 5 }, status: "WITHIN_BOUNDS" },
+      "در محدوده تعریف‌شده",
+    ],
+  ] as const)("%o → %s", (coverage, text) => {
+    expect(staffingIndicatorLabel(staffingIndicator(coverage))).toBe(text);
+  });
+
+  it("shows configured bounds and says when one is not set, never inventing a number", () => {
+    expect(staffingBoundsLabel({ min: 3, max: 5 })).toBe("حداقل ۳ · حداکثر ۵");
+    expect(staffingBoundsLabel({ min: 2 })).toBe("حداقل ۲ · حداکثر تعریف نشده");
+    expect(staffingBoundsLabel({ max: 4 })).toBe("حداقل تعریف نشده · حداکثر ۴");
+    expect(staffingBoundsLabel(null)).toBe(
+      "حداقل تعریف نشده · حداکثر تعریف نشده",
+    );
+  });
+
+  it("states that staffing was not evaluated, and nothing implies adequacy", () => {
+    expect(STAFFING_NOT_EVALUATED).toContain("ارزیابی نشده");
+    expect(STAFFING_NOT_EVALUATED).toContain(
+      "حداقل و حداکثر نفرات تعریف نشده است",
+    );
+    for (const text of [
+      STAFFING_NOT_EVALUATED,
+      staffingIndicatorLabel({ kind: "WITHIN" }),
+    ])
+      expect(text).not.toMatch(/کافی|کامل|تأیید|مناسب|درست|صحیح/);
+  });
+});
+
+describe("preference alignment wording", () => {
+  it("uses the approved labels", () => {
+    expect(ALIGNMENT_LABELS).toEqual({
+      title: "انطباق با ترجیحات",
+      matches: "مطابق ترجیح",
+      differs: "مغایر ترجیح",
+      pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
+      noPreference: "ترجیحی ثبت نشده",
+      unassigned: "بدون شیفت در این روز",
+    });
+  });
+
+  it("says the fit counts partition the roster, and that preferences are advisory", () => {
+    expect(alignmentPartitionNote(12)).toBe(
+      "هر نفر فقط در یکی از این چهار دسته است (جمع: ۱۲ نفر).",
+    );
+    expect(ALIGNMENT_ADVISORY_NOTE).toContain("الزامی نیستند");
+    expect(ALIGNMENT_ADVISORY_NOTE).toContain(
+      "جلوی نهایی‌سازی برنامه را نمی‌گیرد",
+    );
+    // «مانع نهایی‌سازی» stays the label of a blocking finding only.
+    expect(ALIGNMENT_ADVISORY_NOTE).not.toContain(
+      findingSeverityLabel({ blocking: true } as ReviewFinding),
+    );
   });
 });

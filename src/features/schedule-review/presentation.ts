@@ -212,6 +212,86 @@ export function staffingStatusLabel(
   }
 }
 
+/**
+ * Said once for a day whose coverage periods have no minimum or maximum:
+ * staffing was not evaluated, so nothing may read as "adequate" (D40, D44).
+ */
+export const STAFFING_NOT_EVALUATED =
+  "تأمین نفرات ارزیابی نشده است؛ حداقل و حداکثر نفرات تعریف نشده است.";
+
+/**
+ * What a coverage period's staffing status shows. It only reads the status
+ * `staffingStatus` (D44) already decided; the gap is the distance to the
+ * bound that status names, never a new rule. WITHIN_BOUNDS is deliberately
+ * neutral (no green, no check): it is not a confirmation of adequacy.
+ */
+export type StaffingIndicator =
+  | { readonly kind: "NOT_EVALUATED" }
+  | { readonly kind: "WITHIN" }
+  | { readonly kind: "SHORTAGE"; readonly gap: number }
+  | { readonly kind: "EXCESS"; readonly gap: number };
+
+export function staffingIndicator(coverage: {
+  readonly covered: number;
+  readonly bounds: StaffingBounds | null;
+  readonly status: StaffingStatus;
+}): StaffingIndicator {
+  switch (coverage.status) {
+    case "NOT_CONFIGURED":
+      return { kind: "NOT_EVALUATED" };
+    case "WITHIN_BOUNDS":
+      return { kind: "WITHIN" };
+    case "BELOW_MINIMUM":
+      return {
+        kind: "SHORTAGE",
+        gap: coverage.bounds!.min! - coverage.covered,
+      };
+    case "ABOVE_MAXIMUM":
+      return { kind: "EXCESS", gap: coverage.covered - coverage.bounds!.max! };
+  }
+}
+
+export function staffingIndicatorLabel(indicator: StaffingIndicator): string {
+  switch (indicator.kind) {
+    case "NOT_EVALUATED":
+      return "ارزیابی نشده";
+    case "WITHIN":
+      return "در محدوده تعریف‌شده";
+    case "SHORTAGE":
+      return `کمبود ${faNumber(indicator.gap)} نفر`;
+    case "EXCESS":
+      return `مازاد ${faNumber(indicator.gap)} نفر`;
+  }
+}
+
+/** "حداقل ۳ · حداکثر ۵"; a bound that is not set says so, never a guessed number. */
+export function staffingBoundsLabel(bounds: StaffingBounds | null): string {
+  const part = (word: string, value: number | undefined) =>
+    value === undefined ? `${word} تعریف نشده` : `${word} ${faNumber(value)}`;
+  return `${part("حداقل", bounds?.min)} · ${part("حداکثر", bounds?.max)}`;
+}
+
+/** Labels of the «انطباق با ترجیحات» summary (`PreferenceAlignment`). */
+export const ALIGNMENT_LABELS = {
+  title: "انطباق با ترجیحات",
+  matches: "مطابق ترجیح",
+  differs: "مغایر ترجیح",
+  pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
+  noPreference: "ترجیحی ثبت نشده",
+  unassigned: "بدون شیفت در این روز",
+} as const;
+
+/** Why the four fit counts add up to the roster and «بدون شیفت» does not join them. */
+export const alignmentPartitionNote = (rostered: number) =>
+  `هر نفر فقط در یکی از این چهار دسته است (جمع: ${faNumber(rostered)} نفر).`;
+
+export const ALIGNMENT_OVERLAP_NOTE =
+  "جدا شمرده می‌شود و با دسته‌های بالا هم‌پوشانی دارد.";
+
+/** Preferences are wishes (D35): a conflict never invalidates the schedule. */
+export const ALIGNMENT_ADVISORY_NOTE =
+  "ترجیح‌ها الزامی نیستند؛ مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد.";
+
 /** A nurse's own wish for the day, as shown next to their name. */
 export function preferenceLabel(value: PreferenceValue): string {
   return value === "OFF"

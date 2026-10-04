@@ -24,6 +24,7 @@ export * from "./preferences/preference-window";
 export * from "./preferences/can-edit-preference";
 export * from "./preferences/my-preferences";
 export * from "./preferences/preference-fit";
+export * from "./preferences/preference-alignment";
 export * from "./authz/actor";
 export * from "./authz/policies";
 export * from "./rules/assess-change";
