@@ -2,16 +2,22 @@
 
 ## Sign-in
 
-- **Auth.js v5**, Credentials provider (e-mail + password). No registration, password reset,
-  magic links, OAuth or SSO. Accounts are provisioned explicitly by the production CLI or authorized Hospital Admin commands (demo accounts by the seed).
+- **Auth.js v5**, Credentials provider (personnel number **or** e-mail + password, D96). No
+  registration, self-service recovery, magic links, OAuth or SSO. Accounts are provisioned
+  explicitly by the production CLI or authorized Hospital Admin commands (demo accounts by the
+  seed); first passwords are one-time temporary passwords (D89).
 - **Passwords**: Argon2id via `@node-rs/argon2` (prebuilt, no native build step), 19 MiB memory,
   2 iterations, 1 lane (OWASP minimum). Stored in `users.password_hash`; the parameters live in
   each hash, so they can be raised later. Verification runs only on the server
   (`src/infrastructure/auth/credentials.ts`); hashes never leave the server.
-- **One generic failure**: an unknown e-mail, a wrong password, a user without a password and a
-  deactivated user all get "ایمیل یا رمز عبور نادرست است.". When there is no hash to check, a
-  dummy Argon2 verification runs so response time does not reveal whether the account exists.
-- Input is capped (e-mail 320, password 256 characters) to bound the hashing work per request.
+- **Identifier**: containing `@` → e-mail (trimmed, lower-cased); otherwise Persian/Arabic digits
+  are converted, invisible characters removed and 1–20 digits are a personnel number (exact text
+  match: leading zeros count). Anything else matches no account but takes the same path.
+- **One generic failure**: an unknown identifier, a wrong password, a user without a password and
+  a deactivated user all get "شماره پرسنلی/ایمیل یا رمز عبور نادرست است.". When there is no hash
+  to check, a dummy Argon2 verification runs so response time does not reveal whether the account
+  exists.
+- Input is capped (identifier 320, password 256 characters) to bound the hashing work per request.
 - Auth.js logs nothing about failed sign-ins; other auth errors are logged by name only.
 - After signing in, the user returns to `callbackUrl` only if it is a same-site path
   (`safeRedirectPath`); otherwise `/`.
@@ -22,10 +28,32 @@
   HTTPS), **absolute** 12 hours from sign-in (not sliding: the proxy only reads the cookie and
   never re-issues it, so a request in flight during sign-out cannot restore the session). No session tables: Credentials sign-in does not support database
   sessions, and the session carries nothing that needs revoking server-side (see below).
-- Content: **only the user id** (`sub`). The default name/e-mail/picture claims are dropped;
-  roles, Hospital Admin authority, memberships, supervisor assignments and active status are never stored in it.
+- Content: **the user id** (`sub`) and the **session version** it was issued with (`sv`, D90).
+  The default name/e-mail/picture claims are dropped; roles, Hospital Admin authority,
+  memberships, supervisor assignments and active status are never stored in it.
 - Sign-out (`خروج`) clears the cookie. A copied cookie stays cryptographically valid until it
-  expires, but it grants nothing once the user is deactivated (next section).
+  expires, but it grants nothing once the user is deactivated or the password has been changed or
+  reset since it was issued (next section).
+
+## Password changes, temporary passwords and session invalidation
+
+- `users.session_version` is incremented by every self-service change, admin-issued temporary
+  password and operator reset. `getActor()` compares it with the session's `sv`; a mismatch is
+  "not signed in" on the next request, on every device. Sessions from before this feature carry
+  no `sv` and count as version 0 (the default), so existing users stay signed in until their first
+  change.
+- A temporary password sets `users.must_change_password`. Such a session resolves to
+  `passwordChangeRequired`: no actor is produced, so every protected page and Server Action
+  (`requireRequestContext`) redirects to `/account/password`, and use cases cannot run.
+- `/account/password` requires the current password (wrong attempts count against the account
+  throttle), a 12–256 character new password, confirmation, and a different value. On success
+  the action signs the user in again with the new password, so the new session carries the new
+  version.
+- Temporary passwords: CSPRNG (`crypto.randomInt`), 4×4 unambiguous characters (~91 bits); only
+  the Argon2id hash is stored; the plaintext is returned once to the issuing admin's browser and
+  never logged, audited, persisted or returned again; the UI shows it once and discards it.
+  Issuing never reactivates an account and clears an existing lockout. Audit events
+  (`user.temporaryCredentialIssued`, `user.credentialsChanged`) contain no credential material.
 
 ## `getActor()`: the trusted boundary
 
@@ -59,21 +87,22 @@ actor (`ACTOR_INACTIVE`) as defense in depth.
 
 ## Login throttling
 
-Database-backed, per e-mail address (`login_throttles`, migration 0004):
+Database-backed, **per account** (`login_throttles`, migration 0004; D96 supersedes the per-e-mail
+key of D28):
 
-| Rule           | Value                                                                          |
-| -------------- | ------------------------------------------------------------------------------ |
-| Key            | SHA-256 of the lower-cased, trimmed e-mail (the address itself is not stored)  |
-| Limit          | 5 failed attempts within 15 minutes                                            |
-| Lockout        | 15 minutes after the 5th failure; all attempts refused, even correct passwords |
-| Reset          | A successful sign-in deletes the row; an expired window starts counting again  |
-| Unknown e-mail | Throttled exactly like a real one (no enumeration)                             |
-| Concurrency    | One atomic `INSERT … ON CONFLICT DO UPDATE` per failure                        |
+| Rule               | Value                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| Key (known)        | SHA-256 of `account:<user id>`: e-mail, personnel number and a corrected number share it |
+| Key (unknown)      | SHA-256 of `unknown:<identifier kind>:<normalized value>` (the identifier is not stored) |
+| Limit              | 5 failed attempts within 15 minutes (sign-in, or a wrong current password when changing) |
+| Lockout            | 15 minutes after the 5th failure; all attempts refused, even correct passwords           |
+| Reset              | A successful sign-in or password change deletes the row; a temporary password clears it  |
+| Unknown identifier | Throttled exactly like a real one (no enumeration)                                       |
+| Concurrency        | One atomic `INSERT … ON CONFLICT DO UPDATE` per failure                                  |
 
-While locked, the form says sign-in is temporarily blocked for this e-mail. Not covered (known
-MVP limits): per-IP limiting, and an attacker can deliberately lock a known address for 15
-minutes. Rows are not pruned automatically; the table holds at most one small row per attempted
-address.
+While locked, the form says sign-in to this account is temporarily blocked. Not covered (known
+MVP limits): per-IP limiting, and an attacker can deliberately lock a known account for 15
+minutes. Rows keyed by e-mail from before D96 simply expire. Rows are not pruned automatically.
 
 ## Environment
 
@@ -167,3 +196,19 @@ and shell revalidation. Admin navigation/access is derived again on the next req
 same cookie; old loaded controls cannot authorize a write after revocation. Supervisor periods
 remain separate effective-dated relations, with current-only inclusive ending and expected-end
 stale checks. No secrets, bootstrap/recovery adapter or extra audit metadata are introduced.
+
+## Personnel identity and bulk import (D87–D97)
+
+- Personnel numbers, mobile numbers and e-mails are validated and normalized on the server (domain
+  parsers), with database checks as the final guard. Only Hospital Admins see e-mail, mobile,
+  personnel number and credential state (`hasCredentials`, `mustChangePassword` booleans); scoped
+  Head Nurse/Supervisor views are unchanged.
+- The CSV import runs only as authenticated Hospital Admin Server Actions (Next.js origin checks),
+  re-authorizes against the database, caps size (256 KB) and rows (500), decodes strict UTF-8,
+  rejects any credential-like column, never trusts the previewed rows on commit (re-validation and
+  plan fingerprint), and holds the administration advisory lock while committing. Imported
+  accounts have no password; existing accounts are never modified, reset or reactivated.
+- Personnel-number corrections change only the sign-in identifier (audited before/after); the
+  user id, sessions and throttle state are unaffected.
+- Roster additions are Head Nurse use cases (`schedule.editRoster`) with server-side membership,
+  account, status and revision checks; no assignment is created.

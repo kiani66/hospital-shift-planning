@@ -8,15 +8,18 @@ import {
 /** E2E runs against the demo seed (`pnpm db:seed`). */
 export { DEMO_PASSWORD, DEMO_USERS };
 
-export const GENERIC_ERROR = "ایمیل یا رمز عبور نادرست است.";
+export const GENERIC_ERROR = "شماره پرسنلی/ایمیل یا رمز عبور نادرست است.";
+
+/** The sign-in identifier field (personnel number or e-mail). */
+export const IDENTIFIER_LABEL = "شماره پرسنلی یا ایمیل";
 
 export async function signIn(
   page: Page,
-  email: string,
+  identifier: string,
   password: string = DEMO_PASSWORD,
 ) {
   if (!page.url().includes("/login")) await page.goto("/login");
-  await page.getByLabel("ایمیل").fill(email);
+  await page.getByLabel(IDENTIFIER_LABEL).fill(identifier);
   await page.getByLabel("رمز عبور").fill(password);
   await page.getByRole("button", { name: "ورود" }).click();
 }

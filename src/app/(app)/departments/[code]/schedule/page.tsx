@@ -299,8 +299,6 @@ export default async function DepartmentSchedulePage({
           rosterAction={
             rosterCandidates.editable ? (
               <RosterAdditions
-                // A new roster (revision) resets the selection.
-                key={review.month.revision}
                 scheduleId={selected.id}
                 revision={review.month.revision}
                 candidates={rosterCandidates.candidates}

@@ -108,3 +108,17 @@ export function createPersonnelRoster(fixture: Fixture, offset: number) {
     return result.data.scheduleId;
   });
 }
+
+/** Arrange a temporary-password state on this test's isolated nurse fixture. */
+export function requirePasswordChange(fixture: Fixture) {
+  return withDatabase(async (db) => {
+    await db
+      .update(users)
+      .set({ mustChangePassword: true })
+      .where(eq(users.id, fixture.people.nurse.id));
+  });
+}
+
+export function rosterOf(scheduleId: string) {
+  return withDatabase((db) => listRoster(db, scheduleId));
+}

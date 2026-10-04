@@ -31,7 +31,7 @@ async function noOverflow(page: Page) {
   ).toBeLessThanOrEqual(0);
 }
 
-test("admin creates a password account, finds it, opens detail and edits only basic profile", async ({
+test("admin creates an account with a personnel number, sees a one-time temporary password, and edits only the basic profile", async ({
   page,
 }) => {
   await signInAndWait(page, fixture.people.admin.email);
@@ -39,13 +39,23 @@ test("admin creates a password account, finds it, opens detail and edits only ba
   await page.getByRole("link", { name: "ایجاد کاربر", exact: true }).click();
   const email = `created.${fixture.suffix}@people-e2e.invalid`;
   const name = `کاربر جدید ${fixture.suffix}`;
+  const personnelNumber = `9${BigInt(`0x${fixture.suffix}`).toString().padStart(10, "0")}`;
   const form = page.getByRole("form", { name: "ایجاد حساب کاربر" });
-  await form.getByLabel("نام نمایشی").fill(name);
-  await form.getByLabel("ایمیل / شناسه ورود").fill(email);
-  await form.getByLabel("رمز عبور اولیه").fill("private-new-account-password");
+  await form.getByLabel("شماره پرسنلی").fill(personnelNumber);
+  await form.getByLabel("نام و نام خانوادگی").fill(name);
+  await form.getByLabel("ایمیل (اختیاری)").fill(email);
+  await expect(form.getByLabel("همین حالا رمز موقت ساخته شود")).toBeChecked();
+  await expect(form.getByLabel(/رمز عبور/)).toHaveCount(0);
   await form.getByRole("button", { name: "ایجاد حساب", exact: true }).click();
+  const temporary = page.getByTestId("temporary-password");
+  await expect(temporary).toHaveText(/^[A-Za-z0-9]{4}(-[A-Za-z0-9]{4}){3}$/);
+  const issuedPassword = (await temporary.textContent())!;
+  await noOverflow(page);
+  await page.getByRole("button", { name: "تحویل دادم؛ پنهان شود" }).click();
   await expect(page).toHaveURL(/\/admin\/personnel\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(page.getByTestId("temporary-password")).toHaveCount(0);
+  await expect(page.getByText(personnelNumber, { exact: true })).toBeVisible();
   const created = (await personByEmail(email))!;
   expect(created.isHospitalAdmin).toBe(false);
   await page
@@ -55,7 +65,7 @@ test("admin creates a password account, finds it, opens detail and edits only ba
   const updatedName = `نام ویرایش‌شده ${fixture.suffix}`;
   const updatedEmail = `updated.${fixture.suffix}@people-e2e.invalid`;
   await dialog.getByLabel("نام نمایشی").fill(updatedName);
-  await dialog.getByLabel("ایمیل / شناسه ورود").fill(updatedEmail);
+  await dialog.getByLabel("ایمیل (اختیاری)").fill(updatedEmail);
   await expect(dialog.getByLabel(/رمز/)).toHaveCount(0);
   await dialog.getByRole("button", { name: "ذخیره اطلاعات" }).click();
   await expect(dialog).not.toBeVisible();
@@ -65,7 +75,7 @@ test("admin creates a password account, finds it, opens detail and edits only ba
   await page.getByRole("link", { name: "بازگشت به کاربران بیمارستان" }).click();
   await page
     .getByLabel("جستجو با نام، شماره پرسنلی یا ایمیل")
-    .fill(updatedEmail);
+    .fill(personnelNumber);
   await page.getByRole("button", { name: "اعمال فیلتر" }).click();
   await page
     .getByRole("list", { name: "فهرست کاربران" })
@@ -77,38 +87,43 @@ test("admin creates a password account, finds it, opens detail and edits only ba
   const state = await readPersonMutationState(fixture, created.id);
   expect(state.events.map((e) => e.action)).toEqual([
     "user.created",
+    "user.temporaryCredentialIssued",
     "user.profileChanged",
   ]);
   expect(state.history.memberships).toEqual([]);
   expect(JSON.stringify(state.events)).not.toMatch(
-    /password|hash|token|secret/,
+    /password|hash|token|secret/i,
   );
-  await noOverflow(page);
+  expect(JSON.stringify(state.events)).not.toContain(issuedPassword);
 });
 
-test("create form reports Persian invalid/duplicate email errors and clears submitted passwords", async ({
+test("create form reports Persian personnel-number and duplicate errors", async ({
   page,
 }) => {
   await signInAndWait(page, fixture.people.admin.email);
   await page.goto("/admin/personnel/new");
   const form = page.getByRole("form", { name: "ایجاد حساب کاربر" });
-  await form.getByLabel("نام نمایشی").fill("نام تکراری");
-  await form.getByLabel("ایمیل / شناسه ورود").fill("invalid");
-  await form.getByLabel("رمز عبور اولیه").fill("short");
+  await form.getByLabel("شماره پرسنلی").fill("12-34");
+  await form.getByLabel("نام و نام خانوادگی").fill("نام تکراری");
+  await form.getByLabel("ایمیل (اختیاری)").fill("invalid");
   await form.getByRole("button", { name: "ایجاد حساب" }).click();
   await expect(form.getByRole("alert")).toBeVisible();
-  await expect(form.getByLabel("ایمیل / شناسه ورود")).toHaveAttribute(
+  await expect(form.getByLabel("شماره پرسنلی")).toHaveAttribute(
     "aria-invalid",
     "true",
   );
-  await expect(form.getByLabel("رمز عبور اولیه")).toHaveValue("");
-  await form.getByLabel("ایمیل / شناسه ورود").fill(fixture.people.nurse.email);
-  await form.getByLabel("رمز عبور اولیه").fill("private-new-account-password");
+  await expect(form.getByLabel("ایمیل (اختیاری)")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await form
+    .getByLabel("شماره پرسنلی")
+    .fill(`7${fixture.suffix.replace(/\D/g, "1")}`);
+  await form.getByLabel("ایمیل (اختیاری)").fill(fixture.people.nurse.email);
   await form.getByRole("button", { name: "ایجاد حساب" }).click();
   await expect(form.getByRole("alert")).toContainText(
-    "این ایمیل قبلاً ثبت شده است",
+    "این ایمیل قبلاً برای حساب دیگری ثبت شده است",
   );
-  await expect(form.getByLabel("رمز عبور اولیه")).toHaveValue("");
   expect(
     (await readPersonMutationState(fixture, fixture.people.nurse.id)).events,
   ).toEqual([]);

@@ -49,24 +49,23 @@ export function RosterAdditions({
     });
   const all = candidates.length > 0 && selected.size === candidates.length;
 
-  if (candidates.length === 0)
-    return (
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        همه اعضای فعال بخش که در این بازه عضویت دارند در فهرست برنامه هستند.
-      </p>
-    );
-
   return (
     <div className="flex flex-col gap-2">
-      <Button
-        variant="outline"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        className="w-full sm:w-auto"
-      >
-        <UserPlus aria-hidden="true" className="size-5" />
-        افزودن پرسنل به برنامه ({faNumber(candidates.length)} نفر واجد شرایط)
-      </Button>
+      {candidates.length === 0 ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          همه اعضای فعال بخش که در این بازه عضویت دارند در فهرست برنامه هستند.
+        </p>
+      ) : (
+        <Button
+          variant="outline"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          className="w-full sm:w-auto"
+        >
+          <UserPlus aria-hidden="true" className="size-5" />
+          افزودن پرسنل به برنامه ({faNumber(candidates.length)} نفر واجد شرایط)
+        </Button>
+      )}
       {state.status !== "idle" && !open && (
         <p
           role={state.status === "error" ? "alert" : "status"}

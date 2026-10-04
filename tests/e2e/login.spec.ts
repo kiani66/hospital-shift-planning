@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   DEMO_USERS,
   GENERIC_ERROR,
+  IDENTIFIER_LABEL,
   signIn,
   signInAndWait,
   wrongPasswordAccount,
@@ -18,7 +19,7 @@ test.describe("login page", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "ورود به سامانه" }),
     ).toBeVisible();
-    await expect(page.getByLabel("ایمیل")).toHaveAttribute(
+    await expect(page.getByLabel(IDENTIFIER_LABEL)).toHaveAttribute(
       "autocomplete",
       "username",
     );
@@ -62,11 +63,11 @@ test.describe("login page", () => {
     const alert = page.locator("#login-error");
     await expect(alert).toHaveAttribute("role", "alert");
     await expect(alert).toHaveText(GENERIC_ERROR);
-    await expect(page.getByLabel("ایمیل")).toHaveAttribute(
+    await expect(page.getByLabel(IDENTIFIER_LABEL)).toHaveAttribute(
       "aria-describedby",
       "login-error",
     );
-    await expect(page.getByLabel("ایمیل")).toHaveAttribute(
+    await expect(page.getByLabel(IDENTIFIER_LABEL)).toHaveAttribute(
       "aria-invalid",
       "true",
     );
@@ -75,6 +76,14 @@ test.describe("login page", () => {
     await signIn(page, `unknown-${Date.now()}@demo.invalid`, "wrong password");
     await expect(alert).toHaveText(GENERIC_ERROR);
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("signs in with a personnel number typed in Persian digits", async ({
+    page,
+  }) => {
+    // icuNurse1's personnel number is 01011: leading zero kept.
+    await signIn(page, "۰۱۰۱۱");
+    await expect(page).toHaveURL(/\/my-shifts$/);
   });
 
   test("rejects a deactivated user with the generic error", async ({
@@ -92,7 +101,7 @@ test.describe("login page", () => {
       "hardware keyboard flow is checked on desktop",
     );
     await page.goto("/login");
-    await page.getByLabel("ایمیل").focus();
+    await page.getByLabel(IDENTIFIER_LABEL).focus();
     await page.keyboard.type(DEMO_USERS.icuNurse1.email);
     await page.keyboard.press("Tab");
     await expect(page.getByLabel("رمز عبور")).toBeFocused();
@@ -142,7 +151,7 @@ test.describe("session", () => {
     await signInAndWait(page, DEMO_USERS.icuNurse1.email);
     await page.getByRole("button", { name: "خروج" }).click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByLabel("ایمیل")).toBeVisible();
+    await expect(page.getByLabel(IDENTIFIER_LABEL)).toBeVisible();
     await page.waitForLoadState("networkidle");
     await page.goto("/my-shifts");
     await expect(page).toHaveURL(/\/login/);
