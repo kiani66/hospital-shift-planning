@@ -134,7 +134,7 @@ describe("editDenialLabel and preferenceFitLabel", () => {
   it("words every fit neutrally; no preference has its own words", () => {
     expect(preferenceFitLabel("MATCHES")).toBe("مطابق ترجیح");
     expect(preferenceFitLabel("DIFFERS")).toBe("مغایر ترجیح");
-    expect(preferenceFitLabel("PENDING")).toBe("هنوز بدون شیفت");
+    expect(preferenceFitLabel("PENDING")).toBe("در انتظار تخصیص");
     // No preference is not a fit: the row says so instead.
     expect(preferenceFitLabel("NONE")).toBeNull();
     expect(NO_PREFERENCE_LABEL).toBe("ترجیحی ثبت نشده");
@@ -175,9 +175,27 @@ describe("filterEditorNurses: filters combine and never change assignments", () 
     expect(ids({})).toEqual(["a", "b", "c", "d", "e"]);
   });
 
-  it("«فقط مغایرت‌ها» lists only assignments that conflict with a recorded preference", () => {
+  it("«فقط مغایر ترجیح» lists only assignments that conflict with a recorded preference", () => {
     // Not the nurse without a preference, the match, or the pending wish.
     expect(ids({ conflictsOnly: true })).toEqual(["a", "b"]);
+  });
+
+  it("never lists an OFF wish without an assignment: no decision, no conflict", () => {
+    const off = [
+      { userId: "x", displayName: "رها", preference: "OFF" as const },
+    ];
+    expect(
+      filterEditorNurses(off, () => null, {
+        ...NO_FILTERS,
+        conflictsOnly: true,
+      }),
+    ).toEqual([]);
+    expect(
+      filterEditorNurses(off, () => "N", {
+        ...NO_FILTERS,
+        conflictsOnly: true,
+      }),
+    ).toEqual(off);
   });
 
   it("combines the conflict filter with a shift filter (AND)", () => {
@@ -243,7 +261,9 @@ describe("emptyListMessage: an empty list says why", () => {
         withPreference: 0,
         filters: { ...NO_FILTERS, conflictsOnly: true },
       }),
-    ).toBe("برای این روز هیچ ترجیحی ثبت نشده است؛ مغایرتی برای نمایش نیست.");
+    ).toBe(
+      "برای این روز هیچ ترجیحی ثبت نشده است؛ موردی مغایر ترجیح برای نمایش نیست.",
+    );
   });
 
   it("conflicts exist but the other filters hide them", () => {

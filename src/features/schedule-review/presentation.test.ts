@@ -14,7 +14,6 @@ import {
   STAFFING_NOT_EVALUATED,
   VALID_CAVEAT,
   alignmentPartitionNote,
-  restHonoredLabel,
   staffingBoundsLabel,
   staffingIndicator,
   staffingIndicatorLabel,
@@ -310,7 +309,7 @@ describe("preference alignment wording", () => {
       title: "انطباق با ترجیحات",
       matches: "مطابق ترجیح",
       differs: "مغایر ترجیح",
-      pending: "ترجیح ثبت‌شده، هنوز بدون شیفت",
+      pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
       noPreference: "ترجیحی ثبت نشده",
       unassigned: "بدون شیفت در این روز",
     });
@@ -320,7 +319,6 @@ describe("preference alignment wording", () => {
     expect(alignmentPartitionNote(12)).toBe(
       "هر نفر فقط در یکی از این چهار دسته است (جمع: ۱۲ نفر).",
     );
-    expect(restHonoredLabel(1)).toBe("شامل ۱ درخواست استراحت بدون شیفت");
     expect(ALIGNMENT_ADVISORY_NOTE).toContain("الزامی نیستند");
     expect(ALIGNMENT_ADVISORY_NOTE).toContain(
       "جلوی نهایی‌سازی برنامه را نمی‌گیرد",

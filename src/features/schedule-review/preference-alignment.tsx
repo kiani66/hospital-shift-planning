@@ -28,7 +28,6 @@ import {
   ALIGNMENT_OVERLAP_NOTE,
   alignmentPartitionNote,
   preferenceLabel,
-  restHonoredLabel,
 } from "./presentation";
 
 type Icon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -111,14 +110,12 @@ function Count({
   value,
   tone,
   name,
-  detail,
 }: {
   icon: Icon;
   label: string;
   value: number;
   tone: string;
   name: string;
-  detail?: string;
 }) {
   return (
     <div
@@ -132,11 +129,6 @@ function Count({
       <dd className="text-lg leading-tight font-semibold tabular-nums">
         {faNumber(value)}{" "}
         <span className="text-xs font-normal text-muted-foreground">نفر</span>
-        {detail && (
-          <span className="block text-[0.6875rem] leading-snug font-normal text-muted-foreground">
-            {detail}
-          </span>
-        )}
       </dd>
     </div>
   );
@@ -179,9 +171,6 @@ export function PreferenceAlignmentSummary({
           tone="text-status-success-foreground"
           label={ALIGNMENT_LABELS.matches}
           value={a.matches}
-          detail={
-            a.restHonored > 0 ? restHonoredLabel(a.restHonored) : undefined
-          }
         />
         <Count
           name="differs"

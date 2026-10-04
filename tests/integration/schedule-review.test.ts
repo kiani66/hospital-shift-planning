@@ -278,17 +278,17 @@ describe("day detail", () => {
     );
   });
 
-  it("feeds the preference-alignment summary from the day's roster (OFF is not 'no preference')", async () => {
+  it("feeds the preference-alignment summary from the day's roster (OFF is neither 'no preference' nor a match without a decision)", async () => {
     const { day } = await review(actors.icuHead, { day: "2026-10-28" });
     expect(summarizePreferenceAlignment(day!.roster)).toEqual({
       rostered: 6,
       withPreference: 2,
-      // Nurse 4 wished rest (OFF) and has no shift.
-      matches: 1,
-      restHonored: 1,
+      matches: 0,
       // Nurse 1 wished N and works M.
       differs: 1,
-      pending: 0,
+      // Nurse 4 wished rest (OFF) and has no assignment: no decision is
+      // recorded, so it is awaiting, never a match (D99).
+      pending: 1,
       // The Head Nurse, nurses 2 and 3 and the transferred nurse.
       noPreference: 4,
       // Nurse 4 and the transferred nurse: overlaps the fit counts.

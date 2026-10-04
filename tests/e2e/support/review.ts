@@ -150,7 +150,7 @@ export interface AlignmentDepartment extends ReviewDepartment {
  * - 2 Aban (2026-10-24; M, E, N, ME assigned): nurse 1 wishes M (matches),
  *   nurse 2 wishes N (works E: conflict), nurse 3 wishes OFF (works N:
  *   conflict), the Head Nurse has no preference.
- * - 5 Aban (2026-10-27; unplanned): nurse 1 wishes OFF (rest honoured),
+ * - 5 Aban (2026-10-27; unplanned): nurse 1 wishes OFF (no assignment: awaiting),
  *   nurse 2 wishes E (no shift yet); no conflict.
  * - 7 Aban (2026-10-29; unplanned): no preference at all.
  */

@@ -135,7 +135,8 @@ export function preferenceFitLabel(fit: PreferenceFit): string | null {
     case "DIFFERS":
       return "مغایر ترجیح";
     case "PENDING":
-      return "هنوز بدون شیفت";
+      // A shift or OFF wish without an assignment decision yet (D99).
+      return "در انتظار تخصیص";
   }
 }
 
@@ -147,7 +148,7 @@ export type ShiftFilter = "ALL" | "UNASSIGNED" | ShiftCode;
 
 export interface EditorFilters {
   readonly shift: ShiftFilter;
-  /** «فقط مغایرت‌ها»: only assignments that conflict with a recorded preference. */
+  /** «فقط مغایر ترجیح»: only assignments that conflict with a recorded preference. */
   readonly conflictsOnly: boolean;
   readonly query: string;
 }
@@ -217,7 +218,7 @@ export function emptyListMessage(input: {
   if (input.rostered === 0) return "فهرست پرسنل این برنامه خالی است.";
   if (input.filters.conflictsOnly && input.conflicts === 0)
     return input.withPreference === 0
-      ? "برای این روز هیچ ترجیحی ثبت نشده است؛ مغایرتی برای نمایش نیست."
+      ? "برای این روز هیچ ترجیحی ثبت نشده است؛ موردی مغایر ترجیح برای نمایش نیست."
       : "در این روز هیچ شیفتی مغایر ترجیحات ثبت‌شده نیست.";
   return "هیچ پرستاری با این فیلتر یا جستجو پیدا نشد.";
 }

@@ -17,7 +17,6 @@ describe("summarizePreferenceAlignment (advisory, built on preferenceFit)", () =
       rostered: 0,
       withPreference: 0,
       matches: 0,
-      restHonored: 0,
       differs: 0,
       pending: 0,
       noPreference: 0,
@@ -41,13 +40,12 @@ describe("summarizePreferenceAlignment (advisory, built on preferenceFit)", () =
       pending: 0,
       noPreference: 0,
       unassigned: 0,
-      restHonored: 0,
     });
   });
 
   it("tells an explicit OFF apart from no preference", () => {
     const summary = summarizePreferenceAlignment([
-      // OFF wished, no shift: the rest wish is honoured.
+      // OFF wished, no assignment: recorded, awaiting a decision (not a match).
       nurse("OFF", null),
       // OFF wished, but a shift was assigned: a conflict.
       nurse("OFF", "E"),
@@ -58,10 +56,9 @@ describe("summarizePreferenceAlignment (advisory, built on preferenceFit)", () =
     expect(summary).toEqual({
       rostered: 4,
       withPreference: 2,
-      matches: 1,
-      restHonored: 1,
+      matches: 0,
       differs: 1,
-      pending: 0,
+      pending: 1,
       noPreference: 2,
       unassigned: 2,
     });
@@ -84,7 +81,7 @@ describe("summarizePreferenceAlignment (advisory, built on preferenceFit)", () =
     const s = summarizePreferenceAlignment(roster);
     expect(s.matches + s.differs + s.pending + s.noPreference).toBe(s.rostered);
     expect(s.matches + s.differs + s.pending).toBe(s.withPreference);
-    // Three nurses have no shift: one honoured rest, one pending, one without preference.
+    // Three nurses have no shift: two pending (OFF and E wished), one without preference.
     expect(s.unassigned).toBe(3);
     expect(
       s.matches + s.differs + s.pending + s.noPreference + s.unassigned,

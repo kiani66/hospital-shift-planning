@@ -11,16 +11,17 @@ import { preferenceFit, type PreferenceFit } from "./preference-fit";
  *
  * 1. Fit (a partition: every rostered nurse is in exactly one of these, so
  *    `matches + differs + pending + noPreference === rostered`):
- *    - matches: the assigned shift is the wished one, or rest (OFF) was
- *      wished and there is no shift (`restHonored` counts those);
+ *    - matches: the assigned shift is the wished one;
  *    - differs: a shift is assigned and it is not the wished one (a rest
  *      wish with any shift included);
- *    - pending: a shift is wished and none is assigned yet;
+ *    - pending: a preference (a shift or OFF) is recorded and there is no
+ *      assignment yet; OFF is never a match by the mere absence of a shift
+ *      (D99);
  *    - noPreference: nothing recorded for the day ("no preference" is the
  *      absence of a row, D35; an explicit OFF is a recorded preference).
  * 2. Assignment: `unassigned` counts nurses without a shift that day. It
- *    overlaps `restHonored`, `pending` and `noPreference`, so it must never be
- *    added to the fit counts.
+ *    overlaps `pending` and `noPreference`, so it must never be added to the
+ *    fit counts.
  */
 export interface PreferenceAlignment {
   /** Everyone on the roster for the day. */
@@ -28,8 +29,6 @@ export interface PreferenceAlignment {
   /** Nurses with a recorded preference (a shift or OFF). */
   readonly withPreference: number;
   readonly matches: number;
-  /** Part of `matches`: OFF wished and no shift assigned. */
-  readonly restHonored: number;
   readonly differs: number;
   readonly pending: number;
   readonly noPreference: number;
@@ -51,20 +50,15 @@ export function summarizePreferenceAlignment(
     DIFFERS: 0,
     PENDING: 0,
   };
-  let restHonored = 0;
   let unassigned = 0;
   for (const { preference, shift } of nurses) {
     fits[preferenceFit(preference, shift)] += 1;
-    if (shift === null) {
-      unassigned += 1;
-      if (preference === "OFF") restHonored += 1;
-    }
+    if (shift === null) unassigned += 1;
   }
   return {
     rostered: nurses.length,
     withPreference: nurses.length - fits.NONE,
     matches: fits.MATCHES,
-    restHonored,
     differs: fits.DIFFERS,
     pending: fits.PENDING,
     noPreference: fits.NONE,
@@ -72,6 +66,6 @@ export function summarizePreferenceAlignment(
   };
 }
 
-/** The assignment conflicts with a recorded preference (the «فقط مغایرت‌ها» filter). */
+/** The assignment conflicts with a recorded preference (the «فقط مغایر ترجیح» filter). */
 export const conflictsWithPreference = (input: AlignmentInput): boolean =>
   preferenceFit(input.preference, input.shift) === "DIFFERS";

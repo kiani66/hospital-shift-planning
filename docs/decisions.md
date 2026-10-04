@@ -502,7 +502,8 @@ Enforced in `application/schedules/edit-assignments.ts` and
   day sit in the dialog's sticky header and keep it open (within the period, chronological).
 - The dialog lists every rostered nurse in roster order (by name), assigned or not, with role as
   secondary text, the preference and how it relates to the shift (`preferenceFit`: matches,
-  differs, not yet assigned; a difference is a neutral note, never an error), a marker when a
+  differs, not yet assigned; a difference is a neutral note, never an error; amended by D99: an OFF
+  wish without an assignment is not yet assigned, never a match), a marker when a
   finding involves them, and one-step M / E / N / ME / no-shift controls. A filter (all, no
   shift, each shift) and a name search find people; a row edited under a filter stays in view.
 - Findings reported on the neighbouring day that involve this day (the Night before a violating
@@ -1422,40 +1423,61 @@ and the lifecycle (D58) are reused as they are.
 
 - **Preference alignment («انطباق با ترجیحات»).** The day surface's side column shows, below
   «پوشش نفرات», how the day's assignments relate to the recorded wishes. The counts come only from
-  `preferenceFit` (D50) via `summarizePreferenceAlignment`; nothing new is decided:
+  `preferenceFit` via `summarizePreferenceAlignment`:
 
-  | Count                                     | Definition (per rostered nurse, for the day)                        |
-  | ----------------------------------------- | ------------------------------------------------------------------- |
-  | مطابق ترجیح (`matches`)                   | assigned the wished shift, **or** wished OFF and has no shift       |
-  | — شامل … درخواست استراحت (`restHonored`)  | the part of `matches` that is OFF wished and no shift               |
-  | مغایر ترجیح (`differs`)                   | has a shift that is not the wished one (OFF wished + any shift too) |
-  | ترجیح ثبت‌شده، هنوز بدون شیفت (`pending`) | a shift (not OFF) is wished and none is assigned                    |
-  | ترجیحی ثبت نشده (`noPreference`)          | no preference row for the day (D35), assigned or not                |
-  | بدون شیفت در این روز (`unassigned`)       | no assignment that day, whatever the preference                     |
+  | Count                                      | Definition (per rostered nurse, for the day)                        |
+  | ------------------------------------------ | ------------------------------------------------------------------- |
+  | مطابق ترجیح (`matches`)                    | assigned the wished shift                                           |
+  | مغایر ترجیح (`differs`)                    | has a shift that is not the wished one (OFF wished + any shift too) |
+  | ترجیح ثبت‌شده، در انتظار تخصیص (`pending`) | a preference (a shift **or OFF**) is recorded and no assignment yet |
+  | ترجیحی ثبت نشده (`noPreference`)           | no preference row for the day (D35), assigned or not                |
+  | بدون شیفت در این روز (`unassigned`)        | no assignment that day, whatever the preference                     |
 
   The first four partition the roster (each nurse is in exactly one; the UI states their total).
-  `unassigned` is a second dimension that overlaps `restHonored`, `pending` and `noPreference`; it
-  is shown apart, with a note that it is counted separately, so no figure implies a total it is
-  not. The section says preferences are not mandatory and that a conflict does not block
-  finalization (D35, D48), without the words «مانع نهایی‌سازی» that label blocking findings; a conflict
-  is never a finding and never changes day health. The summary
-  is computed on the server from the same day read as coverage, so like coverage it follows an
-  edit when the page refreshes after the save (D49); rows and filter counts are optimistic.
+  `unassigned` is a second dimension that overlaps `pending` and `noPreference`; it is shown
+  apart, with a note that it is counted separately, so no figure implies a total it is not. The
+  section says preferences are not mandatory and that a conflict does not block finalization
+  (D35, D48), without the words «مانع نهایی‌سازی» that label blocking findings; a conflict is
+  never a finding and never changes day health. The summary is computed on the server from the
+  same day read as coverage, so like coverage it follows an edit when the page refreshes after the
+  save (D49); rows and filter counts are optimistic.
+
+- **OFF follows the same lifecycle as M, E, N and ME (approved; amends D50).** A recorded
+  preference is neither a match nor a mismatch until the Head Nurse makes an assignment decision.
+
+  | Preference     | Working copy for the day | Fit                               |
+  | -------------- | ------------------------ | --------------------------------- |
+  | M / E / N / ME | no row                   | awaiting assignment (`PENDING`)   |
+  | OFF            | no row                   | awaiting assignment (`PENDING`)   |
+  | X              | shift X                  | match                             |
+  | X (incl. OFF)  | another shift            | mismatch                          |
+  | OFF            | explicit OFF decision    | match — **not representable yet** |
+
+  OFF is never a match merely because no working shift exists, and absence is never read as an
+  OFF decision. **Model limitation:** the working copy cannot record an explicit OFF decision.
+  `shift_assignments.shift_code` is `NOT NULL` and references `shift_types` (M, E, N, ME only);
+  clearing a shift deletes the row (D48); there is no rest / leave / day-off record. "The Head
+  Nurse decided this nurse is off" and "not planned yet" are therefore the same stored state (no
+  row), and the audit trail is not a scheduling source. Until an explicit OFF decision is
+  approved (a schema and business-rule change: for example an OFF assignment value or a rest
+  record, and how it interacts with night rest D7, coverage D42, versions D17 and My Shifts D98),
+  an OFF wish shows as awaiting until a shift is assigned (mismatch) and is never shown as matched.
 
 - **Rows.** Each row: name (truncated, full name as `title`), the Head Nurse badge, the finding
   marker, then one line with the recorded preference and its fit: «ترجیح: شب» + «مطابق ترجیح»
-  (check icon) / «مغایر ترجیح» (≠ icon) / «هنوز بدون شیفت» (dashed circle). An explicit rest wish
+  (check icon) / «مغایر ترجیح» (≠ icon) / «در انتظار تخصیص» (dashed circle). An explicit rest wish
   is «ترجیح: استراحت» with a bed icon; no preference is a dashed, muted «ترجیحی ثبت نشده». The
   line describes each shift control (`aria-describedby`). Amends D56: icons replace the ✓ / ≠
   glyphs; tones unchanged. The one-step controls, keyboard and range edit are unchanged (D50).
   Read-only lists use the same line but say nothing for a nurse without a preference.
-- **«فقط مغایرت‌ها».** An independent toggle (`aria-pressed`, with the day's conflict count) next to
-  the shift chips: only nurses whose current assignment conflicts with a recorded preference
-  (`differs`; not pending wishes or nurses without a preference). It combines with the shift chip
-  and the name search (AND, `filterEditorNurses`); a row edited under it stays in view (D50).
-  Filters never write. Empty states say which case applies: no conflict on the day, no preference
-  recorded on the day, or the other filters hide the conflicts; «نمایش همه پرسنل» clears all
-  filters.
+- **«فقط مغایر ترجیح» (approved wording).** An independent toggle (`aria-pressed`, with the day's
+  mismatch count) next to the shift chips: only nurses whose current assignment conflicts with a
+  recorded preference (`differs`; not awaiting wishes or nurses without a preference). The label
+  keeps preference mismatch apart from the validation wording «مغایرت» (D51), which is unchanged.
+  It combines with the shift chip and the name search (AND, `filterEditorNurses`); a row edited
+  under it stays in view (D50). Filters never write. Empty states say which case applies: no
+  mismatch on the day, no preference recorded on the day, or the other filters hide the
+  mismatches; «نمایش همه پرسنل» clears all filters.
 - **Staffing.** Coverage per period is unchanged. Only where a `StaffingRequirementsSource` gives
   bounds (none does yet, D44) does a period show «حداقل … · حداکثر …» (an unset bound says «تعریف
   نشده») and a mark read from `staffingStatus`: «کمبود N نفر», «مازاد N نفر» (N is the distance to
@@ -1465,16 +1487,12 @@ and the lifecycle (D58) are reused as they are.
   only the code on phones; the accessible name keeps «صبح (M)»), so every control is reachable
   without horizontal scrolling at 360 px; touch targets stay 44 px.
 
-Open questions (not decided here; the behaviour above follows the existing rules):
+Open questions:
 
-1. **Wording overlap.** «مغایر ترجیح» / «فقط مغایرت‌ها» (as requested) share the word «مغایرت»
-   with D51's day health «بدون مغایرت» (no rule finding). A day can read «بدون مغایرت» and still
-   list preference conflicts. Every preference use is qualified by «ترجیح» except the filter
-   label; the product owner may prefer «فقط مغایر ترجیح».
-2. **Rest honoured vs not yet planned.** `preferenceFit` counts OFF wished + no shift as a match
-   (D50). On a day not yet planned this reads as a match although nothing was decided.
-3. **Staffing numbers** remain undecided (D44): storage, values, and whether a shortage blocks.
+1. **Explicit OFF decision** (see the model limitation above): needs an approved schema and
+   business-rule change before an OFF wish can show as matched.
+2. **Staffing numbers** remain undecided (D44): storage, values, and whether a shortage blocks.
 
-Enforced in `domain/preferences/preference-alignment.ts`,
+Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preference-alignment.ts`,
 `features/schedule-review/preference-alignment.tsx`, `features/schedule-review/day-detail.tsx`
 (`CoverageSummary`) and `features/schedule-editing/` (`filterEditorNurses`, `emptyListMessage`).

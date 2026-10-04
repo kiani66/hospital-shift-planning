@@ -505,7 +505,7 @@ export function DayEditor({
                 !conflictsOnly && "text-status-warning-foreground",
               )}
             />
-            فقط مغایرت‌ها
+            فقط مغایر ترجیح
             <span className="font-semibold tabular-nums">
               {faNumber(conflicts)}
             </span>

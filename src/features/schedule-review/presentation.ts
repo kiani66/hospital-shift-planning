@@ -276,14 +276,10 @@ export const ALIGNMENT_LABELS = {
   title: "انطباق با ترجیحات",
   matches: "مطابق ترجیح",
   differs: "مغایر ترجیح",
-  pending: "ترجیح ثبت‌شده، هنوز بدون شیفت",
+  pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
   noPreference: "ترجیحی ثبت نشده",
   unassigned: "بدون شیفت در این روز",
 } as const;
-
-/** "شامل ۱ درخواست استراحت" under the matches count, when there are any. */
-export const restHonoredLabel = (count: number) =>
-  `شامل ${faNumber(count)} درخواست استراحت بدون شیفت`;
 
 /** Why the four fit counts add up to the roster and «بدون شیفت» does not join them. */
 export const alignmentPartitionNote = (rostered: number) =>

@@ -9,9 +9,10 @@ import {
 
 /**
  * D99: the day editor's preference alignment («انطباق با ترجیحات»), row
- * hierarchy, «فقط مغایرت‌ها» filter, staffing presentation and responsive
+ * hierarchy, «فقط مغایر ترجیح» filter, staffing presentation and responsive
  * layout. Fixture: `provisionAlignmentDepartment` (2 Aban: one match, two
- * conflicts, one without preference; 5 Aban: rest honoured and a pending
+ * conflicts, one without preference; 5 Aban: an OFF and a shift wish, both
+ * awaiting assignment
  * wish; 7 Aban: no preference at all).
  */
 
@@ -28,7 +29,7 @@ const row = (dialog: Locator, name: string) =>
   });
 const rows = (dialog: Locator) => dialog.locator("li[data-nurse-row]");
 const conflictsOnly = (dialog: Locator) =>
-  dialog.getByRole("button", { name: /^فقط مغایرت‌ها/ });
+  dialog.getByRole("button", { name: /^فقط مغایر ترجیح/ });
 const chip = (dialog: Locator, name: RegExp) =>
   dialog
     .getByRole("group", { name: "نمایش پرسنل" })
@@ -137,29 +138,30 @@ test.describe("preference alignment summary and rows", () => {
     await snapshot(page, `summary-${test.info().project.name}`);
   });
 
-  test("a rest wish without a shift matches; a wished shift without one is pending", async ({
+  test("OFF and shift wishes without an assignment are both awaiting, never a match", async ({
     page,
   }) => {
     const [nurse1, nurse2] = department.nurseNames;
     await page.goto(dayUrl(department, "2026-10-27"));
     const dialog = dayDialog(page);
-    await expect(count(dialog, "matches")).toContainText(
-      "شامل ۱ درخواست استراحت بدون شیفت",
-    );
+    // No working shift is not an OFF decision (D99).
+    await expect(count(dialog, "matches")).toHaveText(/مطابق ترجیح\s*۰\s*نفر/);
     await expect(count(dialog, "differs")).toHaveText(/۰\s*نفر/);
     await expect(count(dialog, "pending")).toHaveText(
-      /ترجیح ثبت‌شده، هنوز بدون شیفت\s*۱\s*نفر/,
+      /ترجیح ثبت‌شده، در انتظار تخصیص\s*۲\s*نفر/,
     );
     await expect(count(dialog, "noPreference")).toHaveText(/۲\s*نفر/);
     // Everyone is unassigned: the overlapping count is shown apart.
     await expect(count(dialog, "unassigned")).toContainText("۴ نفر");
     await expect(row(dialog, nurse1)).toContainText("ترجیح: استراحت");
-    await expect(row(dialog, nurse1)).toContainText("مطابق ترجیح");
-    await expect(row(dialog, nurse2)).toContainText("هنوز بدون شیفت");
+    await expect(row(dialog, nurse1)).toContainText("در انتظار تخصیص");
+    await expect(row(dialog, nurse1)).not.toContainText("مطابق ترجیح");
+    await expect(row(dialog, nurse2)).toContainText("ترجیح: عصر");
+    await expect(row(dialog, nurse2)).toContainText("در انتظار تخصیص");
   });
 });
 
-test.describe("«فقط مغایرت‌ها» filter", () => {
+test.describe("«فقط مغایر ترجیح» filter", () => {
   test("combines with the shift filter and search, has empty states, and never changes assignments", async ({
     page,
   }) => {
@@ -233,7 +235,7 @@ test.describe("«فقط مغایرت‌ها» filter", () => {
     await dialog.getByRole("link", { name: /^روز بعد/ }).click();
     await expect(dialog).toHaveAccessibleName("پنجشنبه ۷ آبان ۱۴۰۵");
     await expect(dialog.locator("[data-empty-list]")).toContainText(
-      "برای این روز هیچ ترجیحی ثبت نشده است؛ مغایرتی برای نمایش نیست.",
+      "برای این روز هیچ ترجیحی ثبت نشده است؛ موردی مغایر ترجیح برای نمایش نیست.",
     );
     await expect(count(dialog, "noPreference")).toHaveText(/۴\s*نفر/);
   });
@@ -257,17 +259,20 @@ test.describe("«فقط مغایرت‌ها» filter", () => {
     await expect(rows(dialog)).toHaveCount(2);
     await expect(conflictsOnly(dialog)).toHaveText(/۱$/);
 
-    // Clear nurse 3's Night: the rest wish is honoured.
+    // Clear nurse 3's Night: no longer a conflict, but not a match either:
+    // an OFF wish without an assignment is awaiting (D99).
     await controls(dialog, nurse3)
       .getByRole("button", { name: "بدون شیفت" })
       .click();
     await saved(dialog, "در فهرست پرسنل می‌ماند");
-    await expect(row(dialog, nurse3)).toContainText("مطابق ترجیح");
+    await expect(row(dialog, nurse3)).toContainText("در انتظار تخصیص");
+    await expect(row(dialog, nurse3)).not.toContainText("مطابق ترجیح");
     await expect(conflictsOnly(dialog)).toHaveText(/۰$/);
 
     // The summary is re-read with the day after each edit.
-    await expect(count(dialog, "matches")).toHaveText(/۳\s*نفر/);
+    await expect(count(dialog, "matches")).toHaveText(/۲\s*نفر/);
     await expect(count(dialog, "differs")).toHaveText(/۰\s*نفر/);
+    await expect(count(dialog, "pending")).toHaveText(/۱\s*نفر/);
     await expect(count(dialog, "unassigned")).toContainText("۱ نفر");
     // N moved from nurse 3 to nurse 2: Night coverage stays one.
     await expect(

@@ -136,8 +136,10 @@ describe("PreferenceContext", () => {
     );
 
   it("tells an explicit rest wish apart from no preference", () => {
+    // OFF without an assignment decision is awaiting, never a match (D99).
     const off = ctx("OFF", null);
-    expect(text(off)).toBe("ترجیح: استراحت مطابق ترجیح");
+    expect(text(off)).toBe("ترجیح: استراحت در انتظار تخصیص");
+    expect(off).not.toContain("lucide-circle-check");
     expect(off).toContain('data-preference="OFF"');
     expect(off).toContain("lucide-bed");
 
@@ -153,7 +155,8 @@ describe("PreferenceContext", () => {
     expect(text(ctx("N", "M"))).toBe("ترجیح: شب مغایر ترجیح");
     expect(ctx("N", "M")).toContain("lucide-equal-not");
     expect(text(ctx("OFF", "E"))).toBe("ترجیح: استراحت مغایر ترجیح");
-    expect(text(ctx("E", null))).toBe("ترجیح: عصر هنوز بدون شیفت");
+    expect(text(ctx("E", null))).toBe("ترجیح: عصر در انتظار تخصیص");
+    expect(ctx("E", null)).toContain("lucide-circle-dashed");
   });
 
   it("renders nothing for a missing preference when asked (read-only lists)", () => {
@@ -182,11 +185,10 @@ describe("PreferenceAlignmentSummary", () => {
           new RegExp(`data-alignment="${name}"[^>]*>(.*?)</(div|dl)>`),
         )![1]!,
       );
-    expect(count("matches")).toBe(
-      "مطابق ترجیح ۲ نفر شامل ۱ درخواست استراحت بدون شیفت",
-    );
+    // OFF without an assignment is pending, like E without one.
+    expect(count("matches")).toBe("مطابق ترجیح ۱ نفر");
     expect(count("differs")).toBe("مغایر ترجیح ۱ نفر");
-    expect(count("pending")).toBe("ترجیح ثبت‌شده، هنوز بدون شیفت ۱ نفر");
+    expect(count("pending")).toBe("ترجیح ثبت‌شده، در انتظار تخصیص ۲ نفر");
     expect(count("noPreference")).toBe("ترجیحی ثبت نشده ۱ نفر");
     expect(t).toContain("هر نفر فقط در یکی از این چهار دسته است (جمع: ۵ نفر).");
     expect(count("unassigned")).toBe(
