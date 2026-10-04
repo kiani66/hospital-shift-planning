@@ -9,12 +9,12 @@ const revisionDates = [isoDate("2026-11-02")];
 
 describe("shiftPublication", () => {
   it.each<[ScheduleStatus, boolean, ShiftPublication]>([
-    // D11: nothing is shown while the Head Nurse plans.
-    ["DRAFT", false, "NOT_PUBLISHED"],
-    ["PLANNING", false, "NOT_PUBLISHED"],
+    // D11 as amended: the working copy is visible while planning, as temporary.
+    ["DRAFT", false, "TEMPORARY"],
+    ["PLANNING", false, "TEMPORARY"],
     // The finalized working copy, before any approval.
-    ["FINALIZED", false, "TEMPORARY"],
-    ["RETURNED", false, "TEMPORARY"],
+    ["FINALIZED", false, "FINALIZED"],
+    ["RETURNED", false, "RETURNED"],
     ["SUBMITTED", false, "AWAITING_APPROVAL"],
     // Once approved, always the approved version, whatever the revision does.
     ["APPROVED", true, "OFFICIAL"],
@@ -28,5 +28,12 @@ describe("shiftPublication", () => {
       revisionDates,
     });
     expect(shiftPublication(status, view)).toBe(expected);
+  });
+
+  it("never calls a working copy official, even in an approved status", () => {
+    for (const status of ["APPROVED", "REVISING"] as const)
+      expect(shiftPublication(status, { source: "WORKING_COPY" })).toBe(
+        "TEMPORARY",
+      );
   });
 });

@@ -135,38 +135,89 @@ const entries = async (actor: Actor, period = ABAN) =>
     d.entries.map((e) => `${d.date} ${e.shift} ${e.publication}`),
   );
 
-describe("getMyShiftsMonth: what a nurse sees (D11)", () => {
-  it("shows the status but no assignment while the schedule is planned", async () => {
+describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
+  it("shows the nurse's current assignments as temporary while the schedule is a draft", async () => {
     await plan(); // DRAFT
-    let m = await month(actors.nurse1);
+    const m = await month(actors.nurse1);
     expect(m.onAnyRoster).toBe(true);
     expect(m.schedules).toMatchObject([
-      { id: S, status: "DRAFT", publication: "NOT_PUBLISHED", shiftCount: 0 },
-    ]);
-    expect(m.days.every((d) => d.entries.length === 0)).toBe(true);
-    expect(m.totals).toMatchObject({ shiftCount: 0, minutes: 0 });
-
-    await step(openPreferenceWindow as typeof finalizeSchedule, actors.head);
-    m = await month(actors.nurse1);
-    expect(m.schedules[0]).toMatchObject({
-      status: "PLANNING",
-      publication: "NOT_PUBLISHED",
-    });
-    expect(await entries(actors.nurse1)).toEqual([]);
-  });
-
-  it("shows the finalized working copy as temporary, own shifts only, with totals", async () => {
-    await toFinalized();
-    const m = await month(actors.nurse1);
-    expect(m.period).toEqual(ABAN);
-    expect(m.days).toHaveLength(30);
-    expect(m.schedules).toMatchObject([
-      { status: "FINALIZED", publication: "TEMPORARY", shiftCount: 3 },
+      { id: S, status: "DRAFT", publication: "TEMPORARY", shiftCount: 3 },
     ]);
     expect(await entries(actors.nurse1)).toEqual([
       "2026-10-25 M TEMPORARY",
       "2026-10-27 N TEMPORARY",
       "2026-10-29 ME TEMPORARY",
+    ]);
+    expect(m.totals).toMatchObject({
+      shiftCount: 3,
+      minutes: 31 * 60,
+      includesUnapproved: true,
+    });
+    // No change request before FINALIZED (D13 is unchanged).
+    expect(m.days.flatMap((d) => d.entries).some((e) => e.requestable)).toBe(
+      false,
+    );
+  });
+
+  it("follows the Head Nurse's edits during planning: they may change", async () => {
+    await toPlanning();
+    expect((await month(actors.nurse1)).schedules[0]).toMatchObject({
+      status: "PLANNING",
+      publication: "TEMPORARY",
+    });
+    await assign(U.icuNurse1.id, "2026-10-25", "E");
+    await setAssignment(db, {
+      scheduleId: S,
+      userId: U.icuNurse1.id,
+      date: isoDate("2026-11-02"),
+      shift: "N",
+      updatedBy: U.icuHead.id,
+    });
+    expect(await entries(actors.nurse1)).toEqual([
+      "2026-10-25 E TEMPORARY",
+      "2026-10-27 N TEMPORARY",
+      "2026-10-29 ME TEMPORARY",
+      "2026-11-02 N TEMPORARY",
+    ]);
+  });
+
+  it("shows a Head Nurse their own assignments during planning, never the rest of the roster", async () => {
+    await plan();
+    await assign(U.icuHead.id, "2026-10-28", "ME");
+    expect(await entries(actors.head)).toEqual(["2026-10-28 ME TEMPORARY"]);
+    await step(openPreferenceWindow as typeof finalizeSchedule, actors.head);
+    const m = await month(actors.head);
+    expect(m.schedules[0]).toMatchObject({
+      status: "PLANNING",
+      publication: "TEMPORARY",
+      shiftCount: 1,
+    });
+    expect(m.totals.shiftCount).toBe(1);
+  });
+
+  it("never returns another nurse's planning-stage assignments", async () => {
+    await plan();
+    const mine = await entries(actors.nurse2);
+    expect(mine).toEqual(["2026-10-25 E TEMPORARY", "2026-10-26 N TEMPORARY"]);
+    // nurse1 works 25 Oct too, but only nurse2's own E is in their month.
+    const day = (await month(actors.nurse2)).days.find(
+      (d) => d.date === "2026-10-25",
+    )!;
+    expect(day.entries.map((e) => e.shift)).toEqual(["E"]);
+  });
+
+  it("shows the finalized working copy as finalized (no approval pending), own shifts only, with totals", async () => {
+    await toFinalized();
+    const m = await month(actors.nurse1);
+    expect(m.period).toEqual(ABAN);
+    expect(m.days).toHaveLength(30);
+    expect(m.schedules).toMatchObject([
+      { status: "FINALIZED", publication: "FINALIZED", shiftCount: 3 },
+    ]);
+    expect(await entries(actors.nurse1)).toEqual([
+      "2026-10-25 M FINALIZED",
+      "2026-10-27 N FINALIZED",
+      "2026-10-29 ME FINALIZED",
     ]);
     // M 7h + N 12h + ME 12h; one night.
     expect(m.totals).toEqual({
@@ -178,12 +229,12 @@ describe("getMyShiftsMonth: what a nurse sees (D11)", () => {
     });
     // Another nurse on the same days sees only their own.
     expect(await entries(actors.nurse2)).toEqual([
-      "2026-10-25 E TEMPORARY",
-      "2026-10-26 N TEMPORARY",
+      "2026-10-25 E FINALIZED",
+      "2026-10-26 N FINALIZED",
     ]);
   });
 
-  it("marks a submitted schedule as awaiting the Supervisor, a returned one as temporary again", async () => {
+  it("marks a submitted schedule as awaiting the Supervisor, a returned one as returned", async () => {
     await toSubmitted();
     expect((await month(actors.nurse1)).schedules[0]).toMatchObject({
       status: "SUBMITTED",
@@ -196,7 +247,7 @@ describe("getMyShiftsMonth: what a nurse sees (D11)", () => {
     await step(returnSchedule, actors.supervisor, { comment: "اصلاح شود" });
     expect((await month(actors.nurse1)).schedules[0]).toMatchObject({
       status: "RETURNED",
-      publication: "TEMPORARY",
+      publication: "RETURNED",
     });
   });
 
@@ -269,12 +320,12 @@ describe("getMyShiftsMonth: empty months and people without schedules", () => {
     expect(m).toMatchObject({ onAnyRoster: false, schedules: [] });
   });
 
-  it("shows a published schedule with no shift for the nurse as published, with zero totals", async () => {
+  it("lists a schedule without a shift for the nurse, with zero totals", async () => {
     await toFinalized();
     const nurse3 = (await loadActor(db, U.icuNurse3.id, TODAY))!;
     const m = await month(nurse3);
     expect(m.schedules).toMatchObject([
-      { publication: "TEMPORARY", shiftCount: 0 },
+      { publication: "FINALIZED", shiftCount: 0 },
     ]);
     expect(m.totals.shiftCount).toBe(0);
   });
@@ -287,8 +338,8 @@ describe("getMyShiftsMonth: empty months and people without schedules", () => {
       end: isoDate("2026-11-24"),
     };
     expect(await entries(actors.nurse1, shifted)).toEqual([
-      "2026-10-27 N TEMPORARY",
-      "2026-10-29 ME TEMPORARY",
+      "2026-10-27 N FINALIZED",
+      "2026-10-29 ME FINALIZED",
     ]);
   });
 

@@ -15,8 +15,9 @@ import {
 } from "./presentation";
 
 const STATES: readonly ShiftPublication[] = [
-  "NOT_PUBLISHED",
   "TEMPORARY",
+  "FINALIZED",
+  "RETURNED",
   "AWAITING_APPROVAL",
   "OFFICIAL",
 ];
@@ -53,12 +54,28 @@ describe("publication presentation", () => {
   });
 
   it("warns in words that unapproved shifts may change", () => {
-    for (const s of ["TEMPORARY", "AWAITING_APPROVAL"] as const) {
+    for (const s of STATES.filter((s) => s !== "OFFICIAL")) {
       const p = PUBLICATION_PRESENTATION[s];
-      expect(`${p.headline} ${p.description}`).toMatch(/تغییر/);
+      expect(`${p.headline} ${p.description}`).toMatch(/تغییر|اصلاح/);
       expect(p.headline).not.toMatch(/رسمی و تأییدشده/);
     }
+    // Planning-stage shifts are named temporary in the headline (D11 as amended).
     expect(PUBLICATION_PRESENTATION.TEMPORARY.headline).toMatch(/موقت/);
+    expect(PUBLICATION_PRESENTATION.TEMPORARY.headline).toMatch(/برنامه‌ریزی/);
+  });
+
+  it("says whether Supervisor approval is pending", () => {
+    for (const s of STATES)
+      expect(PUBLICATION_PRESENTATION[s].approvalPending).toBe(
+        s === "AWAITING_APPROVAL",
+      );
+    expect(PUBLICATION_PRESENTATION.AWAITING_APPROVAL.headline).toMatch(
+      /در انتظار تأیید سوپروایزر/,
+    );
+    for (const s of ["FINALIZED", "RETURNED"] as const)
+      expect(PUBLICATION_PRESENTATION[s].description).toMatch(
+        /تأییدی در انتظار نیست/,
+      );
   });
 });
 

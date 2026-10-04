@@ -20,8 +20,9 @@ const cellsOf = (
 };
 
 /**
- * The shifts nurses SEE on a day (D11): the latest approved version once one
- * exists, otherwise the finalized working copy. Requests are made, consented
+ * The shifts nurses see on a day where requests exist (D11, D13: from
+ * FINALIZED on): the latest approved version once one exists, otherwise the
+ * finalized working copy. Requests are made, consented
  * to and refreshed against this view, never against unapproved revision
  * edits. Returns the version read (null for the working copy).
  */

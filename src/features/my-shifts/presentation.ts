@@ -1,8 +1,9 @@
 import {
   BadgeCheck,
-  EyeOff,
   History,
   Hourglass,
+  Lock,
+  MessageSquareWarning,
   PencilLine,
   type LucideIcon,
 } from "lucide-react";
@@ -35,37 +36,54 @@ export interface PublicationPresentation {
   readonly description: string;
   /** Shifts here are not the approved schedule: drawn with a dashed outline. */
   readonly unapproved: boolean;
+  /** A Supervisor decision is awaited (SUBMITTED only); said in words. */
+  readonly approvalPending: boolean;
 }
 
 /**
- * The nurse's three readings of a published schedule (and the unpublished
- * planning state), each with its own icon, tone and wording. Only OFFICIAL
- * is green with a check; anything that may still change says so in words,
- * never by color alone. Tones follow the lifecycle badges (D56): awaiting
- * approval is the review violet of SUBMITTED.
+ * The nurse's readings of the shifts they see (D11 as amended, D98), each
+ * with its own icon, tone and wording. Only OFFICIAL is green with a check;
+ * anything that may still change says so in words, never by color alone,
+ * and says whether Supervisor approval is pending. Tones follow the
+ * lifecycle badges (D56): finalized is the info blue, returned the warning
+ * orange, awaiting approval the review violet of SUBMITTED.
  */
 export const PUBLICATION_PRESENTATION: Readonly<
   Record<ShiftPublication, PublicationPresentation>
 > = {
-  NOT_PUBLISHED: {
-    label: "در حال برنامه‌ریزی",
-    icon: EyeOff,
-    tone: "muted",
-    calloutTone: "muted",
-    headline: "برنامه این ماه هنوز منتشر نشده است",
-    description:
-      "سرپرستار در حال تهیه برنامه است. شیفت‌های شما پس از نهایی شدن برنامه اینجا نمایش داده می‌شود.",
-    unapproved: true,
-  },
   TEMPORARY: {
     label: "موقت",
     icon: PencilLine,
     tone: "attention",
     calloutTone: "attention",
-    headline: "برنامه موقت است؛ شیفت‌ها ممکن است تغییر کنند",
+    headline:
+      "برنامه موقت و در حال برنامه‌ریزی است؛ شیفت‌ها ممکن است تغییر کنند",
     description:
-      "این برنامه هنوز برای تأیید سوپروایزر ارسال نشده است و سرپرستار می‌تواند هر روز آن را تغییر دهد. پیش از برنامه‌ریزی شخصی، دوباره به این صفحه سر بزنید.",
+      "سرپرستار هنوز در حال چیدن برنامه است و هر روز آن ممکن است تغییر کند. این شیفت‌ها قطعی نیستند و هنوز برای تأیید ارسال نشده‌اند؛ پیش از برنامه‌ریزی شخصی، دوباره به این صفحه سر بزنید.",
     unapproved: true,
+    approvalPending: false,
+  },
+  FINALIZED: {
+    label: "نهایی‌شده، ارسال‌نشده",
+    icon: Lock,
+    tone: "info",
+    calloutTone: "info",
+    headline: "نهایی‌شده، هنوز برای تأیید سوپروایزر ارسال نشده است",
+    description:
+      "سرپرستار برنامه را نهایی کرده است، اما تأییدی در انتظار نیست و هنوز رسمی نیست. تا ارسال و تأیید، سرپرستار می‌تواند شیفت‌ها را اصلاح کند.",
+    unapproved: true,
+    approvalPending: false,
+  },
+  RETURNED: {
+    label: "برگشت‌خورده برای اصلاح",
+    icon: MessageSquareWarning,
+    tone: "warning",
+    calloutTone: "attention",
+    headline: "برنامه برای اصلاح برگشت خورده است؛ شیفت‌ها ممکن است تغییر کنند",
+    description:
+      "سوپروایزر برنامه را برای اصلاح به سرپرستار برگردانده است. تأییدی در انتظار نیست تا سرپرستار آن را دوباره ارسال کند؛ تا آن زمان شیفت‌ها رسمی نیستند.",
+    unapproved: true,
+    approvalPending: false,
   },
   AWAITING_APPROVAL: {
     label: "در انتظار تأیید سوپروایزر",
@@ -76,6 +94,7 @@ export const PUBLICATION_PRESENTATION: Readonly<
     description:
       "این برنامه برای تأیید ارسال شده است. اگر سوپروایزر آن را برگرداند، سرپرستار ممکن است شیفت‌ها را تغییر دهد.",
     unapproved: true,
+    approvalPending: true,
   },
   OFFICIAL: {
     label: "تأییدشده (رسمی)",
@@ -86,6 +105,7 @@ export const PUBLICATION_PRESENTATION: Readonly<
     description:
       "سوپروایزر این برنامه را تأیید کرده است. هر تغییری فقط از راه بازنگری و تأیید دوباره انجام می‌شود.",
     unapproved: false,
+    approvalPending: false,
   },
 };
 

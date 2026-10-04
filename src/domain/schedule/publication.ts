@@ -2,14 +2,16 @@ import type { ScheduleStatus } from "./status";
 import type { NurseScheduleView } from "./visibility";
 
 /**
- * How settled the shifts a nurse sees are. Derived from what D11 lets the
- * nurse see (`nurseScheduleView`), never a second visibility rule:
+ * How settled the shifts a nurse sees are. Derived from what D11 (as amended,
+ * D98) lets the nurse see (`nurseScheduleView`), never a second visibility
+ * rule:
  *
- * - NOT_PUBLISHED: still being planned (DRAFT, PLANNING); assignments stay
- *   hidden, only the status is shown.
- * - TEMPORARY: the finalized working copy, not sent for approval yet
- *   (FINALIZED, or RETURNED by the Supervisor); the Head Nurse may still
- *   change any day.
+ * - TEMPORARY: the working copy while the Head Nurse plans (DRAFT,
+ *   PLANNING); any day may change.
+ * - FINALIZED: the finalized working copy, not sent for approval yet; the
+ *   Head Nurse may still correct it, no Supervisor approval is pending.
+ * - RETURNED: the Supervisor returned it for corrections (first cycle); the
+ *   Head Nurse is changing it, no approval is pending.
  * - AWAITING_APPROVAL: the working copy is with the Supervisor (SUBMITTED);
  *   frozen, but a return reopens it for changes.
  * - OFFICIAL: the latest approved version, immutable (D17). Later changes
@@ -17,24 +19,26 @@ import type { NurseScheduleView } from "./visibility";
  *   days are flagged as "change pending" by `nurseScheduleView`.
  */
 export type ShiftPublication =
-  "NOT_PUBLISHED" | "TEMPORARY" | "AWAITING_APPROVAL" | "OFFICIAL";
-
-/** The publication states whose shifts a nurse sees. */
-export type VisibleShiftPublication = Exclude<
-  ShiftPublication,
-  "NOT_PUBLISHED"
->;
+  "TEMPORARY" | "FINALIZED" | "RETURNED" | "AWAITING_APPROVAL" | "OFFICIAL";
 
 export function shiftPublication(
   status: ScheduleStatus,
   view: NurseScheduleView,
 ): ShiftPublication {
-  switch (view.source) {
-    case "NONE":
-      return "NOT_PUBLISHED";
-    case "APPROVED_VERSION":
-      return "OFFICIAL";
-    case "WORKING_COPY":
-      return status === "SUBMITTED" ? "AWAITING_APPROVAL" : "TEMPORARY";
+  if (view.source === "APPROVED_VERSION") return "OFFICIAL";
+  switch (status) {
+    case "FINALIZED":
+      return "FINALIZED";
+    case "RETURNED":
+      return "RETURNED";
+    case "SUBMITTED":
+      return "AWAITING_APPROVAL";
+    case "DRAFT":
+    case "PLANNING":
+    // APPROVED and REVISING always have an approved version; should one ever
+    // lack it, the working copy is shown as the most cautious reading.
+    case "APPROVED":
+    case "REVISING":
+      return "TEMPORARY";
   }
 }

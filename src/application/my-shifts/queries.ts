@@ -3,7 +3,6 @@ import { acceptsChangeRequests } from "../../domain/change-requests/model";
 import {
   shiftPublication,
   type ShiftPublication,
-  type VisibleShiftPublication,
 } from "../../domain/schedule/publication";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import { nurseScheduleView } from "../../domain/schedule/visibility";
@@ -35,9 +34,11 @@ import type { AppContext } from "../use-case";
  * is `actor.userId`, and the input has no user id to send. A schedule counts
  * when the actor is on its roster (D21, D95) and `schedule.viewOwn` allows it
  * (a current member, or a former one keeping history, D16); what is shown of
- * it is D11's `nurseScheduleView`: nothing while planning, the finalized
- * working copy until the first approval, then only the latest approved
- * version (unapproved revision edits stay hidden; their days are flagged).
+ * it is `nurseScheduleView` (D11 as amended, D98): the working copy from DRAFT
+ * until the first approval (marked temporary, finalized, returned or awaiting
+ * approval), then only the latest approved version (unapproved revision edits
+ * stay hidden; their days are flagged). Head Nurses see their own shifts the
+ * same way: they are rostered like everyone else.
  *
  * Reads only. One query for the rosters, then one or two per schedule
  * overlapping the period (the open revision, the actor's own cells),
@@ -47,7 +48,7 @@ import type { AppContext } from "../use-case";
 export interface MyShiftEntry {
   readonly scheduleId: string;
   readonly shift: ShiftCode;
-  readonly publication: VisibleShiftPublication;
+  readonly publication: ShiftPublication;
   /**
    * The day is in an open revision of the approved schedule: a change may
    * be on its way, but the shift shown stays the approved one until then.
@@ -92,7 +93,7 @@ export interface MyShiftsMonth {
   readonly days: readonly MyShiftDay[];
   /** Over the visible shifts of the period. */
   readonly totals: ShiftTotals & {
-    /** Some counted shift is not approved yet (TEMPORARY / AWAITING_APPROVAL). */
+    /** Some counted shift is not from an approved version (anything but OFFICIAL). */
     readonly includesUnapproved: boolean;
   };
 }
@@ -125,14 +126,13 @@ async function visibleSchedule(
       ? view.pendingChangeDates.filter((d) => isInPeriod(period, d))
       : [];
 
+  // Only the actor's own cells are ever loaded, from one source or the other.
   const cells =
     view.source === "APPROVED_VERSION"
       ? await listVersionAssignments(db, schedule.currentVersionId!, {
           userId: actor.userId,
         })
-      : view.source === "WORKING_COPY"
-        ? await listAssignments(db, schedule.id, { userId: actor.userId })
-        : [];
+      : await listAssignments(db, schedule.id, { userId: actor.userId });
 
   const requestsOpen =
     acceptsChangeRequests(schedule.status) &&
@@ -147,8 +147,7 @@ async function visibleSchedule(
     if (
       cell.nurseId !== actor.userId ||
       !isInPeriod(schedule.period, cell.date) ||
-      !isInPeriod(period, cell.date) ||
-      publication === "NOT_PUBLISHED"
+      !isInPeriod(period, cell.date)
     )
       continue;
     entries.set(cell.date, {

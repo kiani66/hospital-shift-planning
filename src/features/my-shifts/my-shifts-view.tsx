@@ -60,8 +60,9 @@ const focusRing =
 /** The order notices appear in: what may still change first. */
 const NOTICE_ORDER: readonly ShiftPublication[] = [
   "TEMPORARY",
+  "RETURNED",
+  "FINALIZED",
   "AWAITING_APPROVAL",
-  "NOT_PUBLISHED",
   "OFFICIAL",
 ];
 
@@ -171,7 +172,8 @@ function PublicationNotices({
     <div className="flex flex-col gap-2">
       {states.map((state) => {
         const p = PUBLICATION_PRESENTATION[state];
-        const loud = state === "TEMPORARY" || state === "AWAITING_APPROVAL";
+        // Every reading that may still change is prominent; OFFICIAL is calm.
+        const loud = p.unapproved;
         const names = schedules
           .filter((s) => s.publication === state)
           .map((s) => s.departmentName)
@@ -192,7 +194,7 @@ function PublicationNotices({
             </p>
             <p className="text-muted-foreground">
               {p.description}
-              {state === "NOT_PUBLISHED" && (
+              {state === "TEMPORARY" && (
                 <>
                   {" "}
                   اگر ثبت ترجیحات باز باشد، از{" "}
@@ -344,14 +346,11 @@ function EntryDetail({
   );
 }
 
-/** Why a day shows no shift: none published for it, or published without one. */
+/** Why a day shows no shift: no schedule covers it, or none is assigned that day. */
 function noShiftText(date: IsoDate, schedules: readonly MyShiftSchedule[]) {
-  const covering = schedules.filter((s) => isInPeriod(s.period, date));
-  if (covering.length === 0)
-    return "برای این روز برنامه‌ای برای شما وجود ندارد.";
-  if (covering.every((s) => s.publication === "NOT_PUBLISHED"))
-    return "برنامه این روز هنوز منتشر نشده است.";
-  return "در این روز شیفتی برای شما ثبت نشده است.";
+  return schedules.some((s) => isInPeriod(s.period, date))
+    ? "در این روز شیفتی برای شما ثبت نشده است."
+    : "برای این روز برنامه‌ای برای شما وجود ندارد.";
 }
 
 /**
@@ -492,9 +491,9 @@ function ShiftAgenda({ days }: { days: readonly MyShiftDay[] }) {
  * change), the month's totals, the calendar with the selected day's detail
  * beside it (below it on phones), the month's shift list and the legend.
  * Months without a schedule and nurses on no roster get their own empty
- * states; a month whose schedules are all still being planned shows no
- * calendar at all, so an empty grid never reads as "no shifts". The legend
- * (codes, colors and catalog hours) is shown in every state.
+ * states. Schedules still being planned show the nurse's current working
+ * assignments as temporary (D11 as amended, D98). The legend (codes, colors
+ * and catalog hours) is shown in every state.
  */
 export function MyShiftsView({
   month,
@@ -515,9 +514,6 @@ export function MyShiftsView({
   selected: IsoDate | null;
   dayHref: (date: IsoDate) => Route;
 }) {
-  const published = month.schedules.some(
-    (s) => s.publication !== "NOT_PUBLISHED",
-  );
   const selectedDay = selected
     ? (month.days.find((d) => d.date === selected) ?? null)
     : null;
@@ -528,7 +524,7 @@ export function MyShiftsView({
       <EmptyState
         icon={<UserRoundX />}
         title="هنوز در برنامه هیچ بخشی نیستید"
-        description="وقتی سرپرستار شما را در برنامه ماهانه بخش قرار دهد و برنامه نهایی شود، شیفت‌هایتان اینجا نمایش داده می‌شود."
+        description="وقتی سرپرستار شما را در برنامه ماهانه بخش قرار دهد، شیفت‌هایتان اینجا نمایش داده می‌شود."
       />
     );
   else if (month.schedules.length === 0)
@@ -543,32 +539,28 @@ export function MyShiftsView({
     body = (
       <>
         <PublicationNotices schedules={month.schedules} />
-        {published && (
-          <>
-            <MonthTotals totals={month.totals} />
-            {month.totals.shiftCount === 0 && (
-              <Callout role="note" tone="info" icon={ClipboardList}>
-                در این ماه شیفتی برای شما ثبت نشده است.
-              </Callout>
-            )}
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-              <ShiftCalendar
-                period={month.period}
-                days={month.days}
-                today={today}
-                selected={selected}
-                label={label}
-                dayHref={dayHref}
-              />
-              <DayDetail
-                day={selectedDay}
-                today={today}
-                schedules={month.schedules}
-              />
-            </div>
-            <ShiftAgenda days={month.days} />
-          </>
+        <MonthTotals totals={month.totals} />
+        {month.totals.shiftCount === 0 && (
+          <Callout role="note" tone="info" icon={ClipboardList}>
+            در این ماه شیفتی برای شما ثبت نشده است.
+          </Callout>
         )}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <ShiftCalendar
+            period={month.period}
+            days={month.days}
+            today={today}
+            selected={selected}
+            label={label}
+            dayHref={dayHref}
+          />
+          <DayDetail
+            day={selectedDay}
+            today={today}
+            schedules={month.schedules}
+          />
+        </div>
+        <ShiftAgenda days={month.days} />
       </>
     );
 
@@ -588,11 +580,11 @@ export function MyShiftsView({
           راهنمای شیفت‌ها
         </h2>
         <ShiftLegend withHours />
-        {published && (
+        {month.schedules.length > 0 && (
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <ShiftChip code="M" size="xs" className={UNAPPROVED_CHIP} />
-              خط‌چین: هنوز تأیید نشده (موقت یا در انتظار تأیید)
+              خط‌چین: هنوز تأییدشده و رسمی نیست
             </span>
             <span className="inline-flex items-center gap-1.5">
               <CHANGE_PENDING.icon

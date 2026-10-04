@@ -26,12 +26,27 @@ withdrawal no longer applies. Withdrawing a revision's submission returns it to 
 so D14's revision scope still holds.
 Enforced in `schedule/state-machine.ts`.
 
-### D11 · Nurse visibility before finalization
+### D11 · Nurse visibility of their own shifts (amended for the NICU pilot)
 
-Before `FINALIZED`, nurses see only their own preferences and the schedule status; working
-assignments stay hidden. From `FINALIZED` on they see the working schedule marked as pending
-approval, until an approved version exists; from then on they see the approved version.
-Enforced in `schedule/visibility.ts`.
+Nurses see their **own** assignments in every status; Head Nurses see their own the same way (they
+are rostered members, D48):
+
+1. **DRAFT / PLANNING:** the current working assignments, with a prominent warning that the
+   schedule is temporary and assignments may change.
+2. **FINALIZED / SUBMITTED** (and a first-cycle RETURNED): the working assignments with their
+   status, saying clearly whether Supervisor approval is pending (only SUBMITTED awaits it).
+3. **APPROVED:** the official approved version.
+4. **Revision after approval** (REVISING, or a revision's SUBMITTED / RETURNED): still the latest
+   approved version; days in the open revision are flagged as pending changes, and the revision's
+   unapproved edits are never shown as assignments.
+
+This concerns a nurse's own shifts only: nothing here lets anyone see another nurse's personal
+schedule (the department grid stays D12 / D46), and historical access stays D16. D13 is unchanged:
+change requests still start at FINALIZED.
+
+_Amended (approved by the product owner for the NICU pilot, recorded with D98)._ The original rule
+hid working assignments before `FINALIZED` (nurses saw only their preferences and the status).
+Enforced in `schedule/visibility.ts` and `schedule/publication.ts`.
 
 ### D12 · Supervisor visibility
 
@@ -1338,9 +1353,10 @@ Enforced in `application/management/personnel-number.ts`.
 
 ## Nurse schedule (My Shifts) decisions
 
-NICU pilot, PR 1. Paths are relative to `src/`. Read-only: no schema change, no migration, no new
-policy action and no change to any rule above. D11's visibility, D16's history access and D17's
-immutability are reused as they are.
+NICU pilot, PR 1. Paths are relative to `src/`. Read-only: no schema change, no migration and no
+new policy action. It applies D11 as amended for the pilot (planning-stage assignments visible to
+their own nurse, approved by the product owner); D16's history access, D17's immutability and every
+other rule above are reused as they are.
 
 ### D98 · My Shifts: the nurse's own monthly calendar
 
@@ -1351,20 +1367,24 @@ immutability are reused as they are.
   (`getMyShiftsMonth`) reads only `actor.userId`'s cells, so another person's schedule cannot be
   addressed. A schedule counts when the actor is on its roster and `schedule.viewOwn` allows it (a
   current member, or a former one keeping history, D16); a deactivated account sees nothing.
-- **What is visible is D11, unchanged** (`nurseScheduleView`). The nurse-facing reading of it is
-  `shiftPublication` (`domain/schedule/publication.ts`):
+- **What is visible is D11 as amended** (`nurseScheduleView`: the working copy until the first
+  approval, then the latest approved version). The nurse-facing reading of it is `shiftPublication`
+  (`domain/schedule/publication.ts`):
 
-  | Schedule                                                    | Shown to the nurse                             | Reading             |
-  | ----------------------------------------------------------- | ---------------------------------------------- | ------------------- |
-  | DRAFT, PLANNING                                             | status only; assignments hidden                | `NOT_PUBLISHED`     |
-  | FINALIZED, first-cycle RETURNED                             | working copy                                   | `TEMPORARY`         |
-  | first-cycle SUBMITTED                                       | working copy (frozen)                          | `AWAITING_APPROVAL` |
-  | APPROVED, and REVISING / a revision's SUBMITTED or RETURNED | latest approved version; revision days flagged | `OFFICIAL`          |
+  | Schedule                                                    | Shown to the nurse                             | Reading             | Approval pending |
+  | ----------------------------------------------------------- | ---------------------------------------------- | ------------------- | ---------------- |
+  | DRAFT, PLANNING                                             | current working assignments                    | `TEMPORARY`         | no               |
+  | FINALIZED                                                   | working copy                                   | `FINALIZED`         | no               |
+  | first-cycle RETURNED                                        | working copy                                   | `RETURNED`          | no               |
+  | first-cycle SUBMITTED                                       | working copy (frozen)                          | `AWAITING_APPROVAL` | yes              |
+  | APPROVED, and REVISING / a revision's SUBMITTED or RETURNED | latest approved version; revision days flagged | `OFFICIAL`          | —                |
 
-  TEMPORARY and AWAITING_APPROVAL carry a prominent notice that shifts may change; their shifts have
-  a dashed outline and their state in words and icon (never color alone). Only OFFICIAL is green
-  with a check. Unapproved revision edits are never shown (D70); the revision's days say «تغییر در
-  دست بررسی» and the approved shift stays visible until a new version is approved.
+  Every reading but OFFICIAL carries a prominent notice that shifts may change and says in words
+  whether Supervisor approval is pending; TEMPORARY names the schedule temporary and in planning.
+  Unapproved shifts have a dashed outline and their state in words and icon (never color alone).
+  Only OFFICIAL is green with a check. Unapproved revision edits are never shown (D70); the
+  revision's days say «تغییر در دست بررسی» and the approved shift stays visible until a new version
+  is approved. Head Nurses see their own shifts here exactly like nurses.
 
 - **Hours and totals.** Each shift's hours and duration come from the domain catalog `SHIFT_TYPES`
   (D42), the single source; `shift_types` holds no hours. Monthly totals (`summarizeShifts`): shift
@@ -1374,9 +1394,9 @@ immutability are reused as they are.
 - **Several schedules in one month.** A schedule overlapping the month only partly contributes its
   days inside the month. A nurse on two departments' rosters in one month (a transfer) sees both,
   one entry per schedule per day (no cross-department validation exists, D20).
-- **Empty states.** A nurse on no roster at all, a month without a schedule, a month whose schedules
-  are all still being planned (no calendar is drawn, so an empty grid never reads as "no shifts")
-  and a published schedule without shifts for the nurse are four distinct messages.
+- **Empty states.** A user on no roster at all, a month without a schedule, and a schedule without
+  shifts for the nurse (a calendar with its status notice and «در این ماه شیفتی برای شما ثبت نشده
+  است») are three distinct messages.
 - **Requests.** A day's detail links to `/requests` while a change request may be made for that
   shift (current member, FINALIZED on, not a past day: D13, D66); the request use case decides
   again. My Shifts writes nothing.
@@ -1387,7 +1407,6 @@ immutability are reused as they are.
 Enforced in `domain/schedule/publication.ts`, `domain/shifts/working-time.ts`,
 `application/my-shifts/queries.ts` and `features/my-shifts/`.
 
-**Open question for the product owner.** The pilot brief asks that nurses "may see their own
-temporary / planning schedules". Under D11 the working copy is hidden before FINALIZED, so in
-DRAFT / PLANNING My Shifts shows the status only. Showing planning-stage assignments would amend D11
-(and `nurseScheduleView`); it is not done without explicit approval.
+**Approved amendment.** The first draft of PR 1 kept the original D11 (planning-stage assignments
+hidden). The product owner approved showing them to their own nurse with a temporary warning; D11
+above and this record describe the approved rule.
