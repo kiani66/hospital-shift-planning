@@ -201,3 +201,64 @@ export async function listSchedulingRoster(
     )
     .orderBy(asc(users.displayName));
 }
+
+export interface RosterCandidateRow {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly personnelNumber: string | null;
+  readonly role: MembershipRole;
+  readonly startedOn: IsoDate;
+  readonly endedOn: IsoDate | null;
+}
+
+/**
+ * Memberships (one row each) of active department members that overlap the
+ * schedule's period, for people not on its roster. Optionally restricted to
+ * some users and share-locked, so a concurrent membership end or account
+ * deactivation waits for (or wins before) an explicit roster addition.
+ */
+export async function listRosterCandidateMemberships(
+  db: DbExecutor,
+  input: {
+    scheduleId: string;
+    userIds?: readonly string[];
+    lock?: boolean;
+  },
+): Promise<RosterCandidateRow[]> {
+  const m = departmentMemberships;
+  const query = db
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
+      role: m.role,
+      startedOn: m.startedOn,
+      endedOn: m.endedOn,
+    })
+    .from(schedules)
+    .innerJoin(
+      m,
+      and(
+        eq(m.departmentId, schedules.departmentId),
+        sql`${m.startedOn} <= ${schedules.periodEnd}`,
+        sql`(${m.endedOn} is null or ${m.endedOn} >= ${schedules.periodStart})`,
+      ),
+    )
+    .innerJoin(users, and(eq(users.id, m.userId), eq(users.isActive, true)))
+    .where(
+      and(
+        eq(schedules.id, input.scheduleId),
+        input.userIds ? inArray(users.id, [...input.userIds]) : undefined,
+        sql`not exists (select 1 from ${scheduleRoster} r where r.schedule_id = ${schedules.id} and r.user_id = ${users.id})`,
+      ),
+    )
+    .orderBy(asc(users.displayName), asc(users.id), asc(m.startedOn));
+  const rows = input.lock
+    ? await query.for("share", { of: [m, users] })
+    : await query;
+  return rows.map((r) => ({
+    ...r,
+    startedOn: r.startedOn as IsoDate,
+    endedOn: r.endedOn as IsoDate | null,
+  }));
+}

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
+import { getRosterCandidates } from "@/application/schedules/roster";
 import { Callout } from "@/components/ui/callout";
 import {
   getScheduleReview,
@@ -26,6 +27,7 @@ import {
   type JalaliMonth,
 } from "@/features/calendar/jalali";
 import { CreateScheduleDialog } from "@/features/schedule/create-schedule-dialog";
+import { RosterAdditions } from "@/features/schedule/roster-additions";
 import { ScheduleHeader } from "@/features/schedule/schedule-header";
 import {
   EmptySchedules,
@@ -240,6 +242,11 @@ export default async function DepartmentSchedulePage({
   const noAssignments =
     review.month.totals.UNPLANNED === review.month.days.length;
 
+  // Explicit roster additions while the schedule is DRAFT / PLANNING.
+  const rosterCandidates = await getRosterCandidates(ctx, {
+    scheduleId: selected.id,
+  }).catch(orNotFound);
+
   return (
     <>
       <ScheduleHeader
@@ -287,7 +294,20 @@ export default async function DepartmentSchedulePage({
         />
       </div>
       <div className="mt-6">
-        <ScheduleDetails schedule={selected} />
+        <ScheduleDetails
+          schedule={selected}
+          rosterAction={
+            rosterCandidates.editable ? (
+              <RosterAdditions
+                // A new roster (revision) resets the selection.
+                key={review.month.revision}
+                scheduleId={selected.id}
+                revision={review.month.revision}
+                candidates={rosterCandidates.candidates}
+              />
+            ) : undefined
+          }
+        />
       </div>
       {review.day && dayLinks && (
         // Not keyed by date: it stays open (and keeps focus) across days.
