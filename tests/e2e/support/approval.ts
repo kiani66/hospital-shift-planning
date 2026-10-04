@@ -8,6 +8,7 @@ import {
   openPreferenceWindow,
 } from "../../../src/application/schedules/preference-windows";
 import {
+  approveSchedule,
   finalizeSchedule,
   submitSchedule,
 } from "../../../src/application/schedules/lifecycle";
@@ -48,10 +49,11 @@ function database() {
  * (preference collection opened, then closed).
  *
  * `stage` goes further, also through the use cases: "finalized" fixes the
- * finding and finalizes, "submitted" also submits.
+ * finding and finalizes, "submitted" also submits, "approved" also has the
+ * department's Supervisor approve it.
  */
 export async function provisionApprovalDepartment(
-  stage: "planning" | "finalized" | "submitted" = "planning",
+  stage: "planning" | "finalized" | "submitted" | "approved" = "planning",
 ): Promise<ApprovalDepartment> {
   const department = await provisionReviewDepartment();
   const { db, pool } = database();
@@ -77,9 +79,10 @@ export async function provisionApprovalDepartment(
         ctx: AppContext,
         input: unknown,
       ) => Promise<{ ok: boolean; error?: { message: string } }>,
+      as: AppContext = ctx,
     ) => {
       const { revision } = (await findScheduleById(db, department.abanId))!;
-      const result = await command(ctx, {
+      const result = await command(as, {
         scheduleId: department.abanId,
         expectedRevision: revision,
       });
@@ -97,7 +100,16 @@ export async function provisionApprovalDepartment(
       });
       await step(finalizeSchedule);
     }
-    if (stage === "submitted") await step(submitSchedule);
+    if (stage === "submitted" || stage === "approved")
+      await step(submitSchedule);
+    if (stage === "approved") {
+      const approver = (await loadActor(
+        db,
+        supervisor.id,
+        todayIn("Asia/Tehran"),
+      ))!;
+      await step(approveSchedule, { db, actor: approver });
+    }
     return { ...department, supervisorEmail };
   } finally {
     await pool.end();

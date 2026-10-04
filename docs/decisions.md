@@ -980,10 +980,11 @@ future, explicit decision (`docs/database.md`).
 
 ### D77 · Deferred
 
-Cross-date swaps; a full `/my-shifts` calendar; reason administration UI; multi-cell adjustments
-in the UI (the command accepts several cells); a grouped count for the queue tabs; staffing
-numbers (D44); SMS, e-mail or push notifications; Schedule Copy / Clone; historical correction of
-past days; payroll and attendance integration; automatic swap matching or schedule repair.
+Cross-date swaps; a full `/my-shifts` calendar (delivered by D98); reason administration UI;
+multi-cell adjustments in the UI (the command accepts several cells); a grouped count for the queue
+tabs; staffing numbers (D44); SMS, e-mail or push notifications; Schedule Copy / Clone; historical
+correction of past days; payroll and attendance integration; automatic swap matching or schedule
+repair.
 
 ## User and department membership management decisions
 
@@ -1334,3 +1335,59 @@ A Hospital Admin may assign a missing number or correct a wrong one from the per
 record it owns are unchanged; the old number stops working for sign-in at once while existing
 sessions and the account throttle (keyed by user id) are unaffected.
 Enforced in `application/management/personnel-number.ts`.
+
+## Nurse schedule (My Shifts) decisions
+
+NICU pilot, PR 1. Paths are relative to `src/`. Read-only: no schema change, no migration, no new
+policy action and no change to any rule above. D11's visibility, D16's history access and D17's
+immutability are reused as they are.
+
+### D98 · My Shifts: the nurse's own monthly calendar
+
+- **Scope.** `/my-shifts` shows the signed-in user's own shifts for one Jalali calendar month
+  (`?month=1405-08`, default the current Tehran month; `?day=<ISO>` selects the day whose detail is
+  shown, default today when it is in the month; invalid values are ignored). Previous / next move by
+  calendar month whether or not a schedule exists (as D39). There is no user parameter: the query
+  (`getMyShiftsMonth`) reads only `actor.userId`'s cells, so another person's schedule cannot be
+  addressed. A schedule counts when the actor is on its roster and `schedule.viewOwn` allows it (a
+  current member, or a former one keeping history, D16); a deactivated account sees nothing.
+- **What is visible is D11, unchanged** (`nurseScheduleView`). The nurse-facing reading of it is
+  `shiftPublication` (`domain/schedule/publication.ts`):
+
+  | Schedule                                                    | Shown to the nurse                             | Reading             |
+  | ----------------------------------------------------------- | ---------------------------------------------- | ------------------- |
+  | DRAFT, PLANNING                                             | status only; assignments hidden                | `NOT_PUBLISHED`     |
+  | FINALIZED, first-cycle RETURNED                             | working copy                                   | `TEMPORARY`         |
+  | first-cycle SUBMITTED                                       | working copy (frozen)                          | `AWAITING_APPROVAL` |
+  | APPROVED, and REVISING / a revision's SUBMITTED or RETURNED | latest approved version; revision days flagged | `OFFICIAL`          |
+
+  TEMPORARY and AWAITING_APPROVAL carry a prominent notice that shifts may change; their shifts have
+  a dashed outline and their state in words and icon (never color alone). Only OFFICIAL is green
+  with a check. Unapproved revision edits are never shown (D70); the revision's days say «تغییر در
+  دست بررسی» and the approved shift stays visible until a new version is approved.
+
+- **Hours and totals.** Each shift's hours and duration come from the domain catalog `SHIFT_TYPES`
+  (D42), the single source; `shift_types` holds no hours. Monthly totals (`summarizeShifts`): shift
+  count, scheduled minutes (sum of catalog durations), Night count, and a count per code. A shift
+  counts whole on its assignment date (a Night on the month's last day counts in that month). The
+  totals say when they include unapproved shifts. Planning figures only, not attendance or payroll.
+- **Several schedules in one month.** A schedule overlapping the month only partly contributes its
+  days inside the month. A nurse on two departments' rosters in one month (a transfer) sees both,
+  one entry per schedule per day (no cross-department validation exists, D20).
+- **Empty states.** A nurse on no roster at all, a month without a schedule, a month whose schedules
+  are all still being planned (no calendar is drawn, so an empty grid never reads as "no shifts")
+  and a published schedule without shifts for the nurse are four distinct messages.
+- **Requests.** A day's detail links to `/requests` while a change request may be made for that
+  shift (current member, FINALIZED on, not a past day: D13, D66); the request use case decides
+  again. My Shifts writes nothing.
+- **Queries.** One for the actor's rosters, then per schedule overlapping the month one for the open
+  revision (only while an approved schedule is being revised) and one for the actor's own cells
+  (`listAssignments` / `listVersionAssignments` filtered by user), independent of department size.
+
+Enforced in `domain/schedule/publication.ts`, `domain/shifts/working-time.ts`,
+`application/my-shifts/queries.ts` and `features/my-shifts/`.
+
+**Open question for the product owner.** The pilot brief asks that nurses "may see their own
+temporary / planning schedules". Under D11 the working copy is hidden before FINALIZED, so in
+DRAFT / PLANNING My Shifts shows the status only. Showing planning-stage assignments would amend D11
+(and `nurseScheduleView`); it is not done without explicit approval.
