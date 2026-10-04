@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 
 import { loadEnvConfig } from "@next/env";
+import { eq } from "drizzle-orm";
 
 import { createSchedule } from "../../../src/application/schedules/create-schedule";
 import type { ScheduleStatus } from "../../../src/domain/schedule/status";
@@ -8,6 +9,7 @@ import { isoDate } from "../../../src/domain/shared/dates";
 import type { ShiftCode } from "../../../src/domain/shifts/shift-type";
 import { todayIn } from "../../../src/infrastructure/auth/actor";
 import { createDatabase } from "../../../src/infrastructure/db/database";
+import { users } from "../../../src/infrastructure/db/schema";
 import { setAssignment } from "../../../src/infrastructure/repositories/assignments";
 import { loadActor } from "../../../src/infrastructure/repositories/memberships";
 import { setPreference } from "../../../src/infrastructure/repositories/preferences";
@@ -127,6 +129,60 @@ export async function forceScheduleStatus(
       expectedRevision: schedule.revision,
       status,
     });
+  } finally {
+    await pool.end();
+  }
+}
+
+/** A nurse long enough to test that names never break the day editor's layout. */
+export const LONG_NAME =
+  "پرستار آزمایشی با نام و نام‌خانوادگی بسیار طولانی عبدالرحیم‌زاده‌اصفهانی‌نژادِ‌کرمانشاهی";
+
+export interface AlignmentDepartment extends ReviewDepartment {
+  /** Nurse 3 renamed to `LONG_NAME`. */
+  readonly nurseNames: readonly [string, string, string];
+}
+
+/**
+ * `provisionReviewDepartment` plus preferences for the preference-alignment
+ * views (D99). Nurse 3 gets `LONG_NAME`.
+ *
+ * - 2 Aban (2026-10-24; M, E, N, ME assigned): nurse 1 wishes M (matches),
+ *   nurse 2 wishes N (works E: conflict), nurse 3 wishes OFF (works N:
+ *   conflict), the Head Nurse has no preference.
+ * - 5 Aban (2026-10-27; unplanned): nurse 1 wishes OFF (rest honoured),
+ *   nurse 2 wishes E (no shift yet); no conflict.
+ * - 7 Aban (2026-10-29; unplanned): no preference at all.
+ */
+export async function provisionAlignmentDepartment(): Promise<AlignmentDepartment> {
+  const department = await provisionReviewDepartment();
+  const { db, pool } = createDatabase(process.env.DATABASE_URL!, { max: 1 });
+  try {
+    const nurse = async (n: number) =>
+      (await findUserByEmail(
+        db,
+        department.nurseEmail.replace("nurse1.", `nurse${n}.`),
+      ))!;
+    const [n1, n2, n3] = [await nurse(1), await nurse(2), await nurse(3)];
+    const prefer = (userId: string, date: string, value: ShiftCode | "OFF") =>
+      setPreference(db, {
+        scheduleId: department.abanId,
+        userId,
+        date: isoDate(date),
+        value,
+      });
+    await prefer(n1.id, "2026-10-24", "M");
+    await prefer(n3.id, "2026-10-24", "OFF");
+    await prefer(n1.id, "2026-10-27", "OFF");
+    await prefer(n2.id, "2026-10-27", "E");
+    await db
+      .update(users)
+      .set({ displayName: LONG_NAME })
+      .where(eq(users.id, n3.id));
+    return {
+      ...department,
+      nurseNames: [n1.displayName, n2.displayName, LONG_NAME],
+    };
   } finally {
     await pool.end();
   }

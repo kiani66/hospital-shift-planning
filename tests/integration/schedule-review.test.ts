@@ -8,6 +8,10 @@ import { getScheduleReview } from "../../src/application/schedules/review";
 import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
+import {
+  conflictsWithPreference,
+  summarizePreferenceAlignment,
+} from "../../src/domain/preferences/preference-alignment";
 import { addDays, isoDate, type IsoDate } from "../../src/domain/shared/dates";
 import type { ShiftCode } from "../../src/domain/shifts/shift-type";
 import {
@@ -272,6 +276,31 @@ describe("day detail", () => {
         [U.transferNurse.id, null],
       ].sort(),
     );
+  });
+
+  it("feeds the preference-alignment summary from the day's roster (OFF is not 'no preference')", async () => {
+    const { day } = await review(actors.icuHead, { day: "2026-10-28" });
+    expect(summarizePreferenceAlignment(day!.roster)).toEqual({
+      rostered: 6,
+      withPreference: 2,
+      // Nurse 4 wished rest (OFF) and has no shift.
+      matches: 1,
+      restHonored: 1,
+      // Nurse 1 wished N and works M.
+      differs: 1,
+      pending: 0,
+      // The Head Nurse, nurses 2 and 3 and the transferred nurse.
+      noPreference: 4,
+      // Nurse 4 and the transferred nurse: overlaps the fit counts.
+      unassigned: 2,
+    });
+    expect(
+      day!.roster
+        .filter((n) =>
+          conflictsWithPreference({ preference: n.preference, shift: n.shift }),
+        )
+        .map((n) => n.userId),
+    ).toEqual([U.icuNurse1.id]);
   });
 
   it("reports operational coverage with no staffing requirement configured", async () => {

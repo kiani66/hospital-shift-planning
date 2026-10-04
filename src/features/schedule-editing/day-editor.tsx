@@ -4,7 +4,9 @@ import {
   CalendarRange,
   Check,
   CircleAlert,
+  EqualNot,
   Eraser,
+  FilterX,
   Keyboard,
   LoaderCircle,
   Search,
@@ -25,7 +27,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import type { MembershipRole } from "@/domain/authz/actor";
-import { preferenceFit } from "@/domain/preferences/preference-fit";
+import { conflictsWithPreference } from "@/domain/preferences/preference-alignment";
 import {
   revertChanges,
   type AssignmentChange,
@@ -39,7 +41,7 @@ import {
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import { ROLE_LABELS } from "@/features/schedule/labels";
-import { preferenceLabel } from "@/features/schedule-review/presentation";
+import { PreferenceContext } from "@/features/schedule-review/preference-alignment";
 import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
@@ -47,10 +49,15 @@ import type { DayOption } from "./range-form";
 import { setAssignmentsAction, type AssignmentEditResult } from "./actions";
 import {
   NETWORK_FAILURE,
+  NO_FILTERS,
+  emptyListMessage,
+  filterEditorNurses,
+  hasActiveFilters,
+  matchesShiftFilter,
   nurseRowId,
-  preferenceFitLabel,
   savedMessage,
   type EditFailureKind,
+  type ShiftFilter,
 } from "./presentation";
 import { RangeForm } from "./range-form";
 import { editorKeyCommand, SHORTCUT_HELP } from "./shortcuts";
@@ -67,8 +74,6 @@ export interface EditorNurse {
 }
 
 export type { DayOption } from "./range-form";
-
-type Filter = "ALL" | "UNASSIGNED" | ShiftCode;
 
 /** A nurse's controls in reading order: the four shifts, "no shift", the range form. */
 const COLUMNS = [...SHIFT_CODES, null, "RANGE"] as const;
@@ -91,10 +96,6 @@ type Status =
 
 const focusRing =
   "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
-
-/** Arabic ي/ك typed on some keyboards match Persian ی/ک in names. */
-const normalize = (text: string) =>
-  text.replace(/ي/g, "ی").replace(/ك/g, "ک").trim();
 
 function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -254,8 +255,10 @@ export function DayEditor({
     submit(revertChanges(status.undo), true);
   }
 
-  // --- Filter, search and rows kept visible while edited --------------------
-  const [filter, setFilter] = useState<Filter>("ALL");
+  // --- Filters, search and rows kept visible while edited -------------------
+  // Filters only choose which rows are listed; they never change assignments.
+  const [filter, setFilter] = useState<ShiftFilter>("ALL");
+  const [conflictsOnly, setConflictsOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
   const [rangeFor, setRangeFor] = useState<string | null>(null);
@@ -268,21 +271,32 @@ export function DayEditor({
   }
   const keep = (nurseId: string) =>
     setKept((k) => (k.has(nurseId) ? k : new Set([...k, nurseId])));
-  const chooseFilter = (next: Filter) => {
+  const chooseFilter = (next: ShiftFilter) => {
     setFilter(next);
     setKept(new Set());
   };
+  const toggleConflictsOnly = () => {
+    setConflictsOnly((on) => !on);
+    setKept(new Set());
+  };
+  const clearFilters = () => {
+    setFilter(NO_FILTERS.shift);
+    setConflictsOnly(NO_FILTERS.conflictsOnly);
+    setQuery(NO_FILTERS.query);
+    setKept(new Set());
+  };
 
-  const matches = (f: Filter, shift: ShiftCode | null) =>
-    f === "ALL" || (f === "UNASSIGNED" ? shift === null : shift === f);
-  const needle = normalize(query);
-  const visible = nurses.filter(
-    (n) =>
-      (kept.has(n.userId) || matches(filter, shifts.get(n.userId) ?? null)) &&
-      (needle === "" || normalize(n.displayName).includes(needle)),
-  );
-  const count = (f: Filter) =>
-    nurses.filter((n) => matches(f, shifts.get(n.userId) ?? null)).length;
+  const shiftOf = (userId: string) => shifts.get(userId) ?? null;
+  const filters = { shift: filter, conflictsOnly, query };
+  const visible = filterEditorNurses(nurses, shiftOf, filters, kept);
+  const count = (f: ShiftFilter) =>
+    nurses.filter((n) => matchesShiftFilter(f, shiftOf(n.userId))).length;
+  const conflicts = nurses.filter((n) =>
+    conflictsWithPreference({
+      preference: n.preference,
+      shift: shiftOf(n.userId),
+    }),
+  ).length;
 
   // --- Roving focus: the list is one tab stop; arrows move within it --------
   const [active, setActive] = useState<{ id: string; col: number } | null>(
@@ -368,15 +382,27 @@ export function DayEditor({
     }
   }
 
-  const filters: readonly { value: Filter; label: string; dot?: string }[] = [
+  const shiftFilters: readonly {
+    value: ShiftFilter;
+    label: string;
+    code?: ShiftCode;
+  }[] = [
     { value: "ALL", label: "همه" },
     { value: "UNASSIGNED", label: "بدون شیفت" },
     ...SHIFT_CODES.map((code) => ({
       value: code,
-      label: `${SHIFT_PRESENTATION[code].name} (${code})`,
-      dot: SHIFT_PRESENTATION[code].dotClass,
+      label: SHIFT_PRESENTATION[code].name,
+      code,
     })),
   ];
+  const chipClass = (on: boolean) =>
+    cn(
+      "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap pointer-coarse:min-h-11",
+      focusRing,
+      on
+        ? "border-primary bg-primary text-primary-foreground shadow-xs"
+        : "border-input bg-background hover:border-primary/35 hover:bg-accent",
+    );
 
   return (
     <section
@@ -420,38 +446,70 @@ export function DayEditor({
         </details>
       </div>
 
-      <div className="flex flex-col gap-2 md:flex-row md:items-center">
-        <div
-          role="group"
-          aria-label="نمایش پرسنل"
-          className="-mx-1 flex [scrollbar-width:none] gap-1 overflow-x-auto px-1 pb-0.5 md:flex-wrap md:overflow-visible"
-        >
-          {filters.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              aria-pressed={filter === f.value}
-              onClick={() => chooseFilter(f.value)}
+      <div className="flex flex-col gap-2 md:flex-row md:items-start">
+        <div className="flex flex-wrap items-center gap-1">
+          <div
+            role="group"
+            aria-label="نمایش پرسنل"
+            className="flex flex-wrap gap-1"
+          >
+            {shiftFilters.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                aria-pressed={filter === f.value}
+                // One name for every layout (phones show only the code).
+                aria-label={`${f.code ? `${f.label} (${f.code})` : f.label} ${faNumber(count(f.value))}`}
+                onClick={() => chooseFilter(f.value)}
+                className={chipClass(filter === f.value)}
+              >
+                {f.code ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-2 rounded-full",
+                        SHIFT_PRESENTATION[f.code].dotClass,
+                      )}
+                    />
+                    {/* Phones show only the code (the aria-label keeps the name). */}
+                    <span>
+                      <span className="max-sm:hidden">{f.label} (</span>
+                      <span dir="ltr">{f.code}</span>
+                      <span className="max-sm:hidden">)</span>
+                    </span>
+                  </>
+                ) : (
+                  f.label
+                )}
+                <span className="font-semibold tabular-nums">
+                  {faNumber(count(f.value))}
+                </span>
+              </button>
+            ))}
+          </div>
+          <span
+            aria-hidden="true"
+            className="mx-0.5 h-5 w-px bg-border max-sm:hidden"
+          />
+          <button
+            type="button"
+            aria-pressed={conflictsOnly}
+            onClick={toggleConflictsOnly}
+            className={chipClass(conflictsOnly)}
+          >
+            <EqualNot
+              aria-hidden="true"
               className={cn(
-                "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap pointer-coarse:min-h-11",
-                focusRing,
-                filter === f.value
-                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                  : "border-input bg-background hover:border-primary/35 hover:bg-accent",
+                "size-3.5",
+                !conflictsOnly && "text-status-warning-foreground",
               )}
-            >
-              {f.dot && (
-                <span
-                  aria-hidden="true"
-                  className={cn("size-2 rounded-full", f.dot)}
-                />
-              )}
-              {f.label}
-              <span className="font-semibold tabular-nums">
-                {faNumber(count(f.value))}
-              </span>
-            </button>
-          ))}
+            />
+            فقط مغایرت‌ها
+            <span className="font-semibold tabular-nums">
+              {faNumber(conflicts)}
+            </span>
+          </button>
         </div>
         <label className="relative md:ms-auto md:w-56 md:shrink-0">
           <span className="sr-only">جستجوی نام</span>
@@ -478,11 +536,33 @@ export function DayEditor({
       />
 
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed bg-muted/50 p-4 text-center text-sm text-muted-foreground">
-          {nurses.length === 0
-            ? "فهرست پرسنل این برنامه خالی است."
-            : "هیچ پرستاری با این فیلتر یا جستجو پیدا نشد."}
-        </p>
+        <div
+          data-empty-list=""
+          className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/50 p-4 text-center text-sm text-muted-foreground"
+        >
+          <p role="status">
+            {emptyListMessage({
+              rostered: nurses.length,
+              withPreference: nurses.filter((n) => n.preference !== null)
+                .length,
+              conflicts,
+              filters,
+            })}
+          </p>
+          {hasActiveFilters(filters) && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className={cn(
+                "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium text-primary hover:bg-accent pointer-coarse:min-h-11",
+                focusRing,
+              )}
+            >
+              <FilterX aria-hidden="true" className="size-3.5" />
+              نمایش همه پرسنل
+            </button>
+          )}
+        </div>
       ) : (
         <ul
           id={ids.list}
@@ -620,9 +700,8 @@ function NurseRow({
   onApplyRange: (shift: ShiftCode | null, dates: IsoDate[]) => void;
   date: IsoDate;
 }) {
-  const fit = preferenceFit(nurse.preference, shift);
-  const fitLabel = preferenceFitLabel(fit);
   const rangeId = useId();
+  const preferenceId = useId();
   const cellProps = (col: number) => ({
     ref: (el: HTMLButtonElement | null) => {
       registerCell(`${nurse.userId}:${col}`, el);
@@ -645,6 +724,10 @@ function NurseRow({
       data-shift={shift ?? "NONE"}
       data-pending={pending || undefined}
       data-flagged={nurse.flagged || undefined}
+      data-conflict={
+        conflictsWithPreference({ preference: nurse.preference, shift }) ||
+        undefined
+      }
       className={cn(
         "scroll-mt-40 border-s-3 px-3 py-2 transition-colors target:bg-brand-soft",
         nurse.flagged
@@ -655,7 +738,10 @@ function NurseRow({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-1 basis-44 flex-col gap-0.5">
           <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span className="truncate text-sm font-medium">
+            <span
+              title={nurse.displayName}
+              className="max-w-full min-w-0 truncate text-sm font-medium"
+            >
               {nurse.displayName}
             </span>
             {nurse.role === "HEAD_NURSE" && (
@@ -677,29 +763,11 @@ function NurseRow({
               />
             )}
           </p>
-          {nurse.preference && (
-            <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="rounded border border-primary/15 bg-brand-soft/70 px-1.5 text-brand-soft-foreground">
-                {preferenceLabel(nurse.preference)}
-              </span>
-              {fitLabel && (
-                <span
-                  data-fit={fit}
-                  className={cn(
-                    "font-medium",
-                    fit === "MATCHES"
-                      ? "text-status-success-foreground"
-                      : "text-status-warning-foreground",
-                  )}
-                >
-                  <span aria-hidden="true">
-                    {fit === "DIFFERS" ? "≠ " : "✓ "}
-                  </span>
-                  {fitLabel}
-                </span>
-              )}
-            </p>
-          )}
+          <PreferenceContext
+            id={preferenceId}
+            preference={nurse.preference}
+            shift={shift}
+          />
         </div>
 
         <div
@@ -715,6 +783,7 @@ function NurseRow({
                 type="button"
                 {...cellProps(col)}
                 aria-pressed={selected}
+                aria-describedby={preferenceId}
                 aria-label={`${SHIFT_PRESENTATION[code].name} (${code})`}
                 onClick={() => onAssign(code)}
                 className={cn(
@@ -736,6 +805,7 @@ function NurseRow({
             type="button"
             {...cellProps(SHIFT_CODES.length)}
             aria-pressed={shift === null}
+            aria-describedby={preferenceId}
             aria-label="بدون شیفت"
             onClick={() => onAssign(null)}
             className={cn(
