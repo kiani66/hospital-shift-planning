@@ -41,6 +41,12 @@ export const HOSPITAL_ADMIN_ACTIONS = [
   "membership.transition",
   "supervisor.assign",
   "supervisor.end",
+  /** Assign a missing personnel number (legacy backfill) or correct a wrong one. */
+  "user.setPersonnelNumber",
+  /** Generate a one-time temporary password (never for the admin's own account). */
+  "user.issueTemporaryPassword",
+  /** Preview and commit a CSV personnel import. */
+  "personnel.import",
 ] as const;
 export type HospitalAdminAction = (typeof HOSPITAL_ADMIN_ACTIONS)[number];
 
@@ -91,6 +97,12 @@ export interface ActionResources
    * their notifications (D16) and nobody else ever sees them.
    */
   "notification.access": { readonly recipientId: string };
+  /**
+   * Changing one's own password (self-service, or forced after a temporary
+   * password). Ownership is the only rule, like notifications: no membership
+   * is needed and nobody may change someone else's password through it.
+   */
+  "account.changeOwnPassword": { readonly userId: string };
 }
 
 export type Action = keyof ActionResources;
@@ -98,6 +110,7 @@ export type Action = keyof ActionResources;
 export type AuthzDenial =
   | "ACTOR_INACTIVE"
   | "NOT_HOSPITAL_ADMIN"
+  | "NOT_ACCOUNT_OWNER"
   | "NOT_HEAD_NURSE_OF_DEPARTMENT"
   | "NOT_MEMBER_OF_DEPARTMENT"
   | "NOT_COUNTERPART"
@@ -134,6 +147,10 @@ export function decide<A extends Action>(
     const { recipientId } = resource as ActionResources["notification.access"];
     return recipientId === actor.userId ? allow : deny("NOT_RECIPIENT");
   }
+  if (action === "account.changeOwnPassword") {
+    const { userId } = resource as ActionResources["account.changeOwnPassword"];
+    return userId === actor.userId ? allow : deny("NOT_ACCOUNT_OWNER");
+  }
   if ((HOSPITAL_ADMIN_ACTIONS as readonly string[]).includes(action))
     return actor.isHospitalAdmin ? allow : deny("NOT_HOSPITAL_ADMIN");
   if (action === "personnel.view") {
@@ -158,6 +175,7 @@ export function decide<A extends Action>(
     | HospitalAdminAction
     | "personnel.view"
     | "notification.access"
+    | "account.changeOwnPassword"
   >;
   const r = resource as ActionResources[DepartmentAction];
   switch (action as DepartmentAction) {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { authorize } from "../../domain/authz/policies";
+import { toAsciiDigits } from "../../domain/identity/normalize";
 import { unwrap } from "../../domain/shared/result";
 import { APP_TIMEZONE, todayIn } from "../../infrastructure/auth/actor";
 import {
@@ -19,7 +20,14 @@ import type { AppContext } from "../use-case";
 import { personnelUser, type PersonnelDetail } from "./read-model";
 
 const filtersSchema = z.object({
-  search: z.string().trim().max(200).catch("").default(""),
+  // Persian/Arabic digits match stored ASCII personnel numbers.
+  search: z
+    .string()
+    .trim()
+    .max(200)
+    .transform(toAsciiDigits)
+    .catch("")
+    .default(""),
   active: z.enum(["all", "active", "inactive"]).catch("all").default("all"),
   admin: z.enum(["all", "admin", "other"]).catch("all").default("all"),
   departmentId: z.uuid().optional().catch(undefined),
@@ -105,6 +113,8 @@ export async function getPersonnelDetail(
     ...personnelUser(user, relations, today),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+    hasCredentials: user.hasCredentials,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 

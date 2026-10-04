@@ -63,7 +63,9 @@ test("admin creates a password account, finds it, opens detail and edits only ba
     page.getByRole("heading", { name: updatedName, exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "بازگشت به کاربران بیمارستان" }).click();
-  await page.getByLabel("جستجو با نام یا ایمیل").fill(updatedEmail);
+  await page
+    .getByLabel("جستجو با نام، شماره پرسنلی یا ایمیل")
+    .fill(updatedEmail);
   await page.getByRole("button", { name: "اعمال فیلتر" }).click();
   await page
     .getByRole("list", { name: "فهرست کاربران" })

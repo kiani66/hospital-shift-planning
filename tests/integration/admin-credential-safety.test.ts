@@ -20,7 +20,7 @@ import {
 import { loadActor } from "../../src/infrastructure/repositories/memberships";
 import {
   findUserById,
-  setUserCredentials,
+  replacePassword,
 } from "../../src/infrastructure/repositories/users";
 import { setupTestDatabase } from "./support/database";
 
@@ -119,9 +119,10 @@ describe("credential-provisioned Hospital Admin safety", () => {
       isHospitalAdmin: true,
     });
     expect(await events()).toHaveLength(1);
-    await setUserCredentials(db, id, {
+    await replacePassword(db, id, {
       passwordHash: await hashPassword("explicit-operator-test-password"),
-      isActive: false,
+      mustChangePassword: false,
+      now: new Date(),
     });
     const result = await setAccountActive(admin, {
       userId: id,

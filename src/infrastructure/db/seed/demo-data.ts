@@ -28,6 +28,8 @@ export const DEMO_PASSWORD = "demo-only-password";
 
 export interface DemoUser {
   readonly id: string;
+  /** Digits as text; `01011` shows that leading zeros are significant. */
+  readonly personnelNumber: string;
   readonly email: string;
   readonly displayName: string;
   readonly isActive?: boolean;
@@ -36,63 +38,75 @@ export interface DemoUser {
 export const DEMO_USERS = {
   supervisor: {
     id: user(1),
+    personnelNumber: "1001",
     email: "supervisor@demo.invalid",
     displayName: "سوپروایزر نمونه",
   },
   icuHead: {
     id: user(10),
+    personnelNumber: "1010",
     email: "head.icu@demo.invalid",
     displayName: "مریم نمونه",
   },
   icuNurse1: {
     id: user(11),
+    personnelNumber: "01011",
     email: "nurse1.icu@demo.invalid",
     displayName: "سارا نمونه",
   },
   icuNurse2: {
     id: user(12),
+    personnelNumber: "1012",
     email: "nurse2.icu@demo.invalid",
     displayName: "زهرا نمونه",
   },
   icuNurse3: {
     id: user(13),
+    personnelNumber: "1013",
     email: "nurse3.icu@demo.invalid",
     displayName: "نگار نمونه",
   },
   icuNurse4: {
     id: user(14),
+    personnelNumber: "1014",
     email: "nurse4.icu@demo.invalid",
     displayName: "علی نمونه",
   },
   erHead: {
     id: user(20),
+    personnelNumber: "1020",
     email: "head.er@demo.invalid",
     displayName: "رضا نمونه",
   },
   erNurse1: {
     id: user(21),
+    personnelNumber: "1021",
     email: "nurse1.er@demo.invalid",
     displayName: "الهام نمونه",
   },
   erNurse2: {
     id: user(22),
+    personnelNumber: "1022",
     email: "nurse2.er@demo.invalid",
     displayName: "مهدی نمونه",
   },
   erNurse3: {
     id: user(23),
+    personnelNumber: "1023",
     email: "nurse3.er@demo.invalid",
     displayName: "نرگس نمونه",
   },
   /** Moved from ER to ICU: shows an ended membership (D16). */
   transferNurse: {
     id: user(30),
+    personnelNumber: "1030",
     email: "transfer@demo.invalid",
     displayName: "لیلا نمونه",
   },
   /** A deactivated former ICU nurse (D22): keeps history, has no access. */
   inactiveNurse: {
     id: user(40),
+    personnelNumber: "1040",
     email: "inactive@demo.invalid",
     displayName: "پرستار غیرفعال نمونه",
     isActive: false,

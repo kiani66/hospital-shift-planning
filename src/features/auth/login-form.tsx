@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { loginAction, type LoginState } from "./actions";
 
 const MESSAGES = {
-  invalid: "ایمیل یا رمز عبور نادرست است.",
+  invalid: "شماره پرسنلی/ایمیل یا رمز عبور نادرست است.",
   throttled:
-    "به دلیل تلاش‌های ناموفق متعدد، ورود با این ایمیل موقتاً مسدود شده است. لطفاً ۱۵ دقیقه دیگر دوباره تلاش کنید.",
+    "به دلیل تلاش‌های ناموفق متعدد، ورود به این حساب موقتاً مسدود شده است. لطفاً ۱۵ دقیقه دیگر دوباره تلاش کنید.",
 } as const;
 
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
@@ -43,18 +43,19 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="email">ایمیل</Label>
+        <Label htmlFor="identifier">شماره پرسنلی یا ایمیل</Label>
         <Input
-          id="email"
-          name="email"
-          type="email"
+          id="identifier"
+          name="identifier"
+          type="text"
           dir="ltr"
-          inputMode="email"
           autoComplete="username"
           autoCapitalize="none"
+          autoCorrect="off"
           spellCheck={false}
+          maxLength={320}
           required
-          defaultValue={state.email}
+          defaultValue={state.identifier}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
           className="min-h-12 text-start"

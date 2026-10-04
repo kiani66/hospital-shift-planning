@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgTable,
   text,
   uniqueIndex,
@@ -16,17 +17,47 @@ export const users = pgTable(
   "users",
   {
     id: id(),
-    email: text().notNull(),
+    /** Optional for personnel created from migration 0009 on; a login identifier when set. */
+    email: text(),
+    /**
+     * Digits only (1–20), stored as text so leading zeros survive; unique.
+     * Required for every account created from migration 0009 on. Legacy rows
+     * are backfilled through the audited correction workflow; NOT NULL is the
+     * separate, explicitly authorized stage (docs/database.md).
+     */
+    personnelNumber: text(),
+    /** Optional Iranian mobile `09xxxxxxxxx`; not unique, never a login identifier. */
+    mobile: text(),
     displayName: text().notNull(),
     /** argon2id hash; set in Phase 3. Never written to audit or notifications. */
     passwordHash: text(),
+    /** Set with a temporary password; the user must choose their own before using the app. */
+    mustChangePassword: boolean().notNull().default(false),
+    /**
+     * Bumped whenever the password changes or is reset. Sessions carry the
+     * value they were issued with; a mismatch invalidates them server-side.
+     */
+    sessionVersion: integer().notNull().default(0),
+    passwordChangedAt: instant(),
     isActive: boolean().notNull().default(true),
     /** System-level Phase 10 authority; existing users default to no authority. */
     isHospitalAdmin: boolean().notNull().default(false),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("users_email_lower_key").on(sql`lower(${t.email})`)],
+  (t) => [
+    uniqueIndex("users_email_lower_key").on(sql`lower(${t.email})`),
+    uniqueIndex("users_personnel_number_key").on(t.personnelNumber),
+    check(
+      "users_personnel_number_format_check",
+      sql`${t.personnelNumber} ~ '^[0-9]{1,20}$'`,
+    ),
+    check("users_mobile_format_check", sql`${t.mobile} ~ '^09[0-9]{9}$'`),
+    check(
+      "users_login_identifier_check",
+      sql`${t.email} is not null or ${t.personnelNumber} is not null`,
+    ),
+  ],
 );
 
 export const departments = pgTable("departments", {

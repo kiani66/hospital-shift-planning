@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, eq, exists, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { MembershipRole } from "../../domain/authz/actor";
 import type { IsoDate } from "../../domain/shared/dates";
@@ -14,7 +14,9 @@ import { activeOn } from "./memberships";
 const accountColumns = {
   id: users.id,
   displayName: users.displayName,
+  personnelNumber: users.personnelNumber,
   email: users.email,
+  mobile: users.mobile,
   isActive: users.isActive,
   isHospitalAdmin: users.isHospitalAdmin,
 };
@@ -75,7 +77,11 @@ export async function readPersonnelPage(
     .from(users)
     .where(
       and(
-        or(ilike(users.displayName, pattern), ilike(users.email, pattern)),
+        or(
+          ilike(users.displayName, pattern),
+          ilike(users.email, pattern),
+          ilike(users.personnelNumber, pattern),
+        ),
         input.active === "all"
           ? undefined
           : eq(users.isActive, input.active === "active"),
@@ -100,6 +106,8 @@ export async function readAccountDetail(db: DbExecutor, userId: string) {
       ...accountColumns,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
+      hasCredentials: sql<boolean>`${users.passwordHash} is not null`,
+      mustChangePassword: users.mustChangePassword,
     })
     .from(users)
     .where(eq(users.id, userId));

@@ -1,12 +1,20 @@
 import { z } from "zod";
 
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "../../domain/identity/password-policy";
 import { ValidationError } from "../../domain/shared/errors";
 import { hashPassword } from "../../infrastructure/auth/password";
 import {
   hasAccountCredentials,
   updateAccount,
 } from "../../infrastructure/repositories/management";
-import { createUser } from "../../infrastructure/repositories/users";
+import {
+  createUser,
+  findUserByEmail,
+  findUserByPersonnelNumber,
+} from "../../infrastructure/repositories/users";
 import { ConflictError } from "../errors";
 import { defineCommand } from "../use-case";
 import {
@@ -14,57 +22,142 @@ import {
   authorizeAdministration,
   requireUser,
 } from "./context";
-import { accountProfileInput } from "./input";
+import { issueTemporaryPasswordFor } from "./credentials";
+import {
+  displayNameInput,
+  optionalEmailInput,
+  optionalMobileInput,
+} from "./input";
+import { personnelNumberInput } from "./personnel-number";
 
+/**
+ * Creates one personnel account. A personnel number is required (unique,
+ * digits only); e-mail and mobile are optional. By default the account has no
+ * password and cannot sign in until a temporary password is issued, here
+ * (`issueTemporaryPassword`, shown once) or later from the person's page.
+ * An explicitly supplied initial password (older callers) is treated as
+ * temporary too: it must be changed at the first sign-in.
+ */
 export const createAccount = defineCommand({
   name: "user.create",
-  input: accountProfileInput.extend({ password: z.string().min(12).max(256) }),
+  input: z.object({
+    personnelNumber: personnelNumberInput,
+    displayName: displayNameInput,
+    email: optionalEmailInput,
+    mobile: optionalMobileInput,
+    issueTemporaryPassword: z.boolean().default(false),
+    password: z
+      .string()
+      .min(PASSWORD_MIN_LENGTH)
+      .max(PASSWORD_MAX_LENGTH)
+      .optional(),
+  }),
   async handler(uow, input) {
     await authorizeAdministration(uow, "user.create");
+    if (input.password && input.issueTemporaryPassword)
+      throw new ValidationError(
+        "Choose either an initial password or a generated temporary one",
+        "password",
+      );
+    if (await findUserByPersonnelNumber(uow.tx, input.personnelNumber))
+      throw new ValidationError(
+        "Personnel number already belongs to another account",
+        "personnelNumber",
+        "PERSONNEL_NUMBER_TAKEN",
+      );
+    if (input.email && (await findUserByEmail(uow.tx, input.email)))
+      throw new ConflictError(
+        "E-mail already belongs to another account",
+        "EMAIL_TAKEN",
+      );
     const user = await createUser(uow.tx, {
+      personnelNumber: input.personnelNumber,
       email: input.email,
+      mobile: input.mobile,
       displayName: input.displayName,
-      passwordHash: await hashPassword(input.password),
+      passwordHash: input.password ? await hashPassword(input.password) : null,
+      mustChangePassword: input.password !== undefined,
     });
     await uow.audit({
       action: "user.created",
       entityType: "user",
       entityId: user.id,
       data: {
+        personnelNumber: user.personnelNumber,
         email: user.email,
+        mobile: user.mobile,
         displayName: user.displayName,
         isActive: true,
+        credentials: input.password ? "initial" : "none",
       },
     });
-    return user;
+    const temporaryPassword = input.issueTemporaryPassword
+      ? await issueTemporaryPasswordFor(uow, user, "single")
+      : undefined;
+    return { ...user, ...(temporaryPassword && { temporaryPassword }) };
   },
 });
 
+/**
+ * Edits display name, e-mail and mobile. The personnel number has its own
+ * audited command (`setUserPersonnelNumber`). E-mail may be removed only from
+ * an account that keeps a personnel number to sign in with.
+ */
 export const updateAccountProfile = defineCommand({
   name: "user.updateProfile",
-  input: accountProfileInput.extend({
+  input: z.object({
     userId: z.uuid(),
-    expectedEmail: z.string(),
+    email: optionalEmailInput,
+    displayName: displayNameInput,
+    mobile: optionalMobileInput.optional(),
+    expectedEmail: z
+      .string()
+      .nullable()
+      .transform((v) => (v === "" ? null : v)),
     expectedDisplayName: z.string(),
+    expectedMobile: z
+      .string()
+      .nullish()
+      .transform((v) => (v === "" || v === undefined ? null : v)),
   }),
   async handler(uow, input) {
     await authorizeAdministration(uow, "user.updateProfile");
     const user = await requireUser(uow, input.userId);
+    const mobileGiven = input.mobile !== undefined;
     if (
       user.email !== input.expectedEmail ||
-      user.displayName !== input.expectedDisplayName
+      user.displayName !== input.expectedDisplayName ||
+      (mobileGiven && user.mobile !== input.expectedMobile)
     )
       throw new ConflictError(undefined, "PROFILE_CHANGED");
-    const after = { email: input.email, displayName: input.displayName };
-    if (user.email === after.email && user.displayName === after.displayName)
+    const after = {
+      email: input.email,
+      displayName: input.displayName,
+      mobile: mobileGiven ? (input.mobile ?? null) : user.mobile,
+    };
+    if (
+      user.email === after.email &&
+      user.displayName === after.displayName &&
+      user.mobile === after.mobile
+    )
       return user;
+    if (after.email === null && user.personnelNumber === null)
+      throw new ValidationError(
+        "An account without a personnel number needs its e-mail to sign in",
+        "email",
+        "LOGIN_IDENTIFIER_REQUIRED",
+      );
     await updateAccount(uow.tx, user.id, after, uow.now);
     await uow.audit({
       action: "user.profileChanged",
       entityType: "user",
       entityId: user.id,
       data: {
-        before: { email: user.email, displayName: user.displayName },
+        before: {
+          email: user.email,
+          displayName: user.displayName,
+          mobile: user.mobile,
+        },
         after,
       },
     });

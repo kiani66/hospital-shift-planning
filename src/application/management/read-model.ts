@@ -24,7 +24,10 @@ export interface MembershipView extends AccessRelation {
 export interface PersonnelUser {
   id: string;
   displayName: string;
-  email: string;
+  /** Null for legacy accounts not yet backfilled (stage 1 of the personnel-number migration). */
+  personnelNumber: string | null;
+  email: string | null;
+  mobile: string | null;
   isActive: boolean;
   isHospitalAdmin: boolean;
   memberships: MembershipView[];
@@ -33,6 +36,9 @@ export interface PersonnelUser {
 export interface PersonnelDetail extends PersonnelUser {
   createdAt: Date;
   updatedAt: Date;
+  /** Safe booleans only; never credential material. */
+  hasCredentials: boolean;
+  mustChangePassword: boolean;
 }
 export interface RelationRow {
   id: string;
@@ -66,7 +72,9 @@ export function personnelUser(
   user: {
     id: string;
     displayName: string;
-    email: string;
+    personnelNumber: string | null;
+    email: string | null;
+    mobile: string | null;
     isActive: boolean;
     isHospitalAdmin: boolean;
   },
@@ -79,7 +87,9 @@ export function personnelUser(
   return {
     id: user.id,
     displayName: user.displayName,
+    personnelNumber: user.personnelNumber,
     email: user.email,
+    mobile: user.mobile,
     isActive: user.isActive,
     isHospitalAdmin: user.isHospitalAdmin,
     memberships: relations.memberships.map((row) => ({

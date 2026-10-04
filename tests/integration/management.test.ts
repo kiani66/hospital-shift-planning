@@ -48,6 +48,7 @@ import {
   auditEvents,
   departmentMemberships,
   schedules,
+  users,
 } from "../../src/infrastructure/db/schema";
 import * as audit from "../../src/infrastructure/repositories/audit";
 import {
@@ -78,6 +79,8 @@ const { db } = setupTestDatabase();
 const NOW = new Date("2026-10-03T08:00:00Z");
 const TODAY = isoDate("2026-10-03");
 const PASSWORD = "phase10-test-password";
+let personnelSequence = 5000;
+const nextPersonnelNumber = () => String(++personnelSequence);
 let admin: AppContext;
 const as = async (id: string): Promise<AppContext> => ({
   db,
@@ -91,14 +94,23 @@ function data<T>(result: ActionResult<T>): T {
 }
 const code = (result: ActionResult<unknown>, expected: string) =>
   expect(result).toMatchObject({ ok: false, error: { code: expected } });
-const newAccount = async (name = "new") =>
-  data(
+const newAccount = async (name = "new") => {
+  const account = data(
     await createAccount(admin, {
+      personnelNumber: nextPersonnelNumber(),
       email: `${name}@phase10.invalid`,
       displayName: name,
       password: PASSWORD,
     }),
   );
+  // An admin-chosen initial password is temporary; these tests start after the
+  // user has replaced it (the forced change is covered in personnel-identity tests).
+  await db
+    .update(users)
+    .set({ mustChangePassword: false })
+    .where(eq(users.id, account.id));
+  return account;
+};
 const member = async (userId: string, extra: Record<string, unknown> = {}) =>
   data(
     await addDepartmentMembership(admin, {
@@ -142,6 +154,7 @@ describe("Hospital Admin boundary and last-admin safety", () => {
       const ctx = await as(id);
       const attempts = [
         createAccount(ctx, {
+          personnelNumber: nextPersonnelNumber(),
           email: "denied@phase10.invalid",
           displayName: "denied",
           password: PASSWORD,
@@ -196,7 +209,12 @@ describe("Hospital Admin boundary and last-admin safety", () => {
     code(
       await createAccount(
         { ...admin, actor: { ...admin.actor, isActive: false } },
-        { email: "x@phase10.invalid", displayName: "x", password: PASSWORD },
+        {
+          personnelNumber: nextPersonnelNumber(),
+          email: "x@phase10.invalid",
+          displayName: "x",
+          password: PASSWORD,
+        },
       ),
       "FORBIDDEN",
     );
@@ -371,6 +389,7 @@ describe("account lifecycle and identity reads", () => {
   it("creates a normalized password account without accidental authority", async () => {
     const account = data(
       await createAccount(admin, {
+        personnelNumber: nextPersonnelNumber(),
         email: " NEW@phase10.invalid ",
         displayName: " New ",
         password: PASSWORD,
@@ -386,10 +405,10 @@ describe("account lifecycle and identity reads", () => {
     expect(
       await authenticateWithPassword(
         db,
-        { email: account.email, password: PASSWORD },
+        { identifier: account.email!, password: PASSWORD },
         NOW,
       ),
-    ).toEqual({ ok: true, userId: account.id });
+    ).toEqual({ ok: true, userId: account.id, sessionVersion: 0 });
     expect((await events()).at(-1)).toMatchObject({
       action: "user.created",
       actorId: admin.actor.userId,
@@ -400,6 +419,7 @@ describe("account lifecycle and identity reads", () => {
     const before = await events();
     code(
       await createAccount(admin, {
+        personnelNumber: nextPersonnelNumber(),
         email: "NEW@phase10.invalid",
         displayName: "other",
         password: PASSWORD,
@@ -409,10 +429,33 @@ describe("account lifecycle and identity reads", () => {
     expect(await events()).toEqual(before);
   });
   it.each([
-    { email: "invalid", displayName: "x", password: PASSWORD },
-    { email: "x@phase10.invalid", displayName: " ", password: PASSWORD },
-    { email: "x@phase10.invalid", displayName: "x", password: "short" },
-    { email: "x@phase10.invalid", displayName: "x", password: "x".repeat(257) },
+    {
+      personnelNumber: "1",
+      email: "invalid",
+      displayName: "x",
+      password: PASSWORD,
+    },
+    {
+      personnelNumber: "1",
+      email: "x@phase10.invalid",
+      displayName: " ",
+      password: PASSWORD,
+    },
+    {
+      personnelNumber: "1",
+      email: "x@phase10.invalid",
+      displayName: "x",
+      password: "short",
+    },
+    {
+      personnelNumber: "1",
+      email: "x@phase10.invalid",
+      displayName: "x",
+      password: "x".repeat(257),
+    },
+    { email: "x@phase10.invalid", displayName: "x" },
+    { personnelNumber: "12a", displayName: "x" },
+    { personnelNumber: "1", displayName: "x", mobile: "123" },
   ])("rejects invalid account input %#", async (input) => {
     code(await createAccount(admin, input), "VALIDATION");
     expect(await events()).toHaveLength(1);
@@ -429,7 +472,7 @@ describe("account lifecycle and identity reads", () => {
     expect(
       await authenticateWithPassword(
         db,
-        { email: account.email, password: PASSWORD },
+        { identifier: account.email!, password: PASSWORD },
         NOW,
       ),
     ).toEqual({ ok: false, reason: "INVALID_CREDENTIALS" });
@@ -490,10 +533,10 @@ describe("account lifecycle and identity reads", () => {
     expect(
       await authenticateWithPassword(
         db,
-        { email: input.email, password: PASSWORD },
+        { identifier: input.email!, password: PASSWORD },
         NOW,
       ),
-    ).toEqual({ ok: true, userId: account.id });
+    ).toEqual({ ok: true, userId: account.id, sessionVersion: 0 });
     expect((await events()).at(-1)?.action).toBe("user.profileChanged");
   });
   it("identity conflicts roll back and unchanged profiles do not add events", async () => {
@@ -1299,6 +1342,7 @@ describe("history, scheduling eligibility, and audit atomicity", () => {
     );
     code(
       await createAccount(admin, {
+        personnelNumber: nextPersonnelNumber(),
         email: "rollback@phase10.invalid",
         displayName: "rollback",
         password: PASSWORD,

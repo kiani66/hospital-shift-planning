@@ -10,12 +10,22 @@ export interface ManagementFormState {
   fields?: Readonly<Record<string, string>>;
   /** Safe destination only; command results, passwords and submitted values are never echoed. */
   userId?: string;
+  /**
+   * A freshly generated temporary password, present in exactly one response
+   * (the one that created it) so the admin can hand it over. Never stored,
+   * logged or returned again; the client drops it when the panel closes.
+   */
+  temporaryPassword?: string;
   at?: number;
 }
 
 export const MANAGEMENT_SUCCESS: Record<ManagementOperation, string> = {
   create: "حساب کاربر ایجاد شد.",
   profile: "اطلاعات حساب ذخیره شد.",
+  personnelNumber:
+    "شماره پرسنلی ثبت شد؛ از این پس ورود با شماره جدید انجام می‌شود و شماره قبلی کار نمی‌کند.",
+  temporaryPassword:
+    "رمز موقت ساخته شد. تمام نشست‌های قبلی کاربر بسته شد و در اولین ورود باید رمز خود را تغییر دهد.",
   status: "وضعیت حساب به‌روز شد.",
   add: "عضویت ثبت شد.",
   end: "تاریخ پایان عضویت ثبت شد؛ سابقه حفظ می‌شود.",
@@ -52,10 +62,22 @@ const reasonMessages: Record<string, string> = {
   ADMIN_ACTIVATION_REQUIRES_CREDENTIALS:
     "برای فعال‌سازی حساب دارای نقش مدیر بیمارستان، ابتدا باید امکان ورود کاربر فراهم شود.",
   UNCHANGED_TRANSITION: "بخش یا نقش جدید باید با عضویت فعلی متفاوت باشد.",
+  PERSONNEL_NUMBER_TAKEN: "این شماره پرسنلی قبلاً برای حساب دیگری ثبت شده است.",
+  PERSONNEL_NUMBER_CHANGED: refreshMessage,
+  EMAIL_TAKEN: "این ایمیل قبلاً برای حساب دیگری ثبت شده است.",
+  LOGIN_IDENTIFIER_REQUIRED:
+    "این حساب شماره پرسنلی ندارد؛ ابتدا شماره پرسنلی را ثبت کنید، سپس می‌توانید ایمیل را حذف کنید.",
+  CREDENTIALS_CHANGED: refreshMessage,
+  SELF_TEMPORARY_PASSWORD:
+    "برای حساب خودتان از «تغییر رمز عبور» استفاده کنید؛ رمز موقت فقط برای دیگران ساخته می‌شود.",
+  ACCOUNT_INACTIVE:
+    "حساب غیرفعال است. ساخت رمز موقت حساب را فعال نمی‌کند؛ در صورت نیاز ابتدا حساب را فعال کنید.",
 };
 const fieldMessages: Record<string, string> = {
   displayName: "نام معتبر با حداکثر ۲۰۰ نویسه وارد کنید.",
+  personnelNumber: "شماره پرسنلی باید فقط شامل ۱ تا ۲۰ رقم و غیرتکراری باشد.",
   email: "ایمیل معتبر و غیرتکراری وارد کنید.",
+  mobile: "شماره موبایل معتبر ایران وارد کنید.",
   password: "رمز اولیه باید بین ۱۲ تا ۲۵۶ نویسه باشد.",
   departmentId: "یک بخش فعال انتخاب کنید.",
   role: "نقش عضویت را انتخاب کنید.",
@@ -113,7 +135,11 @@ export function managementFailure(
           : fieldMessages[key]!,
       ]),
   );
-  if (error.code === "CONFLICT" && operation === "create")
+  if (
+    error.code === "CONFLICT" &&
+    operation === "create" &&
+    error.reason === "EMAIL_TAKEN"
+  )
     fields.email = message;
   return { status: "error", message, fields };
 }
@@ -145,11 +171,20 @@ export function managementResponse<T>(
     operation === "create" && userId && z.uuid().safeParse(userId).success
       ? userId
       : undefined;
-  return result.ok
-    ? {
-        status: "success",
-        message: MANAGEMENT_SUCCESS[operation],
-        ...(createdId && { userId: createdId }),
-      }
-    : managementFailure(operation, result.error);
+  if (!result.ok) return managementFailure(operation, result.error);
+  // The only command field ever passed on: a generated temporary password, once.
+  const issued =
+    (operation === "create" || operation === "temporaryPassword") &&
+    result.data &&
+    typeof result.data === "object" &&
+    "temporaryPassword" in result.data &&
+    typeof result.data.temporaryPassword === "string"
+      ? result.data.temporaryPassword
+      : undefined;
+  return {
+    status: "success",
+    message: MANAGEMENT_SUCCESS[operation],
+    ...(createdId && { userId: createdId }),
+    ...(issued && { temporaryPassword: issued }),
+  };
 }

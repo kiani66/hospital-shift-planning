@@ -9,6 +9,8 @@ import {
   setHospitalAdmin,
   updateAccountProfile,
 } from "@/application/management/accounts";
+import { issueTemporaryPassword } from "@/application/management/credentials";
+import { setUserPersonnelNumber } from "@/application/management/personnel-number";
 import {
   addDepartmentMembership,
   endDepartmentMembership,
@@ -31,6 +33,8 @@ import {
 const commands = {
   create: createAccount,
   profile: updateAccountProfile,
+  personnelNumber: setUserPersonnelNumber,
+  temporaryPassword: issueTemporaryPassword,
   status: setAccountActive,
   add: addDepartmentMembership,
   end: endDepartmentMembership,
@@ -91,6 +95,18 @@ export async function updateProfileAction(
   formData: FormData,
 ) {
   return submit("profile", formData);
+}
+export async function setPersonnelNumberAction(
+  _previous: ManagementFormState,
+  formData: FormData,
+) {
+  return submit("personnelNumber", formData);
+}
+export async function issueTemporaryPasswordAction(
+  _previous: ManagementFormState,
+  formData: FormData,
+) {
+  return submit("temporaryPassword", formData);
 }
 export async function setAccountActiveAction(
   _previous: ManagementFormState,

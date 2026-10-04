@@ -11,7 +11,10 @@ import { setAccountActiveAction, updateProfileAction } from "./actions";
 import { ManagementInput } from "./form-fields";
 import { MutationDialog } from "./mutation-dialog";
 
-type Account = Pick<PersonnelUser, "id" | "displayName" | "email" | "isActive">;
+type Account = Pick<
+  PersonnelUser,
+  "id" | "displayName" | "email" | "mobile" | "personnelNumber" | "isActive"
+>;
 
 function AccountDialog({
   user,
@@ -27,7 +30,8 @@ function AccountDialog({
   // Freeze expected fields when the form opens, even if its surrounding page refreshes.
   const [snapshot] = useState(user);
   const [name, setName] = useState(snapshot.displayName);
-  const [email, setEmail] = useState(snapshot.email);
+  const [email, setEmail] = useState(snapshot.email ?? "");
+  const [mobile, setMobile] = useState(snapshot.mobile ?? "");
   const deactivate = snapshot.isActive;
   const title =
     operation === "profile"
@@ -55,7 +59,12 @@ function AccountDialog({
               <input
                 type="hidden"
                 name="expectedEmail"
-                value={snapshot.email}
+                value={snapshot.email ?? ""}
+              />
+              <input
+                type="hidden"
+                name="expectedMobile"
+                value={snapshot.mobile ?? ""}
               />
               <input
                 type="hidden"
@@ -72,7 +81,7 @@ function AccountDialog({
               />
               <ManagementInput
                 name="email"
-                label="ایمیل / شناسه ورود"
+                label="ایمیل (اختیاری)"
                 value={email}
                 onChange={setEmail}
                 error={state.fields?.email}
@@ -80,9 +89,21 @@ function AccountDialog({
                 dir="ltr"
                 type="email"
               />
+              <ManagementInput
+                name="mobile"
+                label="شماره موبایل (اختیاری)"
+                value={mobile}
+                onChange={setMobile}
+                error={state.fields?.mobile}
+                maxLength={40}
+                dir="ltr"
+                type="tel"
+                inputMode="tel"
+              />
               <Callout icon={Info}>
-                ایمیل جدید شناسه ورود بعدی کاربر است. رمز عبور در این فرم تغییر
-                نمی‌کند.
+                {snapshot.personnelNumber
+                  ? "ورود با شماره پرسنلی و در صورت ثبت، با ایمیل ممکن است. موبایل شناسه ورود نیست. رمز عبور در این فرم تغییر نمی‌کند."
+                  : "این حساب هنوز شماره پرسنلی ندارد؛ ایمیل تنها شناسه ورود آن است و حذف آن مجاز نیست. رمز عبور در این فرم تغییر نمی‌کند."}
               </Callout>
             </>
           ) : (

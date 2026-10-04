@@ -23,6 +23,8 @@ export function ManagementInput({
   maxLength,
   dir,
   autoComplete,
+  inputMode,
+  required,
 }: {
   name: string;
   label: string;
@@ -30,10 +32,12 @@ export function ManagementInput({
   onChange: (value: string) => void;
   error?: string;
   hint?: string;
-  type?: "text" | "email";
+  type?: "text" | "email" | "tel";
   maxLength?: number;
   dir?: "ltr";
   autoComplete?: string;
+  inputMode?: "numeric" | "tel" | "email";
+  required?: boolean;
 }) {
   const id = useId();
   return (
@@ -48,6 +52,8 @@ export function ManagementInput({
         maxLength={maxLength}
         dir={dir}
         autoComplete={autoComplete}
+        inputMode={inputMode}
+        required={required}
         aria-invalid={!!error}
         aria-describedby={error || hint ? `${id}-help` : undefined}
       />

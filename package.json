@@ -28,7 +28,8 @@
     "db:seed": "tsx scripts/db-seed.ts",
     "db:bootstrap-admin": "tsx scripts/db-bootstrap-admin.ts",
     "db:provision-user": "tsx scripts/db-provision-user.ts",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "db:personnel-inventory": "tsx scripts/db-personnel-inventory.ts"
   },
   "dependencies": {
     "@fontsource-variable/vazirmatn": "^5.3.0",
