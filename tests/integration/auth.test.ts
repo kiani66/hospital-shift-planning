@@ -12,7 +12,7 @@ import { isoDate } from "../../src/domain/shared/dates";
 import { actorFromSession } from "../../src/infrastructure/auth/actor";
 import {
   authenticateWithPassword,
-  throttleKey,
+  unknownIdentifierThrottleKey,
 } from "../../src/infrastructure/auth/credentials";
 import { hashPassword } from "../../src/infrastructure/auth/password";
 import {
@@ -40,8 +40,8 @@ const TODAY = isoDate("2026-10-01");
 const NOW = new Date("2026-10-01T08:00:00Z");
 const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
 
-const login = (email: string, password: string, now = NOW) =>
-  authenticateWithPassword(db, { email, password }, now);
+const login = (identifier: string, password: string, now = NOW) =>
+  authenticateWithPassword(db, { identifier, password }, now);
 const INVALID = { ok: false, reason: "INVALID_CREDENTIALS" } as const;
 const THROTTLED = { ok: false, reason: "THROTTLED" } as const;
 
@@ -57,13 +57,14 @@ describe("sign-in with e-mail and password", () => {
     expect(await login(U.icuNurse1.email, DEMO_PASSWORD)).toEqual({
       ok: true,
       userId: U.icuNurse1.id,
+      sessionVersion: 0,
     });
   });
 
   it("matches the e-mail case-insensitively and ignores surrounding spaces", async () => {
     expect(
       await login(`  ${U.icuHead.email.toUpperCase()} `, DEMO_PASSWORD),
-    ).toEqual({ ok: true, userId: U.icuHead.id });
+    ).toEqual({ ok: true, userId: U.icuHead.id, sessionVersion: 0 });
   });
 
   it("rejects a wrong password with the generic failure", async () => {
@@ -170,7 +171,12 @@ describe("login throttling", () => {
       sql`select key_hash from login_throttles`,
     );
     expect(rows).toEqual([
-      { key_hash: throttleKey("someone@example.invalid") },
+      {
+        key_hash: unknownIdentifierThrottleKey({
+          kind: "email",
+          value: "someone@example.invalid",
+        }),
+      },
     ]);
     expect(rows[0]!.key_hash).toMatch(/^[0-9a-f]{64}$/);
   });

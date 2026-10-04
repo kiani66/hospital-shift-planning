@@ -35,7 +35,9 @@ test("Hospital Admin reaches the directory, searches/filters, and reads Jalali h
     page.getByRole("heading", { name: "کاربران بیمارستان", exact: true }),
   ).toBeVisible();
   const form = page.getByRole("form", { name: "جستجو و فیلتر کاربران" });
-  await form.getByLabel("جستجو با نام یا ایمیل").fill(fixture.suffix);
+  await form
+    .getByLabel("جستجو با نام، شماره پرسنلی یا ایمیل")
+    .fill(fixture.suffix);
   await form.getByRole("button", { name: "اعمال فیلتر" }).click();
   const list = page.getByRole("list", { name: "فهرست کاربران" });
   await expect(list.locator(":scope > li")).toHaveCount(6);
@@ -93,7 +95,7 @@ test("Hospital Admin filters system authority and searches a login identifier", 
   await signInAndWait(page, fixture.people.admin.email);
   await page.goto("/admin/personnel");
   await page
-    .getByLabel("جستجو با نام یا ایمیل")
+    .getByLabel("جستجو با نام، شماره پرسنلی یا ایمیل")
     .fill(fixture.people.admin.email.toUpperCase());
   await page.getByLabel("نقش سیستمی").selectOption("admin");
   await page.getByRole("button", { name: "اعمال فیلتر" }).click();

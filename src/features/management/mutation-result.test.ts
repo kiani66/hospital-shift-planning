@@ -112,8 +112,16 @@ describe("safe Persian management feedback", () => {
           ? "ایمیل"
           : "هم‌پوشانی",
       );
+      // Only a known duplicate e-mail is attached to the e-mail field.
+      expect(state.fields?.email).toBeUndefined();
       if (operation === "create")
-        expect(state.fields?.email).toBe(state.message);
+        expect(
+          managementFailure(operation, {
+            code: "CONFLICT",
+            message: "x",
+            reason: "EMAIL_TAKEN",
+          }).fields?.email,
+        ).toContain("ایمیل");
     },
   );
   it("filters unknown error fields and does not echo validation values", () => {
@@ -127,14 +135,14 @@ describe("safe Persian management feedback", () => {
     const parsed = managementFormSchemas.create.safeParse({
       displayName: "",
       email: "invalid",
-      password: "secret",
+      personnelNumber: "secret",
     });
     if (parsed.success) throw new Error("expected validation");
     const validation = invalidManagementForm(parsed.error);
     expect(Object.keys(validation.fields!).sort()).toEqual([
       "displayName",
       "email",
-      "password",
+      "personnelNumber",
     ]);
     expect(JSON.stringify(validation)).not.toContain("secret");
   });
@@ -213,5 +221,21 @@ describe("safe Persian management feedback", () => {
         id,
       ),
     ).not.toHaveProperty("userId");
+  });
+  it("passes a generated temporary password on once, only for issuing operations", () => {
+    const ok = {
+      ok: true as const,
+      data: { id: "x", temporaryPassword: "abcd-efgh-ijkm-npqr" },
+    };
+    expect(managementResponse("temporaryPassword", ok)).toMatchObject({
+      status: "success",
+      temporaryPassword: "abcd-efgh-ijkm-npqr",
+    });
+    expect(managementResponse("profile", ok)).not.toHaveProperty(
+      "temporaryPassword",
+    );
+    expect(
+      managementResponse("create", { ok: true, data: { id: "x" } }),
+    ).not.toHaveProperty("temporaryPassword");
   });
 });

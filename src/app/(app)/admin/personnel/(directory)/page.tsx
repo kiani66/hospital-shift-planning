@@ -25,9 +25,15 @@ export default async function PersonnelPage({
         title="کاربران بیمارستان"
         description="حساب‌ها، دسترسی جاری افراد و مدیریت عضویت بخش‌ها."
       />
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap gap-2">
         <Link href="/admin/personnel/new" className={buttonClasses()}>
           ایجاد کاربر
+        </Link>
+        <Link
+          href="/admin/personnel/import"
+          className={buttonClasses("outline")}
+        >
+          ورود گروهی پرسنل (CSV)
         </Link>
       </div>
       <DirectoryView directory={directory} />

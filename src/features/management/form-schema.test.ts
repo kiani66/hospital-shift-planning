@@ -88,31 +88,50 @@ describe("management form schemas", () => {
       }).success,
     ).toBe(false);
   });
-  it("normalizes profile fields, strips unapproved fields, and retains the exact password", () => {
+  it("normalizes identity fields, strips unapproved fields and never takes a password", () => {
     expect(
       managementFormSchemas.create.parse({
         ...profile,
+        personnelNumber: " ۰۰۱۲۵ ",
+        mobile: "+98 912 123 4567",
+        issueTemporaryPassword: "on",
         password: " a-valid-password ",
         isHospitalAdmin: true,
         isActive: false,
         passwordHash: "secret",
       }),
     ).toEqual({
+      personnelNumber: "00125",
       displayName: "نام نمونه",
       email: "user@demo.invalid",
-      password: " a-valid-password ",
+      mobile: "09121234567",
+      issueTemporaryPassword: true,
+    });
+  });
+  it("treats blank e-mail and mobile as absent", () => {
+    expect(
+      managementFormSchemas.create.parse({
+        personnelNumber: "720",
+        displayName: "x",
+        email: " ",
+        mobile: "",
+      }),
+    ).toEqual({
+      personnelNumber: "720",
+      displayName: "x",
+      email: null,
+      mobile: null,
+      issueTemporaryPassword: false,
     });
   });
   it.each([
-    {
-      displayName: " ",
-      email: "user@demo.invalid",
-      password: "valid-password",
-    },
-    { ...profile, email: "not-an-email", password: "valid-password" },
-    { ...profile, password: "short" },
-    { ...profile, password: "a".repeat(257) },
-    { ...profile, displayName: "a".repeat(201), password: "valid-password" },
+    { displayName: " ", email: "user@demo.invalid", personnelNumber: "1" },
+    { ...profile, email: "not-an-email", personnelNumber: "1" },
+    { ...profile, personnelNumber: "" },
+    { ...profile, personnelNumber: "12a" },
+    { ...profile, personnelNumber: "1".repeat(21) },
+    { ...profile, personnelNumber: "1", mobile: "12345" },
+    { ...profile, displayName: "a".repeat(201), personnelNumber: "1" },
   ])("rejects invalid account field values %#", (input) => {
     expect(managementFormSchemas.create.safeParse(input).success).toBe(false);
   });
@@ -229,17 +248,20 @@ describe("management form schemas", () => {
   );
   it("reads only known string form fields and refuses file values", () => {
     const form = new FormData();
+    form.set("personnelNumber", "720");
     form.set("displayName", "Name");
     form.set("email", "name@demo.invalid");
     form.set("password", "valid-password");
     form.set("isHospitalAdmin", "true");
     const parsed = parseManagementForm("create", form);
     expect(parsed.success && parsed.data).toEqual({
+      personnelNumber: "720",
       displayName: "Name",
       email: "name@demo.invalid",
-      password: "valid-password",
+      mobile: null,
+      issueTemporaryPassword: false,
     });
-    form.set("password", new Blob(["secret"]), "secret.txt");
+    form.set("personnelNumber", new Blob(["secret"]), "secret.txt");
     expect(parseManagementForm("create", form).success).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { CalendarDays, LogOut } from "lucide-react";
+import { CalendarDays, KeyRound, LogOut } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -131,6 +131,16 @@ export function AppShell({
               aria-hidden="true"
               className="hidden h-8 w-px shrink-0 bg-primary/15 md:block"
             />
+            <Link
+              href="/account/password"
+              className={buttonClasses(
+                "ghost",
+                "min-w-11 px-3 max-md:hover:bg-sidebar-accent max-md:hover:text-sidebar-foreground max-md:focus-visible:ring-sidebar-ring md:text-brand-soft-foreground md:hover:bg-background/80",
+              )}
+            >
+              <KeyRound aria-hidden="true" className="size-5" />
+              <span className="max-lg:sr-only">تغییر رمز عبور</span>
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

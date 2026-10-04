@@ -136,7 +136,13 @@ function PreferencesSection({ schedule }: { schedule: ScheduleOverview }) {
   );
 }
 
-function RosterSection({ schedule }: { schedule: ScheduleOverview }) {
+function RosterSection({
+  schedule,
+  rosterAction,
+}: {
+  schedule: ScheduleOverview;
+  rosterAction?: ReactNode;
+}) {
   const { roster } = schedule;
   return (
     <section
@@ -160,8 +166,10 @@ function RosterSection({ schedule }: { schedule: ScheduleOverview }) {
       <p className="text-xs leading-relaxed text-muted-foreground">
         سرپرستار هم عضو برنامه است و مانند بقیه شیفت می‌گیرد. این فهرست هنگام
         ایجاد برنامه از عضویت‌های مؤثر در همین بازه ثبت شده است و با تغییر
-        عضویت‌ها به‌طور خودکار تغییر نمی‌کند.
+        عضویت‌ها به‌طور خودکار تغییر نمی‌کند؛ افراد تازه عضو را پیش از
+        نهایی‌سازی می‌توانید به‌صورت صریح اضافه کنید.
       </p>
+      {rosterAction}
       {roster.members.length === 0 ? (
         <p className="rounded-md border border-dashed bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           فهرست پرسنل این برنامه خالی است.
@@ -191,11 +199,18 @@ function RosterSection({ schedule }: { schedule: ScheduleOverview }) {
 }
 
 /** Below the calendar: preference collection and the roster, side by side on desktop. */
-export function ScheduleDetails({ schedule }: { schedule: ScheduleOverview }) {
+export function ScheduleDetails({
+  schedule,
+  rosterAction,
+}: {
+  schedule: ScheduleOverview;
+  /** The Head Nurse's explicit roster addition (DRAFT / PLANNING only). */
+  rosterAction?: ReactNode;
+}) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <PreferencesSection schedule={schedule} />
-      <RosterSection schedule={schedule} />
+      <RosterSection schedule={schedule} rosterAction={rosterAction} />
     </div>
   );
 }

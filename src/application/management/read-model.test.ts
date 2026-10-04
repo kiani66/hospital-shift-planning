@@ -34,7 +34,9 @@ describe("management DTOs", () => {
     const user = {
       id: "user",
       displayName: "Name",
+      personnelNumber: "00125",
       email: "user@demo.invalid",
+      mobile: null,
       isActive: false,
       isHospitalAdmin: true,
       passwordHash: "hash",
@@ -55,7 +57,9 @@ describe("management DTOs", () => {
       [
         "id",
         "displayName",
+        "personnelNumber",
         "email",
+        "mobile",
         "isActive",
         "isHospitalAdmin",
         "memberships",
@@ -77,7 +81,9 @@ describe("management DTOs", () => {
       {
         id: "u",
         displayName: "N",
+        personnelNumber: null,
         email: "n@demo.invalid",
+        mobile: null,
         isActive: true,
         isHospitalAdmin: false,
       },

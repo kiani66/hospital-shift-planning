@@ -19,19 +19,19 @@ TypeScript schema.
 
 ## Tables
 
-| Area                | Tables                                                                                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| People and access   | `users` (system-level `is_hospital_admin`, default false), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments` |
-| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                         |
-| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role)                         |
-| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                   |
-| Working copy        | `shift_assignments`                                                                                                                                                |
-| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                                            |
-| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                                                   |
-| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                          |
-| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                           |
-| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                             |
-| Authentication      | `login_throttles` (failed sign-ins per hashed e-mail, migration 0004; see `docs/security.md`)                                                                      |
+| Area                | Tables                                                                                                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| People and access   | `users` (system-level `is_hospital_admin`; `personnel_number`, optional `email`/`mobile`, `must_change_password`, `session_version`, migration 0009), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments` |
+| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                                                                                                                    |
+| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role)                                                                                                                    |
+| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                                                                                                              |
+| Working copy        | `shift_assignments`                                                                                                                                                                                                                                           |
+| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                                                                                                                                       |
+| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                                                                                                                                              |
+| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                     |
+| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                      |
+| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                        |
+| Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                       |
 
 ## Where each rule is enforced
 
@@ -45,6 +45,8 @@ TypeScript schema.
 | One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                      |
 | Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                       |
 | One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                             |
+| Personnel numbers are 1–20 ASCII digits (text) and unique; mobiles are `09xxxxxxxxx` | `users_personnel_number_key`, `users_personnel_number_format_check`, `users_mobile_format_check` (0009)     |
+| Every account keeps a login identifier (e-mail or personnel number)                  | `users_login_identifier_check` (0009)                                                                       |
 | Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                  |
 | History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows   |
 | Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                     |
@@ -117,3 +119,36 @@ Account deactivation neither ends relations nor alters approved versions; reacti
 still-effective access. Historical and future relation correction is deliberately deferred.
 See [deployment.md](deployment.md#phase-10-production-upgrade-and-first-hospital-admin) for
 migration ordering, explicit first-admin bootstrap and rollback considerations.
+
+## Personnel number stages
+
+Decision D94. The requirement "every user has a personnel number" is enforced in two stages so a
+deployment never fails on existing data and no number is ever invented:
+
+1. **Migration `0009_personnel_identity` (journaled, applied by `db:migrate` / `vercel-build`).**
+   Additive and backward compatible: `personnel_number text` (nullable), unique index, format check
+   `^[0-9]{1,20}$`; `email` becomes nullable with `users_login_identifier_check`; optional `mobile`
+   with its format check; `must_change_password boolean not null default false`,
+   `session_version integer not null default 0`, `password_changed_at timestamptz`. Existing rows
+   keep their values (no personnel number, version 0, no forced change). Rollback: the previous
+   application keeps working against the expanded schema except that accounts created without an
+   e-mail cannot sign in with it (it reads `email`); do not drop the columns while new servers run.
+2. **Backfill (operational, audited).** `pnpm db:personnel-inventory` (read-only) lists accounts
+   without a number. Supply genuine numbers through the Hospital Admin person page ("ثبت شماره
+   پرسنلی", `user.personnelNumberAssigned`) or
+   `PROVISION_MODE=assign-personnel-number PROVISION_CONFIRM=ASSIGN_PERSONNEL_NUMBER pnpm db:provision-user`.
+   Never update `users` with SQL.
+3. **Strict stage (staged, not journaled).** `src/infrastructure/db/staged/0010_personnel_number_required.sql`
+   raises (and the migration transaction rolls back) while any row has no number, then sets
+   `NOT NULL`. It is outside `migrations/`, so no build applies it. Promote it only when the
+   inventory reports zero on Production **and** the product owner has explicitly authorized the
+   strict stage:
+   1. In a new branch, change `personnelNumber: text()` to `text().notNull()` in
+      `schema/identity.ts`, run `pnpm db:generate --custom --name personnel_number_required`, and
+      replace the generated file's body with the staged SQL (keep the guard).
+   2. Delete the staged file, adjust `tests/integration/personnel-identity.test.ts` ("is not part of
+      the journaled migrations") and `migrations.test.ts` (count), run `pnpm test:integration`.
+   3. Review and merge as its own change; `vercel-build` then applies it. If any account was
+      created without a number in between, the build fails safely and nothing changes.
+      `tests/integration/personnel-identity.test.ts` runs the staged SQL in rolled-back transactions
+      to prove it fails with a missing number and succeeds after the backfill.

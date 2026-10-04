@@ -12,20 +12,20 @@ export interface LoginState {
   /** One generic message for every credential failure (no account enumeration). */
   readonly error?: "invalid" | "throttled";
   /** Echoed back so the field keeps its value; the password never is. */
-  readonly email?: string;
+  readonly identifier?: string;
 }
 
 export async function loginAction(
   _previous: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const rawEmail = formData.get("email");
-  const email = typeof rawEmail === "string" ? rawEmail.slice(0, 320) : "";
+  const raw = formData.get("identifier");
+  const identifier = typeof raw === "string" ? raw.slice(0, 320) : "";
   const input = loginInputSchema.safeParse({
-    email: rawEmail,
+    identifier: raw,
     password: formData.get("password"),
   });
-  if (!input.success) return { error: "invalid", email };
+  if (!input.success) return { error: "invalid", identifier };
 
   try {
     await signIn("credentials", {
@@ -36,7 +36,7 @@ export async function loginAction(
     if (error instanceof CredentialsSignin)
       return {
         error: error.code === "throttled" ? "throttled" : "invalid",
-        email,
+        identifier,
       };
     // A successful sign-in "throws" Next's redirect; let it through.
     throw error;

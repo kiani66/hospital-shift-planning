@@ -1,23 +1,58 @@
 import { z } from "zod";
 
+import { parseOptionalMobileNumber } from "@/domain/identity/mobile";
+import { parsePersonnelNumber } from "@/domain/identity/personnel-number";
 import { isIsoDate, type IsoDate } from "@/domain/shared/dates";
 import { parseJalaliInput } from "@/features/calendar/jalali-input";
 
 const id = z.uuid("اطلاعات فرم معتبر نیست. صفحه را تازه کنید.");
 const department = z.uuid("یک بخش فعال انتخاب کنید.");
-const profile = z.object({
-  displayName: z
-    .string("نام را وارد کنید.")
-    .trim()
-    .min(1, "نام را وارد کنید.")
-    .max(200, "نام باید حداکثر ۲۰۰ نویسه باشد."),
-  email: z
-    .string("ایمیل را وارد کنید.")
-    .trim()
-    .toLowerCase()
-    .max(320, "ایمیل بیش از حد طولانی است.")
-    .pipe(z.email("ایمیل معتبر وارد کنید.")),
-});
+const displayName = z
+  .string("نام را وارد کنید.")
+  .trim()
+  .min(1, "نام را وارد کنید.")
+  .max(200, "نام باید حداکثر ۲۰۰ نویسه باشد.");
+/** Blank means no e-mail; the command normalizes again. */
+const optionalEmail = z
+  .string()
+  .default("")
+  .pipe(
+    z
+      .string()
+      .trim()
+      .toLowerCase()
+      .max(320, "ایمیل بیش از حد طولانی است.")
+      .pipe(z.union([z.literal(""), z.email("ایمیل معتبر وارد کنید.")])),
+  )
+  .transform((v) => (v === "" ? null : v));
+const optionalMobile = z
+  .string()
+  .default("")
+  .pipe(z.string().max(40, "شماره موبایل معتبر وارد کنید."))
+  .transform((value, ctx) => {
+    const parsed = parseOptionalMobileNumber(value);
+    if (parsed.ok) return parsed.value;
+    ctx.addIssue({
+      code: "custom",
+      message: "شماره موبایل معتبر ایران وارد کنید (مثلاً ۰۹۱۲۱۲۳۴۵۶۷).",
+    });
+    return z.NEVER;
+  });
+export const personnelNumberField = z
+  .string("شماره پرسنلی را وارد کنید.")
+  .max(200, "شماره پرسنلی باید فقط شامل ۱ تا ۲۰ رقم باشد.")
+  .transform((value, ctx) => {
+    const parsed = parsePersonnelNumber(value);
+    if (parsed.ok) return parsed.value as string;
+    ctx.addIssue({
+      code: "custom",
+      message:
+        parsed.error.reason === "PERSONNEL_NUMBER_REQUIRED"
+          ? "شماره پرسنلی را وارد کنید."
+          : "شماره پرسنلی باید فقط شامل ۱ تا ۲۰ رقم باشد.",
+    });
+    return z.NEVER;
+  });
 const day = z
   .string("تاریخ شمسی را وارد کنید.")
   .trim()
@@ -57,17 +92,39 @@ const transition = z.object({
   endedOn: optionalDay,
 });
 
+const checkbox = z
+  .string()
+  .optional()
+  .transform((v) => v === "on" || v === "true");
+
 export const managementFormSchemas = {
-  create: profile.extend({
-    password: z
-      .string("رمز اولیه را وارد کنید.")
-      .min(12, "رمز اولیه باید حداقل ۱۲ نویسه باشد.")
-      .max(256, "رمز اولیه باید حداکثر ۲۵۶ نویسه باشد."),
+  create: z.object({
+    personnelNumber: personnelNumberField,
+    displayName,
+    email: optionalEmail,
+    mobile: optionalMobile,
+    issueTemporaryPassword: checkbox,
   }),
-  profile: profile.extend({
+  profile: z.object({
     userId: id,
+    displayName,
+    email: optionalEmail,
+    mobile: optionalMobile,
     expectedEmail: z.string(),
     expectedDisplayName: z.string(),
+    expectedMobile: z.string().default(""),
+  }),
+  personnelNumber: z.object({
+    userId: id,
+    personnelNumber: personnelNumberField,
+    expectedPersonnelNumber: z
+      .string()
+      .default("")
+      .transform((v) => (v === "" ? null : v)),
+  }),
+  temporaryPassword: z.object({
+    userId: id,
+    expectedHasCredentials: active,
   }),
   status: z.object({ userId: id, isActive: active, expectedIsActive: active }),
   add: z.object({

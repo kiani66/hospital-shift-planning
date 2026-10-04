@@ -213,6 +213,12 @@ describe("authorization matrix", () => {
       ACTOR_NAMES.filter((name) => actors[name].isActive),
     ],
     ["notification.access", () => ({ recipientId: "someone-else" }), []],
+    [
+      "account.changeOwnPassword",
+      (actor) => ({ userId: actor.userId }),
+      ACTOR_NAMES.filter((name) => actors[name].isActive),
+    ],
+    ["account.changeOwnPassword", () => ({ userId: "someone-else" }), []],
   ];
 
   describe.each(RESOURCE_RULES)("%s %#", (action, resource, allowed) => {
@@ -622,7 +628,15 @@ describe("Phase 10 Hospital Admin policies", () => {
     "membership.transition",
     "supervisor.assign",
     "supervisor.end",
+    "user.setPersonnelNumber",
+    "user.issueTemporaryPassword",
+    "personnel.import",
   ] as const;
+  it("an admin cannot change another user's password through self-service", () => {
+    expect(
+      decide(admin, "account.changeOwnPassword", { userId: "someone-else" }),
+    ).toEqual({ allowed: false, reason: "NOT_ACCOUNT_OWNER" });
+  });
   it.each(actions)(
     "allows system admin for %s without department membership",
     (action) => {

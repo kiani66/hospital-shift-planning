@@ -68,7 +68,7 @@ export function DirectoryView({
         className="grid gap-4 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-3"
       >
         <div className="space-y-2">
-          <Label htmlFor="search">جستجو با نام یا ایمیل</Label>
+          <Label htmlFor="search">جستجو با نام، شماره پرسنلی یا ایمیل</Label>
           <Input
             id="search"
             name="search"
@@ -138,11 +138,24 @@ export function DirectoryView({
                 </Link>
                 <AccountStatus active={user.isActive} />
               </div>
-              <p
-                dir="ltr"
-                className="mb-3 text-end text-sm break-all text-muted-foreground"
-              >
-                {user.email}
+              <p className="mb-3 flex flex-wrap items-center justify-between gap-x-3 text-sm text-muted-foreground">
+                <span>
+                  شماره پرسنلی:{" "}
+                  {user.personnelNumber ? (
+                    <span dir="ltr" className="font-mono text-foreground">
+                      {user.personnelNumber}
+                    </span>
+                  ) : (
+                    <span className="text-health-attention-foreground">
+                      ثبت نشده
+                    </span>
+                  )}
+                </span>
+                {user.email && (
+                  <span dir="ltr" className="break-all">
+                    {user.email}
+                  </span>
+                )}
               </p>
               {user.isHospitalAdmin && (
                 <div className="mb-3">

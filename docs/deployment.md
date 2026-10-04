@@ -57,38 +57,42 @@ pnpm db:seed` (resets that branch to demo data).
 
 ## Provisioning the first production user
 
-`pnpm db:provision-user` creates or updates one real user and their department membership
-without manual SQL. It is **production-safe** and is not the demo seed:
+`pnpm db:provision-user` creates one real account and its department membership without manual
+SQL, or performs one explicit operator recovery/backfill. It is **production-safe** and is not the
+demo seed:
 
 |              | `db:provision-user`                                  | `db:seed`                                |
 | ------------ | ---------------------------------------------------- | ---------------------------------------- |
-| Purpose      | One real user + membership                           | Reset to fictional demo data             |
+| Purpose      | One real account + membership, or explicit recovery  | Reset to fictional demo data             |
 | Data effect  | Inserts/updates only the rows it names; never resets | Truncates every application table        |
 | Production   | Allowed                                              | Refused (`assertSeedAllowed`), unchanged |
 | When it runs | Only when you invoke it; never during a deploy/build | Only when invoked, dev/preview only      |
 
-It can also create the initial department, but only deliberately: see `PROVISION_DEPARTMENT_NAME`
-below. It is meant for the minimal first production bootstrap (department, user, membership).
+Inputs are environment variables (nothing is hard-coded or committed). `PROVISION_MODE` selects
+the operation (default `create`, decision D93):
 
-Inputs (environment variables; nothing is hard-coded or committed):
+| Variable                         | `create`                                | `reset-password`                  | `assign-personnel-number`            |
+| -------------------------------- | --------------------------------------- | --------------------------------- | ------------------------------------ |
+| `PROVISION_PERSONNEL_NUMBER`     | required (1–20 digits)                  | this or e-mail identifies account | required (the genuine number)        |
+| `PROVISION_EMAIL`                | optional                                | this or number identifies account | required (identifies legacy account) |
+| `PROVISION_DISPLAY_NAME`         | required                                | —                                 | —                                    |
+| `PROVISION_MOBILE`               | optional                                | —                                 | —                                    |
+| `PROVISION_PASSWORD`             | required to create (temporary)          | required (temporary)              | —                                    |
+| `PROVISION_DEPARTMENT_CODE`      | required                                | —                                 | —                                    |
+| `PROVISION_ROLE`                 | `HEAD_NURSE` or `NURSE`                 | —                                 | —                                    |
+| `PROVISION_DEPARTMENT_NAME`      | only to create the department           | —                                 | —                                    |
+| `PROVISION_ALLOW_NEW_MEMBERSHIP` | `yes` to add one to an existing account | —                                 | —                                    |
+| `PROVISION_CONFIRM`              | —                                       | `RESET_PASSWORD`                  | `ASSIGN_PERSONNEL_NUMBER`            |
 
-| Variable                    | Required | Notes                                                                                 |
-| --------------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `PROVISION_EMAIL`           | yes      | Normalized like sign-in (trim, lowercase)                                             |
-| `PROVISION_PASSWORD`        | yes      | 12 to 256 characters; hashed with the same Argon2id function as the login path        |
-| `PROVISION_DEPARTMENT_CODE` | yes      | `departments.code` (exact match, else a unique case-insensitive match)                |
-| `PROVISION_ROLE`            | yes      | `HEAD_NURSE` or `NURSE`                                                               |
-| `PROVISION_DISPLAY_NAME`    | no       | Used only when the user is created; defaults to the part of the e-mail before the `@` |
-
-The database is `DATABASE_URL_UNPOOLED`, falling back to `DATABASE_URL` (same as `db:migrate`),
-e.g. from the Neon production connection string. PowerShell (placeholders only):
+The database is `DATABASE_URL_UNPOOLED`, falling back to `DATABASE_URL` (same as `db:migrate`).
+PowerShell (placeholders only):
 
 ```powershell
 $env:DATABASE_URL_UNPOOLED="<production direct connection string>"
-$env:PROVISION_EMAIL="head@example.com"
-$env:PROVISION_PASSWORD="<strong-password>"
-$env:PROVISION_DEPARTMENT_CODE="icu"
-$env:PROVISION_DEPARTMENT_NAME="ICU"
+$env:PROVISION_PERSONNEL_NUMBER="<genuine personnel number>"
+$env:PROVISION_DISPLAY_NAME="<full name>"
+$env:PROVISION_PASSWORD="<strong temporary password>"
+$env:PROVISION_DEPARTMENT_CODE="nicu"
 $env:PROVISION_ROLE="HEAD_NURSE"
 
 pnpm db:provision-user
@@ -99,28 +103,50 @@ Remove-Item Env:PROVISION_PASSWORD, Env:DATABASE_URL_UNPOOLED
 
 Behavior:
 
-- **Department:** an existing active department is reused as is: it is never renamed and
-  `PROVISION_DEPARTMENT_NAME` is ignored. An existing inactive one is an error (it is not
-  reactivated). If it does not exist, `PROVISION_DEPARTMENT_NAME` is required, otherwise the
-  command fails and writes nothing (no default name is ever used); with a name, the department is
-  created active with exactly the given code and name. Concurrent runs are serialized per code, so
-  a race cannot create two.
-- **Transaction:** the department, user and membership are written in one transaction; any
-  failure leaves no department, user, membership or password change behind. Input is validated before the database is contacted.
-- **New user:** created active, with a generated id and the normalized e-mail.
-- **Existing user** (matched on `lower(email)`, like sign-in): the password hash is replaced and
-  `is_active` set to true; the e-mail spelling, display name and all other data are kept.
-- **Membership** (effective today in Tehran: `started_on <= today` and `ended_on` null or `>= today`):
-  - none: an open-ended membership starting today is created;
-  - current one with the same role: left unchanged;
-  - current one with another role, or one starting in the future: the command stops with a
-    conflict error and changes nothing (it never rewrites history; end the old membership
-    deliberately first). Ended memberships are kept and a new one is added.
-- **Idempotent:** re-running with the same values adds no department, user or membership. It only refreshes
-  the password hash (new salt) and `is_active`, so a repeat run also resets the password.
-- **Output:** e-mail, department code, department status (`created` or `existing`), role and
-  status only. The password, its hash and the
+- **Never silent:** re-running `create` with the same identity changes nothing (output
+  `user: unchanged`, `password: unchanged`). A supplied password is never applied to an existing
+  account; a different name, e-mail, mobile or number is an error; a disabled account is never
+  reactivated; an existing account gets a new membership only with
+  `PROVISION_ALLOW_NEW_MEMBERSHIP=yes`. Role changes are refused (use the personnel screens).
+- **Passwords are temporary:** the created account (and `reset-password`) must choose its own
+  password at the first sign-in. `reset-password` also ends every session of that account; it does
+  not reactivate.
+- **Department:** an existing active department is reused as is (never renamed); an inactive one is
+  an error; a missing one is created only with `PROVISION_DEPARTMENT_NAME`. Concurrent runs are
+  serialized.
+- **Transaction and audit:** each run is one transaction under the administration lock; any failure
+  leaves nothing behind. Every write is audited (`user.created`, `membership.added`,
+  `user.temporaryCredentialIssued`, `user.personnelNumberAssigned`; actor = the target account,
+  `source: operatorCli`). Input is validated before the database is contacted.
+- **Output:** personnel number, department, role and what changed. The password, its hash and the
   connection string are never printed; only the database host and name are.
+
+## NICU pilot runbook (personnel identity, import, roster)
+
+Requires explicit authorization for the Production release; nothing below runs automatically
+except migration 0009 in `vercel-build`.
+
+1. **Release** the change through the normal process. Migration `0009_personnel_identity` is
+   additive; existing users keep e-mail sign-in and their sessions (version 0).
+2. **Your Hospital Admin account:** sign in with your e-mail, open your person page and use
+   «ثبت شماره پرسنلی» to record your genuine personnel number (audited). Alternatively
+   `PROVISION_MODE=assign-personnel-number`. Your admin authority is unchanged.
+3. **Provision the NICU Head Nurse:** «ایجاد کاربر» with personnel number and name (temporary
+   password shown once), then «افزودن عضویت» `HEAD_NURSE` in NICU from today. (Or
+   `db:provision-user` in `create` mode.)
+4. **Hand over your Head Nurse membership (audited):** on your own person page, end your current
+   NICU `HEAD_NURSE` membership (today or a chosen last day) with «پایان عضویت». Do this after the
+   new Head Nurse's membership exists. Your Hospital Admin authority and history stay. Note: your
+   entry in an existing draft roster stays (roster removal is out of scope); you simply receive
+   no shifts.
+5. **Import NICU nurses:** `/admin/personnel/import` with the CSV (personnel numbers as Text in
+   Excel), NICU, start date; review the preview; confirm; then «ساخت رمز موقت برای حساب‌های جدید»
+   and hand each one-time password to its owner.
+6. **Existing draft schedule:** the new Head Nurse opens the NICU schedule and uses «افزودن پرسنل
+   به برنامه» to add themselves and the imported nurses (DRAFT/PLANNING only). No shifts are
+   created; existing assignments stay.
+7. **Backfill check:** `pnpm db:personnel-inventory` against Production. When it reports zero and
+   you authorize it, promote the strict stage (docs/database.md, "Personnel number stages").
 
 ## Before real hospital use
 
@@ -138,8 +164,8 @@ review and tests do not migrate production or establish its first Hospital Admin
 2. Through the normal production release process, apply migrations before the new application
    starts (the existing `vercel-build` path does this). Do not run the demo seed in production.
 3. Choose an existing active password-provisioned account deliberately. If needed, use the
-   existing `db:provision-user` operator workflow first; it refreshes an existing password and
-   reactivates that account, so check its documented effects before running it.
+   `db:provision-user` operator workflow first (`create`, or `reset-password` for explicit
+   recovery; it never reactivates an account), so check its documented effects before running it.
 4. In a secure operator shell with the intended direct database connection configured, set
    `BOOTSTRAP_ADMIN_EMAIL` to that exact account and `BOOTSTRAP_ADMIN_CONFIRM` to
    `ESTABLISH_FIRST_HOSPITAL_ADMIN`, then explicitly run `pnpm db:bootstrap-admin`.

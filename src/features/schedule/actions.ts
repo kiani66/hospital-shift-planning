@@ -6,12 +6,14 @@ import { z } from "zod";
 
 import type { ActionError } from "@/application/result";
 import { createSchedule } from "@/application/schedules/create-schedule";
+import { addRosterMembers } from "@/application/schedules/roster";
 import {
   closePreferenceWindow,
   openPreferenceWindow,
 } from "@/application/schedules/preference-windows";
 import { requireRequestContext } from "@/features/auth/guards";
 import {
+  faNumber,
   isJalaliMonth,
   jalaliMonthLabel,
   jalaliMonthPeriod,
@@ -137,4 +139,52 @@ export async function closePreferencesAction(
     closePreferenceWindow,
     "ثبت ترجیحات بسته شد.",
   );
+}
+
+const rosterForm = z.object({
+  scheduleId: z.uuid(),
+  expectedRevision: z.coerce.number().int().nonnegative(),
+});
+
+/** Head Nurse adds selected eligible members to a DRAFT/PLANNING roster. */
+export async function addRosterMembersAction(
+  _previous: ScheduleFormState,
+  formData: FormData,
+): Promise<ScheduleFormState> {
+  const form = rosterForm.safeParse({
+    scheduleId: formData.get("scheduleId"),
+    expectedRevision: formData.get("expectedRevision"),
+  });
+  const userIds = formData
+    .getAll("userId")
+    .filter((v) => typeof v === "string");
+  if (!form.success) return failure(COMMON.VALIDATION);
+  if (userIds.length === 0)
+    return failure("دست‌کم یک نفر را برای افزودن انتخاب کنید.");
+
+  const ctx = await requireRequestContext();
+  const result = await addRosterMembers(ctx, { ...form.data, userIds });
+  if (result.ok || result.error.code === "CONFLICT") refresh();
+  if (result.ok)
+    return {
+      status: "success",
+      message: `${faNumber(result.data.added.length)} نفر به فهرست پرسنل برنامه اضافه شدند. شیفتی برایشان ثبت نشده است.`,
+      at: Date.now(),
+    };
+  switch (result.error.code) {
+    case "INVALID_STATE":
+      return failure(
+        "افزودن پرسنل فقط پیش از نهایی‌سازی (پیش‌نویس یا در حال برنامه‌ریزی) ممکن است.",
+      );
+    case "VALIDATION":
+      if (result.error.reason === "NOT_ELIGIBLE_FOR_ROSTER") {
+        refresh();
+        return failure(
+          "برخی افراد انتخاب‌شده دیگر واجد شرایط نیستند (عضویت یا حساب تغییر کرده یا قبلاً اضافه شده‌اند). فهرست تازه شد؛ دوباره انتخاب کنید.",
+        );
+      }
+      return failure(COMMON.VALIDATION);
+    default:
+      return failure(COMMON[result.error.code]);
+  }
 }

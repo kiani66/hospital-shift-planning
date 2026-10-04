@@ -101,7 +101,8 @@ export async function updateAccount(
   values: {
     isActive?: boolean;
     isHospitalAdmin?: boolean;
-    email?: string;
+    email?: string | null;
+    mobile?: string | null;
     displayName?: string;
   },
   now: Date,
@@ -221,6 +222,8 @@ export async function searchHospitalUsers(
     .select({
       id: users.id,
       email: users.email,
+      personnelNumber: users.personnelNumber,
+      mobile: users.mobile,
       displayName: users.displayName,
       isActive: users.isActive,
       isHospitalAdmin: users.isHospitalAdmin,
@@ -230,6 +233,7 @@ export async function searchHospitalUsers(
       or(
         ilike(users.email, `%${escaped}%`),
         ilike(users.displayName, `%${escaped}%`),
+        ilike(users.personnelNumber, `%${escaped}%`),
       ),
     )
     .orderBy(asc(users.displayName), asc(users.id))

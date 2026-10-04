@@ -41,24 +41,25 @@ database is unreachable or misconfigured, or `AUTH_SECRET` is missing).
 
 ## Scripts
 
-| Script                         | Purpose                                                              |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `pnpm dev` / `build` / `start` | Next.js                                                              |
-| `pnpm check`                   | Lint, typecheck, format check and unit tests (run before committing) |
-| `pnpm lint`                    | ESLint, including layer-boundary and RTL rules                       |
-| `pnpm typecheck`               | `next typegen` + `tsc --noEmit`                                      |
-| `pnpm format` / `format:check` | Prettier (with Tailwind class sorting)                               |
-| `pnpm test` / `test:watch`     | Vitest unit tests (no database)                                      |
-| `pnpm test:coverage`           | Unit tests with coverage; `src/domain` must stay at 100%             |
-| `pnpm test:integration`        | Integration tests against real PostgreSQL (`TEST_DATABASE_URL`)      |
-| `pnpm test:e2e`                | Playwright against a production build (`pnpm build` first)           |
-| `pnpm db:up` / `db:down`       | Local PostgreSQL via Docker Compose                                  |
-| `pnpm db:generate`             | Generate a SQL migration from the Drizzle schema                     |
-| `pnpm db:migrate`              | Apply migrations                                                     |
-| `pnpm db:seed`                 | Reset the database to deterministic demo data (never in production)  |
-| `pnpm db:provision-user`       | Explicit operator provisioning of a real account and membership      |
-| `pnpm db:bootstrap-admin`      | Establish the first Hospital Admin on a deliberately named account   |
-| `pnpm db:studio`               | Drizzle Studio                                                       |
+| Script                         | Purpose                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| `pnpm dev` / `build` / `start` | Next.js                                                                            |
+| `pnpm check`                   | Lint, typecheck, format check and unit tests (run before committing)               |
+| `pnpm lint`                    | ESLint, including layer-boundary and RTL rules                                     |
+| `pnpm typecheck`               | `next typegen` + `tsc --noEmit`                                                    |
+| `pnpm format` / `format:check` | Prettier (with Tailwind class sorting)                                             |
+| `pnpm test` / `test:watch`     | Vitest unit tests (no database)                                                    |
+| `pnpm test:coverage`           | Unit tests with coverage; `src/domain` must stay at 100%                           |
+| `pnpm test:integration`        | Integration tests against real PostgreSQL (`TEST_DATABASE_URL`)                    |
+| `pnpm test:e2e`                | Playwright against a production build (`pnpm build` first)                         |
+| `pnpm db:up` / `db:down`       | Local PostgreSQL via Docker Compose                                                |
+| `pnpm db:generate`             | Generate a SQL migration from the Drizzle schema                                   |
+| `pnpm db:migrate`              | Apply migrations                                                                   |
+| `pnpm db:seed`                 | Reset the database to deterministic demo data (never in production)                |
+| `pnpm db:provision-user`       | Explicit operator provisioning (create / reset-password / assign-personnel-number) |
+| `pnpm db:personnel-inventory`  | Read-only list of accounts still missing a personnel number                        |
+| `pnpm db:bootstrap-admin`      | Establish the first Hospital Admin on a deliberately named account                 |
+| `pnpm db:studio`               | Drizzle Studio                                                                     |
 
 ## Project structure
 

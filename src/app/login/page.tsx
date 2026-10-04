@@ -6,7 +6,8 @@ import { IconWell } from "@/components/ui/icon-well";
 import { LoginBrandPanel } from "@/features/auth/login-brand-panel";
 import { LoginForm } from "@/features/auth/login-form";
 import { safeRedirectPath } from "@/features/auth/safe-redirect";
-import { getActor } from "@/infrastructure/auth/session";
+import { PASSWORD_CHANGE_PATH } from "@/infrastructure/auth/config";
+import { getSessionState } from "@/infrastructure/auth/session";
 
 export const metadata: Metadata = { title: "ورود" };
 
@@ -17,7 +18,10 @@ export const metadata: Metadata = { title: "ورود" };
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   // Already signed in with a still-valid, active account: skip the form.
-  if (await getActor()) redirect("/");
+  const session = await getSessionState();
+  if (session.status === "active") redirect("/");
+  if (session.status === "passwordChangeRequired")
+    redirect(PASSWORD_CHANGE_PATH);
   const { callbackUrl } = await searchParams;
 
   return (
@@ -46,7 +50,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                     ورود به سامانه
                   </h1>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    با ایمیل و رمز عبور حساب کاربری خود وارد شوید.
+                    با شماره پرسنلی (یا ایمیل) و رمز عبور حساب کاربری خود وارد
+                    شوید.
                   </p>
                 </div>
               </div>

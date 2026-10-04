@@ -26,7 +26,8 @@ export function MutationDialog({
     form: FormData,
   ) => Promise<ManagementFormState>;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  /** The full success state is passed for the one case that needs it (a one-time password). */
+  onSuccess: (message: string, state: ManagementFormState) => void;
   destructive?: boolean;
   children: (state: ManagementFormState) => ReactNode;
 }) {
@@ -38,7 +39,7 @@ export function MutationDialog({
     if (state.status === "success") {
       // Wait for the action transition (including refreshed server props) to
       // commit before exposing the next form's concurrency snapshot.
-      onSuccess(state.message ?? "اطلاعات ذخیره شد.");
+      onSuccess(state.message ?? "اطلاعات ذخیره شد.", state);
       onClose();
     } else if (state.status === "error")
       form.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();

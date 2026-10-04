@@ -11,10 +11,10 @@ import {
 } from "../../infrastructure/repositories/management";
 import { findUserByEmail } from "../../infrastructure/repositories/users";
 import { ConflictError } from "../errors";
-import { accountProfileInput } from "./input";
+import { emailInput } from "./input";
 
 const inputSchema = z.object({
-  email: accountProfileInput.shape.email,
+  email: emailInput,
   confirm: z.literal("ESTABLISH_FIRST_HOSPITAL_ADMIN"),
 });
 

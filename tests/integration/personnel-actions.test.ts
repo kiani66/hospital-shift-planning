@@ -99,9 +99,10 @@ beforeEach(async () => {
 
 const accountForm = (extra: Record<string, string> = {}) =>
   form({
+    personnelNumber: "۰۰۷۰۰۱",
     email: "created@actions.invalid",
     displayName: "Created",
-    password,
+    issueTemporaryPassword: "on",
     ...extra,
   });
 const profileForm = (extra: Record<string, string> = {}) =>
@@ -148,39 +149,65 @@ const transitionForm = (extra: Record<string, string> = {}) =>
   });
 
 describe("ordinary account Server Actions", () => {
-  it("creates a normalized password account, returns only its safe destination, and audits", async () => {
+  it("creates a normalized account with a one-time temporary password, returns only safe fields, and audits", async () => {
     const result = await createAccountAction(
       idle,
       accountForm({
         email: " CREATED@ACTIONS.INVALID ",
         isHospitalAdmin: "true",
         isActive: "false",
+        password,
       }),
     );
     expect(result).toMatchObject({
       status: "success",
       userId: expect.any(String),
+      temporaryPassword: expect.any(String),
     });
     expect(Object.keys(result).sort()).toEqual([
       "at",
       "message",
       "status",
+      "temporaryPassword",
       "userId",
     ]);
     const user = await findUserById(db, result.userId!);
     expect(user).toMatchObject({
+      personnelNumber: "007001",
       email: "created@actions.invalid",
       isActive: true,
       isHospitalAdmin: false,
     });
+    // The submitted `password` field is not part of the create form: discarded.
     expect(
-      await authenticateWithPassword(db, { email: user!.email, password }, now),
+      await authenticateWithPassword(
+        db,
+        { identifier: "007001", password },
+        now,
+      ),
+    ).toMatchObject({ ok: false });
+    expect(
+      await authenticateWithPassword(
+        db,
+        { identifier: "007001", password: result.temporaryPassword! },
+        now,
+      ),
     ).toMatchObject({ ok: true });
-    expect((await events()).at(-1)).toMatchObject({
-      action: "user.created",
-      actorId: admin.actor.userId,
-      entityId: user!.id,
-    });
+    expect(JSON.stringify(await events())).not.toContain(
+      result.temporaryPassword,
+    );
+    expect((await events()).slice(-2)).toMatchObject([
+      {
+        action: "user.created",
+        actorId: admin.actor.userId,
+        entityId: user!.id,
+      },
+      {
+        action: "user.temporaryCredentialIssued",
+        actorId: admin.actor.userId,
+        entityId: user!.id,
+      },
+    ]);
     expect(JSON.stringify(result)).not.toContain(password);
     expect(JSON.stringify(await events())).not.toMatch(
       /password|hash|token|secret/,
@@ -200,10 +227,26 @@ describe("ordinary account Server Actions", () => {
     expect(await events()).toEqual(before);
     expect(revalidatePath).not.toHaveBeenCalled();
   });
+  it("refuses a duplicate personnel number (Persian digits normalized) without writes", async () => {
+    const before = await events();
+    const result = await createAccountAction(
+      idle,
+      accountForm({ personnelNumber: "۰۱۰۱۱", email: "" }),
+    );
+    expect(result).toMatchObject({
+      status: "error",
+      fields: { personnelNumber: expect.stringContaining("قبلاً") },
+    });
+    expect(result).not.toHaveProperty("temporaryPassword");
+    expect(await events()).toEqual(before);
+  });
   it.each<Record<string, string>>([
     { email: "bad" },
     { displayName: " " },
-    { password: "short" },
+    { personnelNumber: "" },
+    { personnelNumber: "12-34" },
+    { personnelNumber: "1".repeat(21) },
+    { mobile: "12345" },
   ])("validates create fields before writing %#", async (extra) => {
     const before = await events();
     expect(await createAccountAction(idle, accountForm(extra))).toMatchObject({
@@ -269,7 +312,7 @@ describe("ordinary account Server Actions", () => {
     expect(
       await authenticateWithPassword(
         db,
-        { email: U.icuNurse1.email, password: "demo-only-password" },
+        { identifier: U.icuNurse1.email, password: "demo-only-password" },
         now,
       ),
     ).toMatchObject({ ok: false });

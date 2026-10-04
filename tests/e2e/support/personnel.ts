@@ -18,6 +18,12 @@ import { createUser } from "../../../src/infrastructure/repositories/users";
 
 let passwordHash: Promise<string> | undefined;
 
+/** A unique, digits-only personnel number per fixture run and role. */
+export function personnelNumberFor(suffix: string, key: string): string {
+  const digits = BigInt(`0x${suffix}`).toString().padStart(10, "0");
+  return `8${digits}${key.length}${key.charCodeAt(0) % 10}`;
+}
+
 /** Isolated local fixtures; never grants authority to shared demo/production accounts. */
 export async function provisionPersonnel() {
   loadEnvConfig(process.cwd());
@@ -37,9 +43,10 @@ export async function provisionPersonnel() {
         code: `other-${suffix}`,
         name: `بخش دیگر ${suffix}`,
       });
+      // Every fixture account has an e-mail (the sign-in helpers use it).
       const people = {} as Record<
         "admin" | "head" | "supervisor" | "nurse" | "timeline" | "outsider",
-        Awaited<ReturnType<typeof createUser>>
+        Awaited<ReturnType<typeof createUser>> & { email: string }
       >;
       for (const [key, label] of [
         ["admin", "مدیر"],
@@ -49,12 +56,13 @@ export async function provisionPersonnel() {
         ["timeline", "تاریخچه"],
         ["outsider", "خارج بخش"],
       ] as const) {
-        people[key] = await createUser(tx, {
+        people[key] = (await createUser(tx, {
+          personnelNumber: personnelNumberFor(suffix, key),
           email: `${key}.${suffix}@people-e2e.invalid`,
           displayName: `${label} ${suffix}`,
           passwordHash: await passwordHash,
           isActive: key !== "timeline",
-        });
+        })) as Awaited<ReturnType<typeof createUser>> & { email: string };
       }
       // Test-fixture setup only. Production authority still uses the authenticated commands/bootstrap.
       await tx
