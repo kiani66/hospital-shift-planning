@@ -86,8 +86,12 @@ describe("health presentation", () => {
     }
     expect(valid.description).toMatch(/^مغایرتی یافت نشد/);
     expect(valid.description).toContain("قوانین پیاده‌سازی‌شده فعلی");
-    expect(valid.description).toContain("تأمین نفرات هنوز بررسی نمی‌شود");
-    expect(VALID_CAVEAT).toContain("تأمین نفرات هنوز بررسی نمی‌شود");
+    expect(valid.description).toContain(
+      "تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود",
+    );
+    expect(VALID_CAVEAT).toContain(
+      "تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود",
+    );
   });
 
   it("never words a day without findings as needing attention", () => {
@@ -311,7 +315,7 @@ describe("preference alignment wording", () => {
       differs: "مغایر ترجیح",
       pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
       noPreference: "ترجیحی ثبت نشده",
-      unassigned: "بدون شیفت در این روز",
+      unassigned: "تعیین‌نشده در این روز",
     });
   });
 

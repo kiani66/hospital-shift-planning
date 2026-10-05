@@ -1,4 +1,4 @@
-import type { PreferenceValue, ShiftCode } from "../shifts/shift-type";
+import type { PreferenceValue, AssignmentCode } from "../shifts/shift-type";
 import { preferenceFit, type PreferenceFit } from "./preference-fit";
 
 /**
@@ -12,8 +12,8 @@ import { preferenceFit, type PreferenceFit } from "./preference-fit";
  * 1. Fit (a partition: every rostered nurse is in exactly one of these, so
  *    `matches + differs + pending + noPreference === rostered`):
  *    - matches: the assigned shift is the wished one;
- *    - differs: a shift is assigned and it is not the wished one (a rest
- *      wish with any shift included);
+ *    - differs: a shift is assigned and it is not the wished one (a working wish with OFF, or a rest
+ *      wish with a working shift included);
  *    - pending: a preference (a shift or OFF) is recorded and there is no
  *      assignment yet; OFF is never a match by the mere absence of a shift
  *      (D99);
@@ -38,7 +38,7 @@ export interface PreferenceAlignment {
 
 export interface AlignmentInput {
   readonly preference: PreferenceValue | null;
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
 }
 
 export function summarizePreferenceAlignment(

@@ -84,6 +84,7 @@ describe("editorKeyCommand", () => {
       "M",
       "E",
       "N",
+      "O",
       "L",
       "Delete / Backspace",
       "↑ / ↓",

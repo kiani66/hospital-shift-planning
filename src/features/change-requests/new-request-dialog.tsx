@@ -15,9 +15,14 @@ import {
 } from "@/domain/change-requests/model";
 import { CHANGE_NOTE_MAX_LENGTH } from "@/domain/change-requests/reason";
 import type { IsoDate } from "@/domain/shared/dates";
-import { SHIFT_CODES, type ShiftCode } from "@/domain/shifts/shift-type";
+import {
+  SHIFT_CODES,
+  isWorkingShift,
+  type AssignmentCode,
+  type ShiftCode,
+} from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
@@ -54,12 +59,14 @@ export function NewRequestDialog({
   scheduleId: string;
   date: IsoDate;
   dateLabel: string;
-  shift: ShiftCode;
+  shift: AssignmentCode;
   reasons: readonly ReasonView[];
   swapCandidates: readonly SwapCandidate[];
 }) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<ChangeRequestType>("UNAVAILABLE");
+  const [type, setType] = useState<ChangeRequestType>(
+    isWorkingShift(shift) ? "UNAVAILABLE" : "SWAP",
+  );
   // Every field is controlled: React resets uncontrolled fields after a form
   // action, which would lose the nurse's choices when the server refuses.
   const [targetShift, setTargetShift] = useState<ShiftCode | "">("");
@@ -79,7 +86,7 @@ export function NewRequestDialog({
       const next = await createChangeRequestAction(previous, formData);
       if (next.status === "success") {
         setOpen(false);
-        setType("UNAVAILABLE");
+        setType(isWorkingShift(shift) ? "UNAVAILABLE" : "SWAP");
         setTargetShift("");
         setCounterpartId("");
         setReasonCode("");
@@ -139,7 +146,9 @@ export function NewRequestDialog({
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-sm font-medium">نوع درخواست</legend>
-            {CHANGE_REQUEST_TYPES.map((value) => (
+            {CHANGE_REQUEST_TYPES.filter(
+              (v) => v !== "UNAVAILABLE" || isWorkingShift(shift),
+            ).map((value) => (
               <label
                 key={value}
                 className={cn(
@@ -189,7 +198,7 @@ export function NewRequestDialog({
                       checked={targetShift === code}
                       onChange={() => setTargetShift(code)}
                       className="size-4 accent-primary"
-                      aria-label={`${code} — ${SHIFT_PRESENTATION[code].name}`}
+                      aria-label={`${code} — ${ASSIGNMENT_PRESENTATION[code].name}`}
                     />
                     <ShiftChip code={code} size="xs" label />
                   </label>
@@ -230,7 +239,7 @@ export function NewRequestDialog({
                     <option key={c.userId} value={c.userId}>
                       {c.displayName} —{" "}
                       {c.shift
-                        ? `شیفت ${SHIFT_PRESENTATION[c.shift].name} (${c.shift})`
+                        ? `شیفت ${ASSIGNMENT_PRESENTATION[c.shift].name} (${c.shift})`
                         : "استراحت"}
                     </option>
                   ))}

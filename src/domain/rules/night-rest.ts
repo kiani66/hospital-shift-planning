@@ -1,6 +1,6 @@
 import { addDays, compareIsoDates } from "../shared/dates";
 import type { Assignment } from "../shifts/assignment";
-import { isNightShift } from "../shifts/shift-type";
+import { isNightShift, isWorkingShift } from "../shifts/shift-type";
 import type { Violation } from "./violation";
 
 type NightRestViolation = Extract<Violation, { rule: "NIGHT_REST" }>;
@@ -27,6 +27,7 @@ export function findNightRestViolations(
     if (!isNightShift(night.shift)) continue;
     const nextDay = addDays(night.date, 1);
     for (const next of byNurseAndDate.get(key(night.nurseId, nextDay)) ?? []) {
+      if (!isWorkingShift(next.shift)) continue;
       violations.push({
         rule: "NIGHT_REST",
         severity: "error",

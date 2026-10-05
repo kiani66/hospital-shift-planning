@@ -29,7 +29,7 @@ const row = (dialog: Locator, name: string) =>
   dialog.locator("li[data-nurse-row]").filter({
     has: dialog.page().getByRole("group", { name: `شیفت ${name}` }),
   });
-/** The list filter chips ("همه", "بدون شیفت", one per shift). */
+/** The list filter chips ("همه", "تعیین‌نشده", one per shift). */
 const chip = (dialog: Locator, name: RegExp) =>
   dialog
     .getByRole("group", { name: "نمایش پرسنل" })
@@ -81,7 +81,7 @@ test.describe("Head Nurse schedule editing", () => {
     );
 
     // Assign an unassigned nurse (found through the "no shift" list).
-    await chip(dialog, /^بدون شیفت/).click();
+    await chip(dialog, /^تعیین‌نشده/).click();
     await controls(dialog, nurse3)
       .getByRole("button", { name: "صبح (M)" })
       .click();
@@ -102,10 +102,10 @@ test.describe("Head Nurse schedule editing", () => {
 
     // Clear it: still in the list, with no shift, ready to be assigned again.
     await controls(dialog, nurse3)
-      .getByRole("button", { name: "بدون شیفت" })
+      .getByRole("button", { name: "تعیین‌نشده" })
       .click();
     await saved(dialog, "در فهرست پرسنل می‌ماند");
-    await expectShift(dialog, nurse3, "بدون شیفت");
+    await expectShift(dialog, nurse3, "تعیین‌نشده");
     await expect(row(dialog, nurse3)).toBeVisible();
 
     // The Head Nurse is scheduled like any nurse.
@@ -121,19 +121,19 @@ test.describe("Head Nurse schedule editing", () => {
     // Undo restores the replaced value through the server.
     await dialog.getByRole("button", { name: "بازگردانی" }).click();
     await saved(dialog, "بازگردانده شد");
-    await expectShift(dialog, nurse1, "بدون شیفت");
+    await expectShift(dialog, nurse1, "تعیین‌نشده");
 
     // The calendar behind reflects the edits once the day is closed.
     await dialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
     await expect(
-      page.getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، بدون مغایرت/ }),
+      page.getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، نیاز به بررسی/ }),
     ).toBeVisible();
 
     // Persisted: a reload shows the same.
     await page.goto(monthUrl(department, "2026-10-28"));
     await expectShift(dayDialog(page), HEAD, "شب (N)");
-    await expectShift(dayDialog(page), nurse3, "بدون شیفت");
-    await expectShift(dayDialog(page), nurse2, "بدون شیفت");
+    await expectShift(dayDialog(page), nurse3, "تعیین‌نشده");
+    await expectShift(dayDialog(page), nurse2, "تعیین‌نشده");
   });
 
   test("keyboard: creates and fixes a night-rest conflict across adjacent days", async ({
@@ -163,7 +163,7 @@ test.describe("Head Nurse schedule editing", () => {
     await saved(dialog);
     const finding = `«${nurse1}» در چهارشنبه ۶ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (پنجشنبه ۷ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`;
     await expect(dialog).toContainText(finding);
-    await expect(dialog.getByText("مانع نهایی‌سازی")).toBeVisible();
+    await expect(dialog.getByText("مانع نهایی‌سازی").first()).toBeVisible();
     await expect(row(dialog, nurse1)).toContainText("نیاز به بررسی");
     expect(await dialog.innerText()).not.toMatch(
       /NIGHT_REST|\d{4}-\d{2}-\d{2}/,
@@ -185,7 +185,7 @@ test.describe("Head Nurse schedule editing", () => {
     await page.keyboard.press("Delete");
     await saved(dialog);
     await expect(dialog).not.toContainText(finding);
-    await expect(row(dialog, nurse1)).not.toContainText("نیاز به بررسی");
+    await expect(row(dialog, nurse1)).toContainText("نیاز به بررسی");
 
     // Arrow keys move between nurses; L is the long shift.
     await page.keyboard.press("ArrowDown");
@@ -223,7 +223,7 @@ test.describe("Head Nurse schedule editing", () => {
     await expectShift(dialog, nurse3, "عصر (E)");
     await dialog.getByRole("button", { name: "بازگردانی" }).click();
     await saved(dialog, "بازگردانده شد");
-    await expectShift(dialog, nurse3, "بدون شیفت");
+    await expectShift(dialog, nurse3, "تعیین‌نشده");
   });
 
   test("a stale tab gets a conflict instead of overwriting newer work", async ({
@@ -294,7 +294,7 @@ test.describe("Head Nurse schedule editing", () => {
     await expect(row(dialog, nurse2)).toContainText("مطابق ترجیح");
 
     await controls(dialog, nurse2)
-      .getByRole("button", { name: "بدون شیفت" })
+      .getByRole("button", { name: "تعیین‌نشده" })
       .tap();
     await saved(dialog, "در فهرست پرسنل می‌ماند");
     await expect(row(dialog, nurse2)).toBeVisible();
@@ -307,7 +307,7 @@ test.describe("Head Nurse schedule editing", () => {
     await noHorizontalOverflow(page);
 
     await page.reload();
-    await expectShift(dayDialog(page), nurse2, "بدون شیفت");
+    await expectShift(dayDialog(page), nurse2, "تعیین‌نشده");
   });
 });
 

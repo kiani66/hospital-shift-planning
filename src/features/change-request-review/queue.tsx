@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { ChangeRequestStatus } from "@/domain/change-requests/model";
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import {
   faNumber,
   formatJalaliDate,
@@ -41,7 +41,7 @@ const TAB_LABELS: Record<ChangeRequestStatus, string> = {
   CANCELLED: "لغوشده",
 };
 
-const Shift = ({ code }: { code: ShiftCode | null }) =>
+const Shift = ({ code }: { code: AssignmentCode | null }) =>
   code ? (
     <ShiftChip code={code} size="xs" label />
   ) : (
@@ -54,7 +54,7 @@ function RequestedChange({ item }: { item: ChangeRequestQueueItem }) {
     case "CHANGE_SHIFT":
       return <Shift code={item.targetShift} />;
     case "UNAVAILABLE":
-      return <span className="text-xs">بدون شیفت</span>;
+      return <Shift code="OFF" />;
     case "SWAP":
       return (
         <span className="flex items-center gap-1.5 text-xs">

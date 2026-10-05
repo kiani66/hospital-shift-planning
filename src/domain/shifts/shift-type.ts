@@ -3,7 +3,7 @@ export type BaseShift = "M" | "E" | "N";
 
 export const SHIFT_CODES = ["M", "E", "N", "ME"] as const;
 
-/** Assignable shift codes. `ME` (long shift) is Morning + Evening. */
+/** Working shift codes. `ME` (long shift) is Morning + Evening. */
 export type ShiftCode = (typeof SHIFT_CODES)[number];
 
 /**
@@ -75,8 +75,15 @@ export const isShiftCode = (value: unknown): value is ShiftCode =>
   typeof value === "string" &&
   (SHIFT_CODES as readonly string[]).includes(value);
 
-export const isNightShift = (code: ShiftCode): boolean =>
-  SHIFT_TYPES[code].isNight;
+/** Explicit scheduling decisions; absence of a row is UNDECIDED. */
+export const ASSIGNMENT_CODES = [...SHIFT_CODES, "OFF"] as const;
+export type AssignmentCode = (typeof ASSIGNMENT_CODES)[number];
+export const isWorkingShift = isShiftCode;
+export const isAssignmentCode = (value: unknown): value is AssignmentCode =>
+  value === "OFF" || isWorkingShift(value);
+
+export const isNightShift = (code: AssignmentCode): boolean =>
+  isWorkingShift(code) && SHIFT_TYPES[code].isNight;
 
 export const PREFERENCE_VALUES = [...SHIFT_CODES, "OFF"] as const;
 

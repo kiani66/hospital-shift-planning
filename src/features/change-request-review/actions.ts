@@ -15,7 +15,7 @@ import {
 } from "@/application/schedules/change-preview";
 import { adjustSchedule } from "@/application/schedules/schedule-changes";
 import { isIsoDate, type IsoDate } from "@/domain/shared/dates";
-import { SHIFT_CODES } from "@/domain/shifts/shift-type";
+import { ASSIGNMENT_CODES } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import {
@@ -95,7 +95,7 @@ const adjustmentCell = z.object({
   nurseId: z.uuid(),
   date: z.string().refine(isIsoDate),
   /** "" is "no shift". */
-  shift: z.enum([...SHIFT_CODES, ""]),
+  shift: z.enum([...ASSIGNMENT_CODES, ""]),
 });
 
 const cellOf = (formData: FormData) => {

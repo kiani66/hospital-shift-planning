@@ -10,7 +10,7 @@ import { ValidationError } from "../../domain/shared/errors";
 import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { MAX_PERIOD_DAYS } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
-import { SHIFT_CODES } from "../../domain/shifts/shift-type";
+import { ASSIGNMENT_CODES } from "../../domain/shifts/shift-type";
 import {
   clearAssignment,
   listAssignmentsFor,
@@ -42,7 +42,7 @@ export const setAssignmentsInput = z.object({
       z.object({
         nurseId: z.uuid(),
         date: isoDateInput,
-        shift: z.enum(SHIFT_CODES).nullable(),
+        shift: z.enum(ASSIGNMENT_CODES).nullable(),
       }),
     )
     .min(1)

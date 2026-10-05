@@ -6,7 +6,7 @@ import {
 import { InvalidStateError, ValidationError } from "../shared/errors";
 import { err, ok, type Result } from "../shared/result";
 import type { Assignment } from "../shifts/assignment";
-import type { ShiftCode } from "../shifts/shift-type";
+import type { AssignmentCode } from "../shifts/shift-type";
 import {
   assignmentKey,
   type AssignmentChange,
@@ -146,8 +146,8 @@ export function planRevisionDiscard(input: {
   const changes: AssignmentChange[] = [];
   for (const key of new Set([...working.keys(), ...approved.keys()])) {
     const cell = (working.get(key) ?? approved.get(key))!;
-    const before: ShiftCode | null = working.get(key)?.shift ?? null;
-    const after: ShiftCode | null = approved.get(key)?.shift ?? null;
+    const before: AssignmentCode | null = working.get(key)?.shift ?? null;
+    const after: AssignmentCode | null = approved.get(key)?.shift ?? null;
     if (before !== after)
       changes.push({ nurseId: cell.nurseId, date: cell.date, before, after });
   }

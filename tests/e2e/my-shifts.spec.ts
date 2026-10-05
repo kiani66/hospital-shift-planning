@@ -72,14 +72,14 @@ test.describe("my shifts", () => {
     await expect(detail).toContainText("موقت");
 
     const agenda = page.getByRole("region", { name: "فهرست شیفت‌های ماه" });
-    await expect(agenda.getByRole("listitem")).toHaveCount(3);
+    await expect(agenda.getByRole("listitem")).toHaveCount(30);
     await expectNoHorizontalScroll(page);
 
     // Another nurse sees only their own shift; there is no way to address
     // someone else's schedule (a user id in the URL is ignored).
     await switchUser(page, department.nurseEmail.replace("nurse1.", "nurse2."));
     await page.goto(`${ABAN}&user=${DEMO_USERS.icuNurse1.id}`);
-    await expect(tile(page, "شیفت‌ها")).toHaveText("۱");
+    await expect(tile(page, "شیفت‌ها")).toHaveText("۱۴");
     await expect(
       calendar(page).getByRole("link", {
         name: "شنبه ۲ آبان ۱۴۰۵: عصر (E)، موقت",
@@ -87,7 +87,7 @@ test.describe("my shifts", () => {
     ).toBeVisible();
     await expect(
       calendar(page).getByRole("link", {
-        name: "یکشنبه ۳ آبان ۱۴۰۵: بدون شیفت",
+        name: "یکشنبه ۳ آبان ۱۴۰۵: استراحت، موقت",
       }),
     ).toBeVisible();
 
@@ -95,7 +95,7 @@ test.describe("my shifts", () => {
     await switchUser(page, department.headEmail);
     await page.goto(ABAN);
     await expect(notice(page, "TEMPORARY")).toBeVisible();
-    await expect(tile(page, "شیفت‌ها")).toHaveText("۱");
+    await expect(tile(page, "شیفت‌ها")).toHaveText("۳۰");
     await expect(
       calendar(page).getByRole("link", {
         name: "شنبه ۲ آبان ۱۴۰۵: طولانی (ME)، موقت",

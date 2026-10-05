@@ -5,7 +5,7 @@ import type { ScheduleChangeMode } from "../../domain/schedule/schedule-change";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { IsoDate } from "../../domain/shared/dates";
 import type { DatePeriod } from "../../domain/shared/period";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import type { AssignmentCode } from "../../domain/shifts/shift-type";
 import type { DbExecutor } from "../../infrastructure/db/database";
 import { listDisplayNames } from "../../infrastructure/repositories/users";
 import type { ActionError } from "../result";
@@ -28,8 +28,8 @@ export interface PreviewCell {
   readonly nurseId: string;
   readonly displayName: string;
   readonly date: IsoDate;
-  readonly before: ShiftCode | null;
-  readonly after: ShiftCode | null;
+  readonly before: AssignmentCode | null;
+  readonly after: AssignmentCode | null;
 }
 
 export type ChangePreviewView =

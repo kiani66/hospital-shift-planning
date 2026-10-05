@@ -5,13 +5,8 @@ import { countByShift, coverageOf } from "../shifts/coverage";
 import { COVERAGE_PERIODS, type BaseShift } from "../shifts/shift-type";
 import type { Violation } from "./violation";
 
-/**
- * Staffing capacity boundary (Phase 7a). The numbers are a business decision
- * not yet made: no minimum or maximum exists anywhere, so every period reads
- * NOT_CONFIGURED. Requirements come from a source per department and day
- * (`StaffingRequirementsSource`); `findStaffingViolations` reports a period
- * outside its bounds as a `warning` (never blocking, D44), so nothing is
- * reported while no source configures numbers.
+/** Staffing bounds per coverage period. A minimum shortfall blocks finalization and
+ * newly introduced post-finalization shortages; an upper-bound excess remains advisory.
  */
 export interface StaffingBounds {
   /** Fewest nurses the coverage period needs. */
@@ -43,9 +38,8 @@ export function staffingStatus(
 type StaffingViolation = Extract<Violation, { rule: "STAFFING" }>;
 
 /**
- * Staffing findings of the period's days: one `warning` per coverage period
- * whose operational coverage (ME counts toward M and E, D42) is below its
- * minimum or above its maximum. Days and periods without a requirement are
+ * Staffing findings: an error below the minimum, a warning above the maximum.
+ * Operational coverage keeps ME contributing to M and E (D42). Days and periods without a requirement are
  * not checked.
  */
 export function findStaffingViolations(input: {
@@ -67,7 +61,7 @@ export function findStaffingViolations(input: {
       if (status === "BELOW_MINIMUM" || status === "ABOVE_MAXIMUM")
         violations.push({
           rule: "STAFFING",
-          severity: "warning",
+          severity: status === "BELOW_MINIMUM" ? "error" : "warning",
           date,
           period,
           covered: coverage[period],
@@ -77,4 +71,25 @@ export function findStaffingViolations(input: {
     }
   }
   return violations;
+}
+
+/** Configured minima override the baseline of one nurse per M/E/N period. */
+export function requiredStaffing(
+  dates: readonly IsoDate[],
+  configured: ReadonlyMap<IsoDate, StaffingRequirement>,
+): ReadonlyMap<IsoDate, StaffingRequirement> {
+  return new Map(
+    dates.map((date) => [
+      date,
+      Object.fromEntries(
+        COVERAGE_PERIODS.map((period) => [
+          period,
+          {
+            ...configured.get(date)?.[period],
+            min: configured.get(date)?.[period]?.min ?? 1,
+          },
+        ]),
+      ),
+    ]),
+  );
 }

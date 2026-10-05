@@ -62,6 +62,7 @@ import {
   listVersionAssignments,
   listVersions,
 } from "../../src/infrastructure/repositories/versions";
+import { completeScheduleFixture } from "../support/complete-schedule";
 import { setupTestDatabase } from "./support/database";
 
 const { db } = setupTestDatabase();
@@ -136,6 +137,11 @@ async function plan() {
   await assign(U.icuNurse2.id, "2026-10-25", "E");
   await assign(U.icuNurse1.id, "2026-10-27", "E");
   await assign(U.icuNurse1.id, "2026-10-28", "M");
+  await completeScheduleFixture(db, S, [
+    U.icuHead.id,
+    U.icuNurse4.id,
+    U.transferNurse.id,
+  ]);
 }
 
 async function lifecycle(
@@ -612,7 +618,7 @@ describe("applying and rejecting (Head Nurse)", () => {
       status: "FINALIZED",
       revisionId: null,
     });
-    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBeNull();
+    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBe("OFF");
     expect(await cell(U.icuNurse3.id, "2026-10-25")).toBe("M");
 
     expect(await findChangeRequest(db, id)).toMatchObject({
@@ -635,12 +641,12 @@ describe("applying and rejecting (Head Nurse)", () => {
           nurseId: U.icuNurse1.id,
           date: "2026-10-25",
           before: "M",
-          after: null,
+          after: "OFF",
         },
         {
           nurseId: U.icuNurse3.id,
           date: "2026-10-25",
-          before: null,
+          before: "OFF",
           after: "M",
         },
       ],
@@ -727,31 +733,33 @@ describe("applying and rejecting (Head Nurse)", () => {
     ok(await apply(id));
   });
 
-  it("14. a soft warning (staffing below minimum) is reported but does not block", async () => {
+  it("14. a configured staffing minimum blocks a newly introduced shortage", async () => {
     staffing = {
       requirementsFor: async () =>
-        new Map([[d("2026-10-25"), { M: { min: 1 } }]]),
+        new Map([[d("2026-10-25"), { M: { min: 2 } }]]),
     };
     const { id } = ok(await unavailable());
     const review = await getChangeRequestReview(as(actors.head), {
       departmentId: DEMO_ICU.id,
       requestId: id,
     });
-    expect(review.blocker).toBeNull();
     expect(review.preview).toMatchObject({
       ok: true,
       evaluation: {
         assessment: {
-          blocked: false,
-          warnings: [{ rule: "STAFFING", period: "M", covered: 0 }],
+          blocked: true,
+          blocking: [
+            expect.objectContaining({
+              rule: "STAFFING",
+              period: "M",
+              covered: 1,
+            }),
+          ],
         },
       },
     });
-    const result = ok(await apply(id));
-    expect(result.warnings).toMatchObject([
-      { rule: "STAFFING", status: "BELOW_MINIMUM" },
-    ]);
-    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBeNull();
+    expect(failure(await apply(id)).code).toBe("RULE_VIOLATION");
+    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBe("M");
   });
 
   it("recomputes a stale UNAVAILABLE / CHANGE_SHIFT request against the current assignment, after explicit confirmation", async () => {
@@ -867,7 +875,7 @@ describe("approved schedules: revisions and versions", () => {
     expect(
       (await listScheduleChanges(db, { scheduleId: S }))[0]!.revisionId,
     ).toBe(open.id);
-    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBeNull();
+    expect(await cell(U.icuNurse1.id, "2026-10-25")).toBe("OFF");
     // 19. The approved version is untouched and still current until re-approval.
     expect(await listVersionAssignments(db, v1!.id)).toEqual(v1Cells);
     expect((await schedule()).currentVersionId).toBe(v1!.id);
@@ -955,7 +963,7 @@ describe("approved schedules: revisions and versions", () => {
       adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-26", shift: "M" }],
         ...extra,
       });
     expect(failure(await adjust({})).code).toBe("VALIDATION");
@@ -994,9 +1002,9 @@ describe("approved schedules: revisions and versions", () => {
       revisionId: result.revisionId,
       cells: [
         {
-          nurseId: U.icuNurse4.id,
+          nurseId: U.icuNurse3.id,
           date: "2026-10-26",
-          before: null,
+          before: "OFF",
           after: "M",
         },
       ],
@@ -1157,7 +1165,7 @@ describe("visibility and scope", () => {
       as(actors.nurse1, new Date("2026-10-26T06:00:00Z")),
     );
     const [s] = options.schedules;
-    expect(s!.assignments).toEqual([
+    expect(s!.assignments.filter((a) => a.shift !== "OFF")).toEqual([
       { date: "2026-10-27", shift: "E", hasActiveRequest: false },
       { date: "2026-10-28", shift: "M", hasActiveRequest: false },
     ]);
@@ -1213,7 +1221,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
     expect(review.stale).toMatchObject({ requestedAgainst: "M", current: "E" });
     // Off that day: everyone rostered but nurse1 (the requester) and nurse2 (E).
     expect(review.replacementCandidates.map((p) => p.userId).sort()).toEqual(
-      [U.icuHead.id, U.icuNurse3.id, U.icuNurse4.id, U.transferNurse.id].sort(),
+      [U.icuNurse3.id, U.transferNurse.id].sort(),
     );
     expect(review.previewView).toMatchObject({
       ok: true,
@@ -1224,7 +1232,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
           nurseId: U.icuNurse1.id,
           displayName: U.icuNurse1.displayName,
           before: "E",
-          after: null,
+          after: "OFF",
         },
       ],
     });
@@ -1299,7 +1307,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
     });
     expect(review.appliedChange).toMatchObject({
       state: "DISCARDED",
-      cells: [{ nurseId: U.icuNurse1.id, before: "M", after: null }],
+      cells: [{ nurseId: U.icuNurse1.id, before: "M", after: "OFF" }],
     });
     // The nurse's own view says the same.
     const [mine] = await getMyChangeRequests(as(actors.nurse1));
@@ -1365,7 +1373,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
     await toApproved();
     const view = await getAdjustmentPreview(as(actors.head), {
       scheduleId: S,
-      changes: [{ nurseId: U.icuNurse4.id, date: d("2026-10-26"), shift: "M" }],
+      changes: [{ nurseId: U.icuNurse3.id, date: d("2026-10-26"), shift: "M" }],
     });
     expect(view).toMatchObject({
       ok: true,
@@ -1373,7 +1381,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
       targetStatus: "REVISING",
       addedRevisionDates: ["2026-10-26"],
       cells: [
-        { displayName: U.icuNurse4.displayName, before: null, after: "M" },
+        { displayName: U.icuNurse3.displayName, before: "OFF", after: "M" },
       ],
       blocked: false,
     });
@@ -1382,7 +1390,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
       await adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-26", shift: "M" }],
         reasonCode: "STAFFING_NEED",
       }),
     );
@@ -1391,7 +1399,7 @@ describe("Head Nurse queue and review (Slice D)", () => {
       await getAdjustmentPreview(as(actors.head), {
         scheduleId: S,
         changes: [
-          { nurseId: U.icuNurse4.id, date: d("2026-10-26"), shift: "M" },
+          { nurseId: U.icuNurse3.id, date: d("2026-10-26"), shift: "M" },
         ],
       }),
     ).toMatchObject({
@@ -1586,7 +1594,7 @@ describe("revision lifecycle end to end (Slice E)", () => {
       await adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-26", shift: "M" }],
         reasonCode: "STAFFING_NEED",
       }),
     );
@@ -1642,7 +1650,7 @@ describe("revision lifecycle end to end (Slice E)", () => {
       await adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-26", shift: "M" }],
         reasonCode: "OTHER",
         note: "پوشش جلسه آموزشی",
       }),
@@ -1658,17 +1666,17 @@ describe("revision lifecycle end to end (Slice E)", () => {
     expect(
       cellAt(
         await listVersionAssignments(db, versions[1]!.id),
-        U.icuNurse4.id,
+        U.icuNurse3.id,
         "2026-10-26",
       ),
     ).toBe("M");
     expect(
       cellAt(
         await listVersionAssignments(db, v1!.id),
-        U.icuNurse4.id,
+        U.icuNurse3.id,
         "2026-10-26",
       ),
-    ).toBeNull();
+    ).toBe("OFF");
     const [change] = await listScheduleChanges(db, { scheduleId: S });
     expect(change).toMatchObject({
       kind: "ADJUSTMENT",
@@ -1713,7 +1721,7 @@ describe("audit trail covers every Phase 9 fact", () => {
       await adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: "M" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-26", shift: "M" }],
         reasonCode: "STAFFING_NEED",
       }),
     ); // revision.scopeExtended
@@ -1723,7 +1731,7 @@ describe("audit trail covers every Phase 9 fact", () => {
       await adjustSchedule(as(actors.head), {
         scheduleId: S,
         expectedRevision: await revision(),
-        changes: [{ nurseId: U.icuNurse4.id, date: "2026-10-27", shift: "E" }],
+        changes: [{ nurseId: U.icuNurse3.id, date: "2026-10-27", shift: "E" }],
         reasonCode: "STAFFING_NEED",
       }),
     );

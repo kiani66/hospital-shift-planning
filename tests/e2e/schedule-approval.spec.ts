@@ -58,9 +58,9 @@ test.describe("approval workflow", () => {
     await expect(day).toHaveAccessibleName("دوشنبه ۴ آبان ۱۴۰۵");
     await day
       .getByRole("group", { name: `شیفت ${nurse1}` })
-      .getByRole("button", { name: "بدون شیفت" })
+      .getByRole("button", { name: "استراحت" })
       .click();
-    await expect(day.getByRole("status").first()).toContainText("پاک شد");
+    await expect(day.getByRole("status").first()).toContainText("ثبت شد");
     await day.getByRole("button", { name: "بستن جزئیات روز" }).click();
     await expect(blockers).toHaveCount(0);
 

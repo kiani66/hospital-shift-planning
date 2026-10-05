@@ -59,9 +59,9 @@ const fieldOf = (result: ReturnType<typeof plan>) =>
   !result.ok && (result.error as ValidationError).field;
 
 describe("planRequestChange", () => {
-  it("UNAVAILABLE clears the requester's current shift", () => {
+  it("UNAVAILABLE records explicit OFF", () => {
     expect(value(plan(request(), cells()))).toEqual({
-      edits: [{ nurseId: "sara", date, shift: null }],
+      edits: [{ nurseId: "sara", date, shift: "OFF" }],
       stale: null,
     });
   });
@@ -70,7 +70,7 @@ describe("planRequestChange", () => {
     expect(
       value(plan(request(), cells(), { replacementNurseId: "ali" })).edits,
     ).toEqual([
-      { nurseId: "sara", date, shift: null },
+      { nurseId: "sara", date, shift: "OFF" },
       { nurseId: "ali", date, shift: "M" },
     ]);
   });
@@ -137,9 +137,9 @@ describe("planRequestChange", () => {
     });
 
     it("drops cells that would not change (the schedule already reflects them)", () => {
-      const result = value(plan(request(), cells({ requester: null })));
+      const result = value(plan(request(), cells({ requester: "OFF" })));
       expect(result.edits).toEqual([]);
-      expect(result.stale?.current).toBeNull();
+      expect(result.stale?.current).toBe("OFF");
     });
   });
 
@@ -161,7 +161,7 @@ describe("planRequestChange", () => {
       });
     });
 
-    it("swaps a working day with a day off", () => {
+    it("keeps a legacy undecided swap distinct from explicit OFF", () => {
       const offSwap = { ...swap, counterpartShift: null };
       expect(value(plan(offSwap, cells())).edits).toEqual([
         { nurseId: "sara", date, shift: null },
@@ -219,4 +219,47 @@ describe("confirmRequestPlan", () => {
       "request",
     );
   });
+});
+
+describe("OFF application results", () => {
+  it("exchanges explicit working and OFF decisions", () => {
+    const swap = request({
+      type: "SWAP",
+      requesterShift: "OFF",
+      counterpartId: "ali",
+      counterpartShift: "M",
+      consent: "ACCEPTED",
+    });
+    expect(
+      value(plan(swap, cells({ requester: "OFF", counterpart: "M" }))).edits,
+    ).toEqual([
+      { nurseId: "sara", date, shift: "M" },
+      { nurseId: "ali", date, shift: "OFF" },
+    ]);
+  });
+  it("accepts an OFF replacement and preserves explicit OFF in UNAVAILABLE", () => {
+    expect(
+      value(
+        plan(request(), cells({ replacement: "OFF" }), {
+          replacementNurseId: "ali",
+        }),
+      ).edits,
+    ).toEqual([
+      { nurseId: "sara", date, shift: "OFF" },
+      { nurseId: "ali", date, shift: "M" },
+    ]);
+  });
+  it.each(["M", "E", "N", "ME", "OFF", null] as const)(
+    "manual OTHER supports %s separately",
+    (shift) => {
+      const before = shift === "ME" ? "M" : "ME";
+      expect(
+        value(
+          plan(request({ type: "OTHER" }), cells({ requester: before }), {
+            requesterShift: shift,
+          }),
+        ).edits,
+      ).toEqual([{ nurseId: "sara", date, shift }]);
+    },
+  );
 });

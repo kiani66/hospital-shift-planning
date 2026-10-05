@@ -8,10 +8,13 @@ import {
   type ChangeAssessment,
   type DayStaffingImpact,
 } from "../../domain/rules/assess-change";
+import { requiredStaffing } from "../../domain/rules/staffing";
 import { validateSchedule } from "../../domain/rules/validate-schedule";
 import {
   assignmentKey,
   planAssignmentEdits,
+  canEditAssignment,
+  ASSIGNMENT_EDIT_REFUSALS,
   type AssignmentChange,
   type AssignmentEdit,
 } from "../../domain/schedule/assignment-editing";
@@ -38,7 +41,7 @@ import {
 } from "../../domain/shared/errors";
 import { MAX_PERIOD_DAYS } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
-import { SHIFT_CODES } from "../../domain/shifts/shift-type";
+import { ASSIGNMENT_CODES } from "../../domain/shifts/shift-type";
 import { APP_TIMEZONE, todayIn } from "../../infrastructure/auth/actor";
 import type { DbExecutor } from "../../infrastructure/db/database";
 import type { ScheduleChangeKind } from "../../infrastructure/db/schema";
@@ -124,21 +127,48 @@ export async function evaluateScheduleChange(
   options: {
     readonly today: IsoDate;
     readonly staffing: StaffingRequirementsSource;
+    readonly directSwap?: boolean;
   },
 ): Promise<ScheduleChangeEvaluation> {
   const hasApprovedVersion = schedule.currentVersionId !== null;
   const openRevision = hasApprovedVersion
     ? await findOpenRevision(db, schedule.id)
     : null;
-  const target = unwrap(
-    planChangeTarget({
-      status: schedule.status,
-      hasApprovedVersion,
-      openRevisionDates: openRevision ? new Set(openRevision.dates) : null,
-      dates: edits.map((e) => e.date),
-      today: options.today,
-    }),
-  );
+  if (options.directSwap && openRevision) {
+    for (const edit of edits) {
+      const permitted = canEditAssignment({
+        status: schedule.status,
+        period: schedule.period,
+        date: edit.date,
+        revisionDates: new Set(openRevision.dates),
+      });
+      if (!permitted.allowed)
+        throw new InvalidStateError(
+          schedule.status,
+          ASSIGNMENT_EDIT_REFUSALS.DATE_OUTSIDE_REVISION_SCOPE,
+        );
+    }
+  }
+  const target: ScheduleChangeTarget =
+    options.directSwap &&
+    (schedule.status === "DRAFT" || schedule.status === "PLANNING")
+      ? {
+          mode: "WORKING_COPY",
+          status: schedule.status,
+          revisionDates: null,
+          addedRevisionDates: [],
+        }
+      : unwrap(
+          planChangeTarget({
+            status: schedule.status,
+            hasApprovedVersion,
+            openRevisionDates: openRevision
+              ? new Set(openRevision.dates)
+              : null,
+            dates: edits.map((e) => e.date),
+            today: options.today,
+          }),
+        );
 
   const [roster, assignments] = await Promise.all([
     listRoster(db, schedule.id),
@@ -179,7 +209,7 @@ export async function evaluateScheduleChange(
   );
   const dates = uniqueSortedDates(changes.map((c) => c.date));
   const { period } = schedule;
-  const [adjacent, requirements] = await Promise.all([
+  const [adjacent, configured] = await Promise.all([
     listAdjacentAssignments(db, {
       departmentId: schedule.departmentId,
       excludeScheduleId: schedule.id,
@@ -191,6 +221,7 @@ export async function evaluateScheduleChange(
       dates,
     }),
   ]);
+  const requirements = requiredStaffing(dates, configured);
   const validate = (cells: typeof assignments) =>
     validateSchedule({
       period,
@@ -222,6 +253,7 @@ export interface ScheduleChangeWrite {
   readonly requestId: string | null;
   readonly reasonCode: string;
   readonly note: string | null;
+  readonly directSwap?: boolean;
 }
 
 export interface ScheduleChangeResult {
@@ -254,7 +286,11 @@ export async function writeScheduleChange(
     uow.tx,
     schedule,
     input.edits,
-    { today: todayFor(uow.now), staffing: uow.staffing },
+    {
+      today: todayFor(uow.now),
+      staffing: uow.staffing,
+      directSwap: input.directSwap,
+    },
   );
   const { target, changes, assessment } = evaluation;
   if (assessment.blocked) throw new RuleViolationError(assessment.blocking);
@@ -374,7 +410,7 @@ const cellChanges = z
     z.object({
       nurseId: z.uuid(),
       date: isoDateInput,
-      shift: z.enum(SHIFT_CODES).nullable(),
+      shift: z.enum(ASSIGNMENT_CODES).nullable(),
     }),
   )
   .min(1)

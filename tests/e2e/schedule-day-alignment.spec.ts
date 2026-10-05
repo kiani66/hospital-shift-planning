@@ -102,7 +102,7 @@ test.describe("preference alignment summary and rows", () => {
       "هر نفر فقط در یکی از این چهار دسته است (جمع: ۴ نفر).",
     );
     await expect(count(dialog, "unassigned")).toHaveText(
-      /^بدون شیفت در این روز:\s*۰ نفر\s*جدا شمرده می‌شود/,
+      /^تعیین‌نشده در این روز:\s*۰ نفر\s*جدا شمرده می‌شود/,
     );
     await expect(alignment(dialog)).toContainText(
       "مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد",
@@ -262,7 +262,7 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     // Clear nurse 3's Night: no longer a conflict, but not a match either:
     // an OFF wish without an assignment is awaiting (D99).
     await controls(dialog, nurse3)
-      .getByRole("button", { name: "بدون شیفت" })
+      .getByRole("button", { name: "تعیین‌نشده" })
       .click();
     await saved(dialog, "در فهرست پرسنل می‌ماند");
     await expect(row(dialog, nurse3)).toContainText("در انتظار تخصیص");
@@ -384,7 +384,7 @@ test.describe("responsive layout", () => {
         conflictsOnly(dialog),
         chip(dialog, /^صبح \(M\)/),
         controls(dialog, nurse2).getByRole("button", { name: "شب (N)" }),
-        controls(dialog, nurse2).getByRole("button", { name: "بدون شیفت" }),
+        controls(dialog, nurse2).getByRole("button", { name: "تعیین‌نشده" }),
       ])
         expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 

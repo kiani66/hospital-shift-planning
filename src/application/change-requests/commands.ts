@@ -14,7 +14,7 @@ import {
 } from "../../domain/change-requests/request";
 import { isIsoDate, type IsoDate } from "../../domain/shared/dates";
 import { unwrap } from "../../domain/shared/result";
-import { SHIFT_CODES } from "../../domain/shifts/shift-type";
+import { ASSIGNMENT_CODES, SHIFT_CODES } from "../../domain/shifts/shift-type";
 import {
   PG_UNIQUE_VIOLATION,
   pgErrorCode,
@@ -485,8 +485,8 @@ export const applyChangeRequestInput = requestRef.extend({
   expectedRevision: z.number().int().nonnegative(),
   /** UNAVAILABLE: who takes over the shift (optional). */
   replacementNurseId: z.uuid().nullish(),
-  /** OTHER: the requester's resulting shift (null: off). */
-  requesterShift: z.enum(SHIFT_CODES).nullable().optional(),
+  /** OTHER: the requester's resulting shift (null: undecided). */
+  requesterShift: z.enum(ASSIGNMENT_CODES).nullable().optional(),
   /** The Head Nurse saw the changed context and applies against the current one. */
   confirmStaleContext: z.boolean().optional(),
 });

@@ -36,6 +36,7 @@ import {
 } from "@/features/schedule/schedule-overview";
 import { getAdjustmentReasons } from "@/application/change-requests/queries";
 import { AdjustmentForm } from "@/features/change-request-review/adjustment-form";
+import { DirectSwapForm } from "@/features/schedule-editing/direct-swap-form";
 import { DayEditor } from "@/features/schedule-editing/day-editor";
 import {
   HeadNurseLifecycleAction,
@@ -319,6 +320,21 @@ export default async function DepartmentSchedulePage({
           <DayDetail
             day={review.day}
             adjustment={adjustment}
+            directSwap={
+              (review.day.edit.allowed ||
+                (selected.status === "APPROVED" &&
+                  review.day.date >= today)) && (
+                <DirectSwapForm
+                  key={`${review.day.date}-${review.month.revision}`}
+                  scheduleId={selected.id}
+                  revision={review.month.revision}
+                  date={review.day.date}
+                  nurses={review.day.roster}
+                  reasons={await getAdjustmentReasons(ctx)}
+                />
+              )
+            }
+
             editor={dayEditor(
               review.day,
               {

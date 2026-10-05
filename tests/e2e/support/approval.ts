@@ -18,7 +18,7 @@ import { hashPassword } from "../../../src/infrastructure/auth/password";
 import { todayIn } from "../../../src/infrastructure/auth/actor";
 import { createDatabase } from "../../../src/infrastructure/db/database";
 import { DEMO_PASSWORD } from "../../../src/infrastructure/db/seed/demo-data";
-import { clearAssignment } from "../../../src/infrastructure/repositories/assignments";
+import { setAssignment } from "../../../src/infrastructure/repositories/assignments";
 import { findDepartmentByCode } from "../../../src/infrastructure/repositories/departments";
 import {
   assignSupervisor,
@@ -30,6 +30,7 @@ import {
   findUserByEmail,
 } from "../../../src/infrastructure/repositories/users";
 import { provisionReviewDepartment, type ReviewDepartment } from "./review";
+import { completeScheduleFixture } from "../../support/complete-schedule";
 
 export interface ApprovalDepartment extends ReviewDepartment {
   /** A Supervisor assigned to this department only (isolated per test). */
@@ -90,13 +91,28 @@ export async function provisionApprovalDepartment(
     };
     await step(openPreferenceWindow);
     await step(closePreferenceWindow);
+    const nurse3 = (await findUserByEmail(
+      db,
+      department.nurseEmail.replace("nurse1.", "nurse3."),
+    ))!;
+    const nurse2 = (await findUserByEmail(
+      db,
+      department.nurseEmail.replace("nurse1.", "nurse2."),
+    ))!;
+    await completeScheduleFixture(db, department.abanId, [
+      head.id,
+      nurse3.id,
+      nurse2.id,
+    ]);
     if (stage !== "planning") {
-      // Clear the Morning after the Night (4 Aban) so nothing blocks.
+      // Explicit rest after the Night keeps every nurse-day decided.
       const nurse1 = (await findUserByEmail(db, department.nurseEmail))!;
-      await clearAssignment(db, {
+      await setAssignment(db, {
         scheduleId: department.abanId,
         userId: nurse1.id,
         date: isoDate("2026-10-26"),
+        shift: "OFF",
+        updatedBy: head.id,
       });
       await step(finalizeSchedule);
     }

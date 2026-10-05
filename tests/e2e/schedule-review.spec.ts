@@ -68,7 +68,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       dayLink(page, "شنبه ۲ آبان ۱۴۰۵، بدون مغایرت"),
     ).toHaveAttribute("data-health", "VALID");
     await expect(
-      dayLink(page, "دوشنبه ۴ آبان ۱۴۰۵، نیاز به بررسی (۱ مورد)"),
+      dayLink(page, "دوشنبه ۴ آبان ۱۴۰۵، نیاز به بررسی (۶ مورد)"),
     ).toHaveAttribute("data-health", "NEEDS_ATTENTION");
     await expect(
       dayLink(page, "جمعه ۱ آبان ۱۴۰۵، برنامه‌ریزی‌نشده"),
@@ -77,8 +77,8 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     const totals = main(page).getByRole("list", {
       name: "خلاصه وضعیت روزهای ماه",
     });
-    await expect(totals).toContainText("بدون مغایرت: ۲ روز");
-    await expect(totals).toContainText("نیاز به بررسی: ۱ روز");
+    await expect(totals).toContainText("بدون مغایرت: ۱ روز");
+    await expect(totals).toContainText("نیاز به بررسی: ۲ روز");
     await expect(totals).toContainText("برنامه‌ریزی‌نشده: ۲۷ روز");
 
     // Quiet by default, loud on exceptions: a VALID day is not tinted or
@@ -99,8 +99,8 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     const attentionDays = main(page).getByRole("navigation", {
       name: "روزهای نیازمند بررسی",
     });
-    await expect(attentionDays.getByRole("link")).toHaveCount(1);
-    await expect(attentionDays.getByRole("link")).toHaveAttribute(
+    await expect(attentionDays.getByRole("link")).toHaveCount(2);
+    await expect(attentionDays.getByRole("link").last()).toHaveAttribute(
       "href",
       /day=2026-10-26$/,
     );
@@ -136,7 +136,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       dialog.getByRole("heading", { name: "دوشنبه ۴ آبان ۱۴۰۵" }),
     ).toBeFocused();
     await expect(dialog.getByText("نیاز به بررسی").first()).toBeVisible();
-    await expect(dialog.getByText("مانع نهایی‌سازی")).toBeVisible();
+    await expect(dialog.getByText("مانع نهایی‌سازی").first()).toBeVisible();
     await expect(dialog).toContainText(
       `«${department.nurseNames[0]}» در یکشنبه ۳ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (دوشنبه ۴ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`,
     );
@@ -144,12 +144,15 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(dialog).toContainText(
       "برای رفع: شیفت صبح روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.",
     );
-    const flaggedRow = dialog.locator("li[data-nurse-row][data-flagged]");
+    const flaggedRow = dialog
+      .locator("li[data-nurse-row][data-flagged]")
+      .filter({ hasText: department.nurseNames[0]! });
     await expect(flaggedRow).toHaveCount(1);
     await expect(flaggedRow).toContainText(department.nurseNames[0]!);
     const who = dialog
       .getByRole("region", { name: /نیاز به بررسی/ })
-      .getByRole("link", { name: department.nurseNames[0]! });
+      .getByRole("link", { name: department.nurseNames[0]! })
+      .first();
     await expect(who).toHaveAttribute(
       "href",
       `#${await flaggedRow.getAttribute("id")}`,
@@ -217,11 +220,11 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     );
     await expect(
       dialog.getByText("حداقل و حداکثر نفرات تعریف نشده است"),
-    ).toHaveCount(1);
+    ).toHaveCount(0);
     // VALID is cautious: no violation found, staffing is not checked yet,
     // and a day without findings never opens under "needs attention".
     await expect(dialog).toContainText(
-      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تأمین نفرات هنوز بررسی نمی‌شود.",
+      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.",
     );
     await expect(
       dialog.getByRole("heading", { name: /نیاز به بررسی/ }),

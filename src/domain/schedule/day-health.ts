@@ -8,7 +8,7 @@ import {
   type ShiftCounts,
 } from "../shifts/coverage";
 import type { Assignment } from "../shifts/assignment";
-import type { ShiftCode } from "../shifts/shift-type";
+import type { AssignmentCode } from "../shifts/shift-type";
 
 /**
  * A day's high-level review state. Semantic only: colors, icons and wording
@@ -19,9 +19,8 @@ import type { ShiftCode } from "../shifts/shift-type";
  * - NEEDS_ATTENTION: at least one finding of an applicable rule.
  * - VALID: assignments exist and no violation was found among the currently
  *   implemented and applicable rules. It does NOT mean the day is fully
- *   staffed or correct: staffing requirements are not defined yet (see
- *   `rules/staffing.ts`). When staffing validators are added, VALID includes
- *   them without any change here.
+ *   staffed or correct: only the implemented checks are proven, including decision completeness
+ *   and the required staffing minima when provided by the validator.
  */
 export const DAY_HEALTH_STATES = [
   "UNPLANNED",
@@ -63,7 +62,7 @@ export function summarizeScheduleDays(input: {
   readonly diagnostics: readonly Diagnostic[];
 }): ScheduleDaysSummary {
   const { period } = input;
-  const shiftsByDay = new Map<IsoDate, ShiftCode[]>();
+  const shiftsByDay = new Map<IsoDate, AssignmentCode[]>();
   for (const a of input.assignments) {
     if (!isInPeriod(period, a.date)) continue;
     shiftsByDay.set(a.date, [...(shiftsByDay.get(a.date) ?? []), a.shift]);

@@ -1496,3 +1496,36 @@ Open questions:
 Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preference-alignment.ts`,
 `features/schedule-review/preference-alignment.tsx`, `features/schedule-review/day-detail.tsx`
 (`CoverageSummary`) and `features/schedule-editing/` (`filterEditorNurses`, `emptyListMessage`).
+
+## D100 — Explicit OFF scheduling (approved; supersedes conflicting D40/D44/D48/D98/D99 details)
+
+- A missing assignment row is UNDECIDED («تعیین‌نشده»), never OFF. An assignment
+  with code OFF is an explicit rest decision («استراحت»). `ShiftCode` remains
+  M/E/N/ME; `AssignmentCode` includes OFF. The existing nurse/day unique key and
+  assignment/version foreign keys remain the source of truth.
+- Migration `0010_explicit_off` adds only the OFF reference value (sort order 5,
+  no coverage, not night) and keeps CHANGE_SHIFT targets working-only. It does
+  not backfill historical assignments. The staged personnel-number migration
+  stays outside the active migration journal.
+- Draft/Planning may contain undecided days. Finalize and Submit enforce an
+  explicit decision for every roster member on every period day and staffing
+  minima for M/E/N. A configured minimum overrides the default minimum of one;
+  ME retains its existing M+E coverage. Coverage and completeness are separate
+  findings. Staffing maxima remain warnings; insufficient minima are errors.
+- OFF contributes no working minutes, working shift count or coverage. My Shifts
+  counts rest days separately and applies the same publication/version rules to
+  OFF as working decisions. Missing legacy rows stay missing.
+- Any preference with an undecided assignment is pending. Identical explicit
+  preference/decision codes match; all other explicit decisions mismatch,
+  including working versus OFF. N followed by OFF satisfies night rest. No
+  automatic OFF decisions are created.
+- Approved UNAVAILABLE changes the working assignment to OFF. OFF may initiate
+  or participate in SWAP. OTHER may resolve to working/OFF or explicitly clear
+  to undecided. Audit payloads preserve OFF versus null.
+- Head Nurse direct swaps exchange two explicit decisions atomically through
+  the normal authorization, lifecycle, staffing/night-rest assessment and audit
+  pipeline. An open revision's existing date scope is enforced. Approved
+  snapshots remain immutable; revision discard restores explicit OFF too.
+- Necessary editor controls add OFF and physical O shortcut with a separate
+  clear operation. OFF uses neutral presentation. No preference redesign,
+  notification behavior, schedule copy or staffing configuration UI is added.

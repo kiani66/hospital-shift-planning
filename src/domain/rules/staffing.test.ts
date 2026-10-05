@@ -65,7 +65,7 @@ describe("findStaffingViolations", () => {
     expect(result).toEqual([
       {
         rule: "STAFFING",
-        severity: "warning",
+        severity: "error",
         date: "2026-10-25",
         period: "E",
         covered: 1,
@@ -73,7 +73,7 @@ describe("findStaffingViolations", () => {
         bounds: { min: 2 },
       },
     ]);
-    expect(result.every(isBlocking)).toBe(false);
+    expect(result.every(isBlocking)).toBe(true);
   });
 
   it("reports a period above its maximum", () => {

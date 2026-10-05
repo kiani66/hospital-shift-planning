@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Callout } from "@/components/ui/callout";
 import { IconWell } from "@/components/ui/icon-well";
 import { summarizePreferenceAlignment } from "@/domain/preferences/preference-alignment";
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import {
   editDenialLabel,
@@ -385,7 +385,7 @@ function ReadOnlyNurseRow({
   flagged,
 }: {
   nurse: ReviewNurse;
-  shift: ShiftCode | null;
+  shift: AssignmentCode | null;
   flagged: boolean;
 }) {
   return (
@@ -477,11 +477,13 @@ export function DayDetail({
   day,
   editor,
   adjustment,
+  directSwap,
 }: {
   day: DayReview;
   editor?: ReactNode;
   /** Phase 9: the Head Nurse's operational adjustment, where the editor cannot act. */
   adjustment?: ReactNode;
+  directSwap?: ReactNode;
 }) {
   const flagged = flaggedNurses(day);
   return (
@@ -493,6 +495,7 @@ export function DayDetail({
           </Callout>
         )}
         {adjustment}
+        {directSwap}
         <Findings day={day} linked={!!editor} />
         <RelatedFindings day={day} linked={!!editor} />
         <CoverageSummary day={day} />
@@ -514,16 +517,31 @@ export function DayDetail({
               ))}
             </div>
             <details className="rounded-xl border bg-card shadow-xs">
+              <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+                استراحت ({faNumber(day.off.length)} نفر)
+              </summary>
+              <ul className="divide-y border-t px-3">
+                {day.off.map((n) => (
+                  <ReadOnlyNurseRow
+                    key={n.userId}
+                    nurse={n}
+                    shift="OFF"
+                    flagged={flagged.has(n.userId)}
+                  />
+                ))}
+              </ul>
+            </details>
+            <details className="rounded-xl border bg-card shadow-xs">
               <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
                 <Users
                   aria-hidden="true"
                   className="size-4 text-muted-foreground"
                 />
-                بدون شیفت در این روز ({faNumber(day.unassigned.length)} نفر)
+                تعیین‌نشده در این روز ({faNumber(day.unassigned.length)} نفر)
               </summary>
               {day.unassigned.length === 0 ? (
                 <p className="border-t px-3 py-2 text-sm text-muted-foreground">
-                  همه پرسنل برنامه در این روز شیفت دارند.
+                  برای همه پرسنل این روز تصمیم ثبت شده است.
                 </p>
               ) : (
                 <ul className="divide-y border-t px-3">

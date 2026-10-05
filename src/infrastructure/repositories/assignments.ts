@@ -2,10 +2,16 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 
 import type { IsoDate } from "../../domain/shared/dates";
 import type { Assignment } from "../../domain/shifts/assignment";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import type { AssignmentCode } from "../../domain/shifts/shift-type";
 import type { DbExecutor } from "../db/database";
-import { schedules, shiftAssignments } from "../db/schema";
-import { asIsoDate, asShiftCode } from "./mappers";
+import type { RosterEntry } from "./roster";
+import {
+  schedules,
+  shiftAssignments,
+  scheduleRoster,
+  users,
+} from "../db/schema";
+import { asIsoDate, asAssignmentCode } from "./mappers";
 
 /** Sets the nurse's single assignment for the day (D15), replacing any existing one. */
 export async function setAssignment(
@@ -14,7 +20,7 @@ export async function setAssignment(
     scheduleId: string;
     userId: string;
     date: IsoDate;
-    shift: ShiftCode;
+    shift: AssignmentCode;
     source?: "MANUAL" | "PREFILL";
     updatedBy: string;
   },
@@ -75,7 +81,7 @@ const toAssignment = (r: {
 }): Assignment => ({
   nurseId: r.nurseId,
   date: asIsoDate(r.date),
-  shift: asShiftCode(r.shift),
+  shift: asAssignmentCode(r.shift),
 });
 
 /** The schedule's working copy (optionally one nurse's), as domain assignments. */
@@ -151,4 +157,51 @@ export async function listAdjacentAssignments(
     )
     .orderBy(asc(shiftAssignments.date), asc(shiftAssignments.userId));
   return rows.map(toAssignment);
+}
+
+/** Roster and its explicit decisions in one read; missing decisions stay absent. */
+export async function listRosterAssignments(
+  db: DbExecutor,
+  scheduleId: string,
+): Promise<{
+  roster: RosterEntry[];
+  assignments: Assignment[];
+}> {
+  const rows = await db
+    .select({
+      userId: scheduleRoster.userId,
+      role: scheduleRoster.role,
+      displayName: users.displayName,
+      date: shiftAssignments.date,
+      shift: shiftAssignments.shiftCode,
+    })
+    .from(scheduleRoster)
+    .innerJoin(users, eq(users.id, scheduleRoster.userId))
+    .leftJoin(
+      shiftAssignments,
+      and(
+        eq(shiftAssignments.scheduleId, scheduleRoster.scheduleId),
+        eq(shiftAssignments.userId, scheduleRoster.userId),
+      ),
+    )
+    .where(eq(scheduleRoster.scheduleId, scheduleId))
+    .orderBy(asc(users.displayName), asc(users.id), asc(shiftAssignments.date));
+  const roster = new Map<string, RosterEntry>();
+  const assignments: Assignment[] = [];
+  for (const row of rows) {
+    roster.set(row.userId, {
+      userId: row.userId,
+      displayName: row.displayName,
+      role: row.role,
+    });
+    if (row.date !== null && row.shift !== null)
+      assignments.push(
+        toAssignment({ nurseId: row.userId, date: row.date, shift: row.shift }),
+      );
+  }
+  assignments.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) || a.nurseId.localeCompare(b.nurseId),
+  );
+  return { roster: [...roster.values()], assignments };
 }

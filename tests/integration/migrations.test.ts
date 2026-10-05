@@ -145,13 +145,14 @@ describe("migrations (applied to an empty database by the global setup)", () => 
       covers: string[];
       is_night: boolean;
     }>(sql`select code, covers, is_night from shift_types order by sort_order`);
-    expect(rows).toEqual(
-      Object.values(SHIFT_TYPES).map((s) => ({
+    expect(rows).toEqual([
+      ...Object.values(SHIFT_TYPES).map((s) => ({
         code: s.code,
         covers: [...s.covers],
         is_night: s.isNight,
       })),
-    );
+      { code: "OFF", covers: [], is_night: false },
+    ]);
   });
 
   it("records the migration history and is a no-op when run again", async () => {
@@ -165,7 +166,7 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login
     // throttles, 0005 legacy change requests, 0006 Phase 9 schema, 0007 reasons,
     // 0008 system-level Hospital Admin flag, 0009 personnel identity (stage 1)
-    expect(before).toBe(10);
+    expect(before).toBe(11);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

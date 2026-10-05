@@ -30,7 +30,7 @@ export interface AppContext {
   readonly clock?: () => Date;
   /**
    * Where staffing bounds come from (D44). Defaults to the source that
-   * configures nothing, so no staffing finding exists until numbers do.
+   * configures no overrides; required minima still default to one per M/E/N.
    */
   readonly staffing?: StaffingRequirementsSource;
 }

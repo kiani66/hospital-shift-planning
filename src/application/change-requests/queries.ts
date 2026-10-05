@@ -20,7 +20,11 @@ import {
 import { compareIsoDates, type IsoDate } from "../../domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import {
+  isWorkingShift,
+  type AssignmentCode,
+  type ShiftCode,
+} from "../../domain/shifts/shift-type";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import {
   listAssignments,
@@ -126,10 +130,10 @@ export interface ChangeRequestView {
   readonly date: IsoDate;
   readonly requester: Person;
   /** The requester's shift the request was made against. */
-  readonly requesterShift: ShiftCode;
+  readonly requesterShift: AssignmentCode;
   readonly targetShift: ShiftCode | null;
   readonly counterpart: Person | null;
-  readonly counterpartShift: ShiftCode | null;
+  readonly counterpartShift: AssignmentCode | null;
   readonly reason: ReasonView;
   readonly note: string | null;
   readonly status: ChangeRequestStatus;
@@ -351,14 +355,14 @@ async function changedPendingSwaps(
 
 export interface RequestableAssignment {
   readonly date: IsoDate;
-  readonly shift: ShiftCode;
+  readonly shift: AssignmentCode;
   /** The actor already has an active request for this day. */
   readonly hasActiveRequest: boolean;
 }
 
 export interface SwapCandidate extends Person {
   /** Their shift that day as nurses see it; null = off. */
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
 }
 
 export interface RequestableSchedule {
@@ -486,8 +490,8 @@ export const QUEUE_LIMIT = 200;
 export interface ChangeRequestQueueItem extends ChangeRequestView {
   /** Pending only: the involved nurses' shifts that day in the working copy now. */
   readonly current: {
-    readonly requester: ShiftCode | null;
-    readonly counterpart: ShiftCode | null;
+    readonly requester: AssignmentCode | null;
+    readonly counterpart: AssignmentCode | null;
   } | null;
 }
 
@@ -526,7 +530,7 @@ export async function getChangeRequestQueue(
   ]);
   // The live context of pending requests: one query per schedule involved.
   const pending = records.filter((r) => r.status === "PENDING");
-  const live = new Map<string, ShiftCode>();
+  const live = new Map<string, AssignmentCode>();
   for (const scheduleId of new Set(pending.map((r) => r.scheduleId))) {
     const mine = pending.filter((r) => r.scheduleId === scheduleId);
     for (const a of await listAssignmentsFor(ctx.db, {
@@ -574,8 +578,8 @@ export interface ChangeRequestReview {
   };
   /** The involved nurses' shifts that day in the working copy now. */
   readonly current: {
-    readonly requester: ShiftCode | null;
-    readonly counterpart: ShiftCode | null;
+    readonly requester: AssignmentCode | null;
+    readonly counterpart: AssignmentCode | null;
   };
   /** UNAVAILABLE / CHANGE_SHIFT / OTHER: the requester's assignment changed since the request. */
   readonly stale: StaleRequestContext | null;
@@ -718,7 +722,7 @@ export async function getChangeRequestReview(
             .filter(
               (r) =>
                 r.userId !== record.requesterId &&
-                cells.shiftOf(r.userId) === null,
+                !isWorkingShift(cells.shiftOf(r.userId)),
             )
             .map((r) => ({ userId: r.userId, displayName: r.displayName }))
         : [],

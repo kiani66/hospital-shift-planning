@@ -82,7 +82,7 @@ export const shiftChangeRequests = pgTable(
     targetShiftCode: text().references(() => shiftTypes.code),
     /** SWAP only: the partner. */
     counterpartId: uuid().references(() => users.id),
-    /** SWAP only. Snapshot of the partner's shift that day; null = off. */
+    /** SWAP only. Snapshot of the partner's shift that day; null = undecided. */
     counterpartShiftCode: text(),
     reasonCode: text()
       .notNull()
@@ -146,6 +146,10 @@ export const shiftChangeRequests = pgTable(
     check(
       "shift_change_requests_counterpart_check",
       sql`${t.counterpartId} is null or ${t.counterpartId} <> ${t.requesterId}`,
+    ),
+    check(
+      "shift_change_requests_working_target_check",
+      sql`${t.targetShiftCode} is null or ${t.targetShiftCode} in ('M', 'E', 'N', 'ME')`,
     ),
     check(
       "shift_change_requests_target_check",

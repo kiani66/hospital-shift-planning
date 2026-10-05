@@ -33,6 +33,7 @@ import {
   findScheduleById,
   updateSchedule,
 } from "../../src/infrastructure/repositories/schedules";
+import { completeScheduleFixture } from "../support/complete-schedule";
 import { setupTestDatabase } from "./support/database";
 
 const { db } = setupTestDatabase();
@@ -115,6 +116,11 @@ async function toPlanning() {
 }
 async function toFinalized() {
   await toPlanning();
+  await completeScheduleFixture(db, S, [
+    U.icuHead.id,
+    U.icuNurse4.id,
+    U.transferNurse.id,
+  ]);
   await step(finalizeSchedule, actors.head);
 }
 async function toSubmitted() {
@@ -132,7 +138,9 @@ const month = (actor: Actor, period = ABAN, today = TODAY) =>
 /** Every visible entry of the month as `date shift publication`. */
 const entries = async (actor: Actor, period = ABAN) =>
   (await month(actor, period)).days.flatMap((d) =>
-    d.entries.map((e) => `${d.date} ${e.shift} ${e.publication}`),
+    d.entries
+      .filter((e) => e.shift !== "OFF")
+      .map((e) => `${d.date} ${e.shift} ${e.publication}`),
   );
 
 describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
@@ -222,6 +230,7 @@ describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
     // M 7h + N 12h + ME 12h; one night.
     expect(m.totals).toEqual({
       shiftCount: 3,
+      offCount: 27,
       minutes: 31 * 60,
       nightCount: 1,
       byCode: { M: 1, E: 0, N: 1, ME: 1 },

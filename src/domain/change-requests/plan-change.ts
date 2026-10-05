@@ -2,7 +2,7 @@ import type { AssignmentEdit } from "../schedule/assignment-editing";
 import type { IsoDate } from "../shared/dates";
 import { InvalidStateError, ValidationError } from "../shared/errors";
 import { err, ok, type Result } from "../shared/result";
-import type { ShiftCode } from "../shifts/shift-type";
+import { isWorkingShift, type AssignmentCode } from "../shifts/shift-type";
 import { CHANGE_REQUEST_REFUSALS } from "./model";
 import { checkSwapContext, type ChangeRequestState } from "./request";
 
@@ -13,8 +13,8 @@ export interface RequestResolution {
    * (must be on the roster and off that day). Omitted: nobody does.
    */
   readonly replacementNurseId?: string | null;
-  /** OTHER only (required): the requester's resulting shift, null for off. */
-  readonly requesterShift?: ShiftCode | null;
+  /** OTHER only (required): the requester's resulting shift, null for undecided. */
+  readonly requesterShift?: AssignmentCode | null;
   /**
    * The Head Nurse saw that the requester's assignment changed since the
    * request and confirms the change against the current one.
@@ -24,19 +24,19 @@ export interface RequestResolution {
 
 /** The current working-copy shifts of the cells a request touches. */
 export interface CurrentRequestCells {
-  readonly requester: ShiftCode | null;
+  readonly requester: AssignmentCode | null;
   /** SWAP: the partner's current shift. */
-  readonly counterpart: ShiftCode | null;
+  readonly counterpart: AssignmentCode | null;
   /** UNAVAILABLE with a replacement: the replacement's current shift. */
-  readonly replacement: ShiftCode | null;
+  readonly replacement: AssignmentCode | null;
 }
 
 /** The requester's assignment differs from the one the request was made against. */
 export interface StaleRequestContext {
   readonly nurseId: string;
   readonly date: IsoDate;
-  readonly requestedAgainst: ShiftCode | null;
-  readonly current: ShiftCode | null;
+  readonly requestedAgainst: AssignmentCode | null;
+  readonly current: AssignmentCode | null;
 }
 
 export interface RequestChangePlan {
@@ -53,7 +53,7 @@ const invalid = (message: string, field: string) =>
  * The schedule change a request leads to, always computed against the
  * schedule's CURRENT working copy, never the snapshot the nurse saw:
  *
- * - UNAVAILABLE: the requester gets no shift; an optional replacement (off
+ * - UNAVAILABLE: the requester gets explicit OFF; an optional replacement (not working
  *   that day) takes over the requester's current shift.
  * - CHANGE_SHIFT: the requester gets the requested shift.
  * - OTHER: the requester gets what the Head Nurse decides.
@@ -88,7 +88,7 @@ export function planRequestChange(input: {
     );
 
   const edits: AssignmentEdit[] = [];
-  const edit = (nurseId: string, shift: ShiftCode | null) =>
+  const edit = (nurseId: string, shift: AssignmentCode | null) =>
     edits.push({ nurseId, date, shift });
 
   switch (request.type) {
@@ -100,7 +100,7 @@ export function planRequestChange(input: {
       return ok({ edits, stale: null });
     }
     case "UNAVAILABLE":
-      edit(requesterId, null);
+      edit(requesterId, "OFF");
       if (replacementId !== null) {
         if (
           replacementId === requesterId ||
@@ -110,12 +110,12 @@ export function planRequestChange(input: {
             "The replacement must be another nurse on the roster",
             "replacementNurseId",
           );
-        if (current.replacement !== null)
+        if (isWorkingShift(current.replacement))
           return invalid(
             "The replacement already works that day",
             "replacementNurseId",
           );
-        if (current.requester === null)
+        if (!isWorkingShift(current.requester))
           return invalid(
             "There is no shift for a replacement to take over",
             "replacementNurseId",

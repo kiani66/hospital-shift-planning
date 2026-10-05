@@ -9,7 +9,7 @@ import {
   scheduleVersions,
   shiftAssignments,
 } from "../db/schema";
-import { asIsoDate, asShiftCode } from "./mappers";
+import { asIsoDate, asAssignmentCode } from "./mappers";
 
 /**
  * Approved schedule versions. This module deliberately has no update or delete
@@ -114,7 +114,7 @@ export async function listVersionAssignments(
   return rows.map((r) => ({
     nurseId: r.nurseId,
     date: asIsoDate(r.date),
-    shift: asShiftCode(r.shift),
+    shift: asAssignmentCode(r.shift),
   }));
 }
 
@@ -145,6 +145,6 @@ export async function listVersionAssignmentsFor(
   return rows.map((r) => ({
     nurseId: r.nurseId,
     date: asIsoDate(r.date),
-    shift: asShiftCode(r.shift),
+    shift: asAssignmentCode(r.shift),
   }));
 }
