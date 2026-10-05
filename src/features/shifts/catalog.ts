@@ -1,6 +1,8 @@
 import {
   SHIFT_TYPES,
   crossesMidnight,
+  isWorkingShift,
+  type AssignmentCode,
   type BaseShift,
   type ShiftCode,
 } from "@/domain/shifts/shift-type";
@@ -83,8 +85,29 @@ export const faClock = (time: string) =>
   time.replace(/\d/g, (d) => PERSIAN_DIGITS[Number(d)]!);
 
 /** "۰۷:۰۰ تا ۱۴:۰۰", or "۱۹:۰۰ تا ۰۷:۰۰ روز بعد" for a shift that crosses midnight. */
-export function shiftHoursLabel(code: ShiftCode): string {
+export function shiftHoursLabel(code: AssignmentCode): string {
+  if (!isWorkingShift(code)) return "استراحت";
   const shift = SHIFT_TYPES[code];
   const range = `${faClock(shift.start)} تا ${faClock(shift.end)}`;
   return crossesMidnight(shift) ? `${range} روز بعد` : range;
 }
+
+/** OFF is a neutral scheduling decision, with no working hours or shift token. */
+export const ASSIGNMENT_PRESENTATION = {
+  ...SHIFT_PRESENTATION,
+  OFF: {
+    code: "OFF",
+    name: "استراحت",
+    fullName: "استراحت",
+    tokenClass: "bg-muted text-muted-foreground",
+    accentClass: "text-muted-foreground",
+    dotClass: "bg-muted-foreground",
+    softClass: "bg-muted",
+  },
+} as const;
+export const assignmentName = (code: AssignmentCode | null): string =>
+  code === null
+    ? "تعیین‌نشده"
+    : code === "OFF"
+      ? "استراحت"
+      : `${SHIFT_PRESENTATION[code].name} (${code})`;

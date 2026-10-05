@@ -24,6 +24,7 @@ import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import {
   COVERAGE_PERIODS,
   SHIFT_CODES,
+  type AssignmentCode,
   type BaseShift,
   type PreferenceValue,
   type ShiftCode,
@@ -32,7 +33,6 @@ import { countActiveWindows } from "../../domain/preferences/preference-window";
 import { listPreferenceWindows } from "../../infrastructure/repositories/preference-windows";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
-import { listRoster } from "../../infrastructure/repositories/roster";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
 import { listSubmissions } from "../../infrastructure/repositories/submissions";
 import { listDisplayNames } from "../../infrastructure/repositories/users";
@@ -104,9 +104,9 @@ export interface ReviewNurse {
   readonly preference: PreferenceValue | null;
 }
 
-/** A rostered nurse on the selected day, with their shift (null: no shift). */
+/** A rostered nurse on the selected day, with their shift (null: undecided). */
 export interface ReviewRosterNurse extends ReviewNurse {
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
 }
 
 export interface ReviewShift {
@@ -145,6 +145,7 @@ export interface DayReview {
   readonly relatedFindings: readonly ReviewFinding[];
   /** Rostered nurses without an assignment that day. */
   readonly unassigned: readonly ReviewNurse[];
+  readonly off: readonly ReviewNurse[];
   /** Everyone on the roster (sorted by name), assigned or not: the editing list. */
   readonly roster: readonly ReviewRosterNurse[];
   /** Whether the actor may edit this day's assignments, and why not. */
@@ -178,7 +179,7 @@ export async function getScheduleReview(
 ): Promise<ScheduleReview> {
   const { db, actor } = ctx;
   const holidays = sources.holidays ?? NO_HOLIDAY_DATA;
-  const staffing = sources.staffing ?? NO_STAFFING_REQUIREMENTS;
+  const staffing = sources.staffing ?? ctx.staffing ?? NO_STAFFING_REQUIREMENTS;
 
   const schedule = UUID.test(input.scheduleId)
     ? await findScheduleById(db, input.scheduleId)
@@ -195,14 +196,18 @@ export async function getScheduleReview(
   const { period } = schedule;
 
   const now = ctx.clock?.() ?? new Date();
-  const [{ assignments, violations }, officialHolidays, windows, submissions] =
-    await Promise.all([
-      // The same validation FINALIZE and SUBMIT are gated by (D58).
-      validateWorkingCopy(db, schedule),
-      holidays.listOfficialHolidays(period),
-      listPreferenceWindows(db, schedule.id),
-      listSubmissions(db, schedule.id),
-    ]);
+  const [
+    { assignments, violations, roster, requirements },
+    officialHolidays,
+    windows,
+    submissions,
+  ] = await Promise.all([
+    // The same validation FINALIZE and SUBMIT are gated by (D58).
+    validateWorkingCopy(db, schedule, staffing),
+    holidays.listOfficialHolidays(period),
+    listPreferenceWindows(db, schedule.id),
+    listSubmissions(db, schedule.id),
+  ]);
   const diagnostics = violations.map((v) => toDiagnostic(v, period));
   const workflow = describeWorkflow(actor, {
     schedule,
@@ -254,13 +259,8 @@ export async function getScheduleReview(
   const revisionScoped =
     mayEdit &&
     (schedule.status === "REVISING" || schedule.status === "RETURNED");
-  const [roster, preferences, requirements, revision] = await Promise.all([
-    listRoster(db, schedule.id),
+  const [preferences, revision] = await Promise.all([
     listPreferences(db, schedule.id, { date }),
-    staffing.requirementsFor({
-      departmentId: schedule.departmentId,
-      dates: [date],
-    }),
     revisionScoped ? findOpenRevision(db, schedule.id) : null,
   ]);
   const summaryOfDay = days.find((d) => d.date === date)!;
@@ -305,6 +305,7 @@ export async function getScheduleReview(
       relatedFindings: diagnostics
         .filter((d) => d.date !== date && d.dates.includes(date))
         .map(withNames),
+      off: roster.filter((r) => shiftOf.get(r.userId) === "OFF").map(nurse),
       unassigned: roster.filter((r) => !shiftOf.has(r.userId)).map(nurse),
       roster: roster.map((r) => ({
         ...nurse(r),

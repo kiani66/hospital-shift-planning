@@ -6,7 +6,7 @@ import { useActionState, useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { CHANGE_NOTE_MAX_LENGTH } from "@/domain/change-requests/reason";
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import type { RequestFormState } from "@/features/change-requests/actions";
 
@@ -87,8 +87,8 @@ export function ApplyRequestButton({
   requestId: string;
   revision: number;
   replacementNurseId: string | null;
-  /** OTHER: the decided resulting shift ("" = off); undefined when not OTHER. */
-  requesterShift?: ShiftCode | "";
+  /** OTHER: the decided resulting shift ("" = undecided); undefined when not OTHER. */
+  requesterShift?: AssignmentCode | "";
   /** The requester's shift changed since the request: confirmation required. */
   stale: ReactNode | null;
   disabled: boolean;

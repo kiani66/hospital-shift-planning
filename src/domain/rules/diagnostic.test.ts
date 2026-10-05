@@ -89,6 +89,7 @@ describe("toDiagnostic", () => {
       "NIGHT_REST",
       "OUTSIDE_PERIOD",
       "STAFFING",
+      "UNDECIDED",
     ]);
   });
 

@@ -40,7 +40,10 @@ import {
   type MonthLink,
 } from "@/features/schedule-review/month-calendar";
 import { ShiftLegend } from "@/features/shell/shift-legend";
-import { SHIFT_PRESENTATION, shiftHoursLabel } from "@/features/shifts/catalog";
+import {
+  ASSIGNMENT_PRESENTATION,
+  shiftHoursLabel,
+} from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
@@ -245,13 +248,14 @@ function MonthTotals({ totals }: { totals: MyShiftsMonth["totals"] }) {
     ["شیفت‌ها", `${faNumber(totals.shiftCount)}`],
     ["ساعات برنامه‌ریزی‌شده", formatHours(totals.minutes)],
     ["شیفت شب", `${faNumber(totals.nightCount)}`],
+    ["روزهای استراحت", `${faNumber(totals.offCount)}`],
   ] as const;
   return (
     <section aria-labelledby="month-totals" className="flex flex-col gap-2">
       <h2 id="month-totals" className="sr-only">
         جمع ماه
       </h2>
-      <dl className="grid grid-cols-3 gap-2">
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tiles.map(([term, value]) => (
           <div
             key={term}
@@ -274,18 +278,22 @@ function MonthTotals({ totals }: { totals: MyShiftsMonth["totals"] }) {
           {SHIFT_CODES.map((code) => (
             <li key={code} className="inline-flex items-center gap-1.5">
               <ShiftChip code={code} size="xs" variant="soft" />
-              <span className="sr-only">{SHIFT_PRESENTATION[code].name}:</span>
+              <span className="sr-only">
+                {ASSIGNMENT_PRESENTATION[code].name}:
+              </span>
               <span className="tabular-nums">
                 {faNumber(totals.byCode[code])}
               </span>
             </li>
           ))}
         </ul>
-        {totals.includesUnapproved && totals.shiftCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            شامل شیفت‌های تأییدنشده؛ با تغییر برنامه، این ارقام هم تغییر می‌کند.
-          </p>
-        )}
+        {totals.includesUnapproved &&
+          totals.shiftCount + totals.offCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              شامل شیفت‌های تأییدنشده؛ با تغییر برنامه، این ارقام هم تغییر
+              می‌کند.
+            </p>
+          )}
       </div>
     </section>
   );
@@ -349,7 +357,7 @@ function EntryDetail({
 /** Why a day shows no shift: no schedule covers it, or none is assigned that day. */
 function noShiftText(date: IsoDate, schedules: readonly MyShiftSchedule[]) {
   return schedules.some((s) => isInPeriod(s.period, date))
-    ? "در این روز شیفتی برای شما ثبت نشده است."
+    ? "تصمیم این روز هنوز تعیین نشده است."
     : "برای این روز برنامه‌ای برای شما وجود ندارد.";
 }
 
@@ -434,7 +442,7 @@ function ShiftAgenda({ days }: { days: readonly MyShiftDay[] }) {
         id="month-agenda"
         title="فهرست شیفت‌های ماه"
         icon={<ListChecks className="size-4" />}
-        meta={`${faNumber(rows.length)} شیفت`}
+        meta={`${faNumber(rows.length)} تصمیم ثبت‌شده`}
       />
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -540,7 +548,7 @@ export function MyShiftsView({
       <>
         <PublicationNotices schedules={month.schedules} />
         <MonthTotals totals={month.totals} />
-        {month.totals.shiftCount === 0 && (
+        {month.totals.shiftCount + month.totals.offCount === 0 && (
           <Callout role="note" tone="info" icon={ClipboardList}>
             در این ماه شیفتی برای شما ثبت نشده است.
           </Callout>

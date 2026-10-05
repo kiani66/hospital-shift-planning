@@ -54,6 +54,7 @@ import {
   listVersionAssignments,
   listVersions,
 } from "../../src/infrastructure/repositories/versions";
+import { completeScheduleFixture } from "../support/complete-schedule";
 import { setupTestDatabase } from "./support/database";
 
 const { db, pool } = setupTestDatabase();
@@ -111,6 +112,11 @@ const assign = (userId: string, date: string, shift: ShiftCode) =>
 
 /** DRAFT → PLANNING through the real use cases, collection opened then closed. */
 async function toPlanning({ keepWindowOpen = false } = {}) {
+  await completeScheduleFixture(db, S, [
+    U.icuHead.id,
+    U.icuNurse4.id,
+    U.transferNurse.id,
+  ]);
   unwrapOk(
     await openPreferenceWindow(as(actors.icuHead), {
       scheduleId: S,
@@ -203,7 +209,11 @@ describe("finalizeSchedule", () => {
       entityId: S,
       departmentId: DEMO_ICU.id,
       scheduleId: S,
-      data: { from: "PLANNING", to: "FINALIZED", assignmentCount: 2 },
+      data: {
+        from: "PLANNING",
+        to: "FINALIZED",
+        assignmentCount: assignments.length,
+      },
     });
   });
 
@@ -298,6 +308,8 @@ describe("finalizeSchedule", () => {
     });
     expect(review.workflow.blockingFindings).toEqual({
       count: 1,
+      undecided: 0,
+      staffing: 0,
       dates: ["2026-11-21"],
     });
     expect(review.workflow.actions.finalize).toEqual({
@@ -395,7 +407,7 @@ describe("submitSchedule", () => {
         from: "FINALIZED",
         to: "SUBMITTED",
         submissionId: data.submissionId,
-        assignmentCount: 1,
+        assignmentCount: (await listAssignments(db, S)).length,
         assignmentsFingerprint: assignmentsFingerprint(assignments),
       },
     });
@@ -658,7 +670,7 @@ describe("approveSchedule", () => {
         submittedBy: U.icuHead.id,
         versionId: version!.id,
         versionNo: 1,
-        assignmentCount: 2,
+        assignmentCount: (await listAssignments(db, S)).length,
       },
     });
     // What was approved is exactly what was submitted.

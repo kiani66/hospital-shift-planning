@@ -6,8 +6,8 @@ import type {
   ChangeRequestType,
   SwapConsentStatus,
 } from "@/domain/change-requests/model";
-import type { ShiftCode } from "@/domain/shifts/shift-type";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import type { AssignmentCode, ShiftCode } from "@/domain/shifts/shift-type";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 
 /**
  * Persian wording of Shift Change Requests (Phase 9). The server decides;
@@ -56,8 +56,12 @@ export const REJECTION_LABELS: Record<ChangeRequestRejection, string> = {
   COUNTERPART_DECLINED: "همکار با جابه‌جایی موافقت نکرد.",
 };
 
-const shift = (code: ShiftCode | null) =>
-  code ? `شیفت ${SHIFT_PRESENTATION[code].name}` : "استراحت";
+const shift = (code: AssignmentCode | null) =>
+  code === null
+    ? "تعیین‌نشده"
+    : code === "OFF"
+      ? "استراحت"
+      : `شیفت ${ASSIGNMENT_PRESENTATION[code].name}`;
 
 /**
  * One sentence of what was asked, from the nurse's own point of view
@@ -65,10 +69,10 @@ const shift = (code: ShiftCode | null) =>
  */
 export function requestSummary(request: {
   readonly type: ChangeRequestType;
-  readonly requesterShift: ShiftCode;
+  readonly requesterShift: AssignmentCode;
   readonly targetShift: ShiftCode | null;
   readonly counterpart: { readonly displayName: string } | null;
-  readonly counterpartShift: ShiftCode | null;
+  readonly counterpartShift: AssignmentCode | null;
   readonly requester: { readonly displayName: string };
   readonly role?: "REQUESTER" | "COUNTERPART";
 }): string {

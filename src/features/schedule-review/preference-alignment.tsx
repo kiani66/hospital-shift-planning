@@ -14,7 +14,10 @@ import {
   preferenceFit,
   type PreferenceFit,
 } from "@/domain/preferences/preference-fit";
-import type { PreferenceValue, ShiftCode } from "@/domain/shifts/shift-type";
+import type {
+  PreferenceValue,
+  AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import {
   NO_PREFERENCE_LABEL,
@@ -60,7 +63,7 @@ export function PreferenceContext({
   hideMissing = false,
 }: {
   preference: PreferenceValue | null;
-  shift: ShiftCode | null;
+  shift: AssignmentCode | null;
   id?: string;
   /** Read-only lists say nothing for a nurse without a preference. */
   hideMissing?: boolean;
@@ -136,7 +139,7 @@ function Count({
 
 /**
  * «انطباق با ترجیحات»: how the day's assignments relate to the recorded
- * wishes. The four fit counts partition the roster and say so; «بدون شیفت»
+ * wishes. The four fit counts partition the roster and say so; «تعیین‌نشده»
  * is another dimension that overlaps them and is shown apart, so no figure
  * suggests a total it is not. Advisory: a conflict never invalidates the
  * schedule (D35), and nothing here is green "approval".

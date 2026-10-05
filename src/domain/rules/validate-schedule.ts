@@ -1,5 +1,5 @@
 import { addDays, compareIsoDates, type IsoDate } from "../shared/dates";
-import { isInPeriod, type DatePeriod } from "../shared/period";
+import { isInPeriod, periodDays, type DatePeriod } from "../shared/period";
 import type { Assignment } from "../shifts/assignment";
 import { findNightRestViolations } from "./night-rest";
 import { findStaffingViolations, type StaffingRequirement } from "./staffing";
@@ -9,6 +9,8 @@ export interface ScheduleValidationInput {
   readonly period: DatePeriod;
   /** The schedule's working-copy assignments. */
   readonly assignments: readonly Assignment[];
+  /** Roster snapshot: every rostered nurse requires a decision on every period day. */
+  readonly rosterNurseIds?: readonly string[];
   /**
    * Assignments from neighbouring schedules for the same nurses; at minimum the
    * day before `period.start` and the day after `period.end`. Used only as
@@ -17,7 +19,7 @@ export interface ScheduleValidationInput {
   readonly adjacentAssignments?: readonly Assignment[];
   /**
    * Configured staffing bounds per day (D44); days without an entry are not
-   * checked. Staffing findings are warnings, never blocking.
+   * checked. Minimum shortfalls block; maximum excesses remain warnings.
    */
   readonly staffingRequirements?: ReadonlyMap<IsoDate, StaffingRequirement>;
 }
@@ -25,7 +27,7 @@ export interface ScheduleValidationInput {
 /**
  * All rule violations that involve this schedule, sorted by date then nurse.
  * Violations may exist while planning; `hasBlockingViolations` gates FINALIZE/SUBMIT
- * (errors only; warnings such as staffing never block).
+ * (errors only; staffing maximum warnings never block).
  */
 export function validateSchedule(input: ScheduleValidationInput): Violation[] {
   const { period, assignments } = input;
@@ -51,6 +53,20 @@ export function validateSchedule(input: ScheduleValidationInput): Violation[] {
       });
     }
     seen.add(k);
+  }
+
+  if (input.rosterNurseIds) {
+    for (const date of periodDays(period)) {
+      for (const nurseId of input.rosterNurseIds) {
+        if (!seen.has(`${nurseId}|${date}`))
+          violations.push({
+            rule: "UNDECIDED",
+            severity: "error",
+            nurseId,
+            date,
+          });
+      }
+    }
   }
 
   // Only the days touching the boundary matter for the night-rest rule.

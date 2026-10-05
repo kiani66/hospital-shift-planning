@@ -7,10 +7,13 @@ import type { ReasonView } from "@/application/change-requests/queries";
 import { Button } from "@/components/ui/button";
 import { CHANGE_NOTE_MAX_LENGTH } from "@/domain/change-requests/reason";
 import type { IsoDate } from "@/domain/shared/dates";
-import { SHIFT_CODES, type ShiftCode } from "@/domain/shifts/shift-type";
+import {
+  ASSIGNMENT_CODES,
+  type AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import { requestErrorMessage } from "@/features/change-requests/presentation";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName } from "@/features/shifts/catalog";
 
 import {
   adjustScheduleAction,
@@ -22,8 +25,7 @@ import { PreviewPanel } from "./preview-panel";
 const FIELD_CLASS =
   "min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
 
-const shiftLabel = (code: ShiftCode | null) =>
-  code ? `${SHIFT_PRESENTATION[code].name} (${code})` : "بدون شیفت";
+const shiftLabel = assignmentName;
 
 /**
  * A Head Nurse's direct operational adjustment of one nurse's shift on this
@@ -46,7 +48,7 @@ export function AdjustmentForm({
   nurses: readonly {
     readonly userId: string;
     readonly displayName: string;
-    readonly shift: ShiftCode | null;
+    readonly shift: AssignmentCode | null;
   }[];
   reasons: readonly ReasonView[];
 }) {
@@ -57,7 +59,7 @@ export function AdjustmentForm({
     note: useId(),
   };
   const [nurseId, setNurseId] = useState("");
-  const [shift, setShift] = useState<ShiftCode | "" | "NONE">("");
+  const [shift, setShift] = useState<AssignmentCode | "" | "NONE">("");
   const [reasonCode, setReasonCode] = useState("");
   const [note, setNote] = useState("");
   // A preview belongs to the selection it was made for.
@@ -144,20 +146,26 @@ export function AdjustmentForm({
           <select
             id={ids.shift}
             value={shift}
-            onChange={(e) => setShift(e.target.value as ShiftCode | "NONE")}
+            onChange={(e) =>
+              setShift(e.target.value as AssignmentCode | "NONE")
+            }
             className={FIELD_CLASS}
           >
             <option value="" disabled>
               انتخاب شیفت
             </option>
-            {SHIFT_CODES.filter((c) => c !== current?.shift).map((code) => (
-              <option key={code} value={code}>
-                {shiftLabel(code)}
-              </option>
-            ))}
-            {current?.shift !== null && <option value="NONE">بدون شیفت</option>}
+            {ASSIGNMENT_CODES.filter((c) => c !== current?.shift).map(
+              (code) => (
+                <option key={code} value={code}>
+                  {shiftLabel(code)}
+                </option>
+              ),
+            )}
+            {current?.shift !== null && (
+              <option value="NONE">تعیین‌نشده</option>
+            )}
           </select>
-          {/* The server reads "" as "no shift". */}
+          {/* The server reads "" as explicit clearing to undecided. */}
           <input
             type="hidden"
             name="shift"

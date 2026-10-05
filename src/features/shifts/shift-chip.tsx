@@ -1,7 +1,7 @@
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import { cn } from "@/lib/utils";
 
-import { SHIFT_PRESENTATION } from "./catalog";
+import { ASSIGNMENT_PRESENTATION } from "./catalog";
 
 const SIZES = {
   xs: "min-w-6 px-1 text-[0.6875rem] leading-4",
@@ -24,13 +24,13 @@ export function ShiftChip({
   label = false,
   className,
 }: {
-  code: ShiftCode;
+  code: AssignmentCode;
   size?: keyof typeof SIZES;
   variant?: "solid" | "soft";
   label?: boolean | "full";
   className?: string;
 }) {
-  const shift = SHIFT_PRESENTATION[code];
+  const shift = ASSIGNMENT_PRESENTATION[code];
   return (
     <span
       className={cn(
@@ -42,8 +42,10 @@ export function ShiftChip({
         className,
       )}
     >
-      <span dir="ltr">{code}</span>
-      {label && (
+      <span dir={code === "OFF" ? undefined : "ltr"}>
+        {code === "OFF" ? "استراحت" : code}
+      </span>
+      {label && code !== "OFF" && (
         <span className="font-medium">
           {label === "full" ? shift.fullName : shift.name}
         </span>

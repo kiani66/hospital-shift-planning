@@ -56,14 +56,27 @@ export function dayList(dates: readonly IsoDate[], max = 4): string {
 /** Why an offered action cannot be taken yet (the header's blocker list). */
 export function blockerLabel(
   blocker: WorkflowBlocker,
-  findings: { readonly count: number; readonly dates: readonly IsoDate[] },
+  findings: {
+    readonly count: number;
+    readonly dates: readonly IsoDate[];
+    readonly undecided?: number;
+    readonly staffing?: number;
+  },
 ): string {
   switch (blocker) {
     case "BLOCKING_FINDINGS": {
       const where = findings.dates.length
         ? ` در ${dayList(findings.dates)}`
         : "";
-      return `${faNumber(findings.count)} مغایرت مسدودکننده${where} باید برطرف شود.`;
+      const details = [
+        ...(findings.undecided
+          ? [`${faNumber(findings.undecided)} تصمیم تعیین‌نشده`]
+          : []),
+        ...(findings.staffing
+          ? [`${faNumber(findings.staffing)} نوبت با کمبود نیرو`]
+          : []),
+      ];
+      return `${faNumber(findings.count)} مغایرت مسدودکننده${where} باید برطرف شود.${details.length ? ` ${details.join("؛ ")}.` : ""}`;
     }
     case "PREFERENCE_WINDOW_OPEN":
       return "ثبت ترجیحات پرستاران هنوز باز است؛ پیش از ارسال، آن را ببندید.";

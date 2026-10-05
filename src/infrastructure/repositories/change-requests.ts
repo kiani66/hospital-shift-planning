@@ -8,10 +8,10 @@ import type {
 } from "../../domain/change-requests/model";
 import type { NewChangeRequest } from "../../domain/change-requests/request";
 import type { IsoDate } from "../../domain/shared/dates";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import type { AssignmentCode, ShiftCode } from "../../domain/shifts/shift-type";
 import type { DbExecutor, Transaction } from "../db/database";
 import { schedules, shiftChangeRequests } from "../db/schema";
-import { asIsoDate } from "./mappers";
+import { asIsoDate, asAssignmentCode, asShiftCode } from "./mappers";
 
 /**
  * Phase 9 Shift Change Requests. This module stores requests only: nothing
@@ -27,10 +27,10 @@ export interface ChangeRequestRecord {
   readonly requesterId: string;
   readonly type: ChangeRequestType;
   readonly date: IsoDate;
-  readonly requesterShift: ShiftCode;
+  readonly requesterShift: AssignmentCode;
   readonly targetShift: ShiftCode | null;
   readonly counterpartId: string | null;
-  readonly counterpartShift: ShiftCode | null;
+  readonly counterpartShift: AssignmentCode | null;
   readonly reasonCode: string;
   readonly note: string | null;
   readonly status: ChangeRequestStatus;
@@ -91,6 +91,12 @@ const toRecord = (row: Row): ChangeRequestRecord =>
   ({
     ...row,
     date: asIsoDate(row.date),
+    requesterShift: asAssignmentCode(row.requesterShift),
+    targetShift: row.targetShift === null ? null : asShiftCode(row.targetShift),
+    counterpartShift:
+      row.counterpartShift === null
+        ? null
+        : asAssignmentCode(row.counterpartShift),
   }) as ChangeRequestRecord;
 
 const select = (db: DbExecutor) =>
@@ -220,8 +226,8 @@ export async function countChangeRequestsByStatus(
 
 export type ChangeRequestUpdate = Partial<{
   status: ChangeRequestStatus;
-  requesterShiftCode: ShiftCode;
-  counterpartShiftCode: ShiftCode | null;
+  requesterShiftCode: AssignmentCode;
+  counterpartShiftCode: AssignmentCode | null;
   consentStatus: SwapConsentStatus;
   consentAt: Date | null;
   consentBy: string | null;

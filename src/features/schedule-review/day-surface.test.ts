@@ -42,6 +42,7 @@ const day = (coverage: ReviewCoverage[]): DayReview => ({
   coverage,
   findings: [],
   relatedFindings: [],
+  off: [],
   unassigned: [],
   roster: [],
   edit: { allowed: true },
@@ -192,7 +193,7 @@ describe("PreferenceAlignmentSummary", () => {
     expect(count("noPreference")).toBe("ترجیحی ثبت نشده ۱ نفر");
     expect(t).toContain("هر نفر فقط در یکی از این چهار دسته است (جمع: ۵ نفر).");
     expect(count("unassigned")).toBe(
-      "بدون شیفت در این روز: ۳ نفر جدا شمرده می‌شود و با دسته‌های بالا هم‌پوشانی دارد.",
+      "تعیین‌نشده در این روز: ۳ نفر جدا شمرده می‌شود و با دسته‌های بالا هم‌پوشانی دارد.",
     );
     expect(t).toContain("مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد");
   });

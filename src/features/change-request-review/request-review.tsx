@@ -4,7 +4,10 @@ import type { ChangeRequestReview } from "@/application/change-requests/queries"
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
-import { SHIFT_CODES, type ShiftCode } from "@/domain/shifts/shift-type";
+import {
+  ASSIGNMENT_CODES,
+  type AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import {
   faNumber,
   formatJalaliDate,
@@ -22,22 +25,22 @@ import {
 } from "@/features/change-requests/presentation";
 import { SCHEDULE_STATUS_LABELS } from "@/features/schedule/labels";
 import { dayList } from "@/features/schedule-workflow/presentation";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 
 import { ApplyRequestButton, RejectRequestButton } from "./decision-buttons";
 import { PreviewPanel } from "./preview-panel";
 
-const Shift = ({ code }: { code: ShiftCode | null }) =>
+const Shift = ({ code }: { code: AssignmentCode | null }) =>
   code ? (
     <ShiftChip code={code} size="xs" label />
   ) : (
-    <span className="text-muted-foreground">بدون شیفت</span>
+    <span className="text-muted-foreground">تعیین‌نشده</span>
   );
 
-const shiftName = (code: ShiftCode | null) =>
-  code ? `${SHIFT_PRESENTATION[code].name} (${code})` : "بدون شیفت";
+const shiftName = (code: AssignmentCode | null) =>
+  code ? `${ASSIGNMENT_PRESENTATION[code].name} (${code})` : "تعیین‌نشده";
 
 function Row({
   label,
@@ -267,19 +270,19 @@ export function RequestReview({
                   id="resulting-shift"
                   name="shift"
                   defaultValue={
-                    otherShift === undefined ? "" : otherShift || "OFF"
+                    otherShift === undefined ? "" : otherShift || "UNDECIDED"
                   }
                   className="min-h-11 rounded-md border border-input bg-background px-3"
                 >
                   <option value="" disabled>
                     انتخاب کنید
                   </option>
-                  {SHIFT_CODES.map((code) => (
+                  {ASSIGNMENT_CODES.map((code) => (
                     <option key={code} value={code}>
                       {shiftName(code)}
                     </option>
                   ))}
-                  <option value="OFF">بدون شیفت</option>
+                  <option value="UNDECIDED">تعیین‌نشده</option>
                 </select>
               </>
             )}

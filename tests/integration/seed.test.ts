@@ -49,7 +49,7 @@ describe("demo seed", () => {
       supervisors: 2,
       schedules: 1,
       roster: 6,
-      shift_types: 4,
+      shift_types: 5,
     });
   });
 

@@ -165,7 +165,7 @@ describe("hasBlockingViolations", () => {
 });
 
 describe("staffing (warnings)", () => {
-  it("adds staffing warnings next to hard findings without making them blocking", () => {
+  it("adds blocking staffing shortages next to hard findings", () => {
     const result = validateSchedule({
       period,
       assignments: [a("sara", "2026-03-25", "N"), a("sara", "2026-03-26", "M")],
@@ -181,7 +181,7 @@ describe("staffing (warnings)", () => {
     ]);
     const staffing = result.filter((v) => v.rule === "STAFFING");
     expect(staffing.map((v) => v.period)).toEqual(["E", "M"]);
-    expect(hasBlockingViolations(staffing)).toBe(false);
+    expect(hasBlockingViolations(staffing)).toBe(true);
     expect(hasBlockingViolations(result)).toBe(true);
   });
 

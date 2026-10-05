@@ -1,4 +1,4 @@
-import type { PreferenceValue, ShiftCode } from "../shifts/shift-type";
+import type { PreferenceValue, AssignmentCode } from "../shifts/shift-type";
 
 /**
  * How a nurse's own wish for a day relates to their assignment, for the
@@ -11,16 +11,14 @@ import type { PreferenceValue, ShiftCode } from "../shifts/shift-type";
  *   with any shift included).
  * - PENDING: a preference is recorded and no assignment decision exists yet.
  *
- * OFF follows the same lifecycle as a shift wish (D99, amends D50): without
- * an assignment row it is PENDING, never MATCHES. The working copy has no way
- * to record an explicit "this nurse is off" decision (no row is both "off"
- * and "not planned yet"), so absence is never read as that decision.
+ * OFF matches only an explicit OFF assignment. Without an assignment row
+ * every recorded preference is PENDING, never MATCHES.
  */
 export type PreferenceFit = "NONE" | "MATCHES" | "DIFFERS" | "PENDING";
 
 export function preferenceFit(
   preference: PreferenceValue | null,
-  assignment: ShiftCode | null,
+  assignment: AssignmentCode | null,
 ): PreferenceFit {
   if (preference === null) return "NONE";
   if (assignment === null) return "PENDING";

@@ -17,6 +17,7 @@ import { adjustSchedule } from "../../src/application/schedules/schedule-changes
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
 import { ValidationError } from "../../src/domain/shared/errors";
+import { periodDays } from "../../src/domain/shared/period";
 import { isoDate } from "../../src/domain/shared/dates";
 import type { ShiftCode } from "../../src/domain/shifts/shift-type";
 import {
@@ -33,6 +34,7 @@ import {
   findScheduleById,
   updateSchedule,
 } from "../../src/infrastructure/repositories/schedules";
+import { completeScheduleFixture } from "../support/complete-schedule";
 import { setupTestDatabase } from "./support/database";
 
 const { db } = setupTestDatabase();
@@ -115,6 +117,11 @@ async function toPlanning() {
 }
 async function toFinalized() {
   await toPlanning();
+  await completeScheduleFixture(db, S, [
+    U.icuHead.id,
+    U.icuNurse4.id,
+    U.transferNurse.id,
+  ]);
   await step(finalizeSchedule, actors.head);
 }
 async function toSubmitted() {
@@ -132,7 +139,9 @@ const month = (actor: Actor, period = ABAN, today = TODAY) =>
 /** Every visible entry of the month as `date shift publication`. */
 const entries = async (actor: Actor, period = ABAN) =>
   (await month(actor, period)).days.flatMap((d) =>
-    d.entries.map((e) => `${d.date} ${e.shift} ${e.publication}`),
+    d.entries
+      .filter((e) => e.shift !== "OFF")
+      .map((e) => `${d.date} ${e.shift} ${e.publication}`),
   );
 
 describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
@@ -222,6 +231,7 @@ describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
     // M 7h + N 12h + ME 12h; one night.
     expect(m.totals).toEqual({
       shiftCount: 3,
+      offCount: 27,
       minutes: 31 * 60,
       nightCount: 1,
       byCode: { M: 1, E: 0, N: 1, ME: 1 },
@@ -457,10 +467,10 @@ describe("getMyShiftsMonth: authorization", () => {
     const requestable = Object.fromEntries(
       m.days.flatMap((d) => d.entries.map((e) => [d.date, e.requestable])),
     );
-    expect(requestable).toEqual({
-      "2026-10-25": false,
-      "2026-10-27": true,
-      "2026-10-29": true,
-    });
+    expect(requestable).toEqual(
+      Object.fromEntries(
+        periodDays(ABAN).map((date) => [date, date >= "2026-10-27"]),
+      ),
+    );
   });
 });

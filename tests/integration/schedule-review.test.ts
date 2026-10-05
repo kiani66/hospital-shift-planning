@@ -13,7 +13,10 @@ import {
   summarizePreferenceAlignment,
 } from "../../src/domain/preferences/preference-alignment";
 import { addDays, isoDate, type IsoDate } from "../../src/domain/shared/dates";
-import type { ShiftCode } from "../../src/domain/shifts/shift-type";
+import type {
+  AssignmentCode,
+  ShiftCode,
+} from "../../src/domain/shifts/shift-type";
 import {
   departmentMemberships,
   scheduleRoster,
@@ -125,21 +128,21 @@ describe("month overview", () => {
     const { month } = await review(actors.icuHead);
     const byDate = new Map(month.days.map((d) => [d.date, d]));
     expect(byDate.get(isoDate("2026-10-24"))).toMatchObject({
-      health: "VALID",
+      health: "NEEDS_ATTENTION",
       shifts: { M: 1, E: 0, N: 1, ME: 1 },
       coverage: { M: 2, E: 1, N: 1 },
-      findings: { blocking: 0, other: 0 },
+      findings: { blocking: 3, other: 0 },
       holiday: null,
     });
-    expect(byDate.get(isoDate("2026-10-25"))!.health).toBe("VALID");
+    expect(byDate.get(isoDate("2026-10-25"))!.health).toBe("NEEDS_ATTENTION");
     expect(byDate.get(isoDate("2026-10-26"))).toMatchObject({
       health: "NEEDS_ATTENTION",
-      findings: { blocking: 1, other: 0 },
+      findings: { blocking: 8, other: 0 },
     });
     expect(month.totals).toEqual({
       UNPLANNED: 27,
-      VALID: 2,
-      NEEDS_ATTENTION: 1,
+      VALID: 0,
+      NEEDS_ATTENTION: 3,
     });
   });
 
@@ -160,9 +163,9 @@ describe("month overview", () => {
     const { month, day } = await review(actors.icuHead, { day: "2026-10-23" });
     expect(month.days[0]).toMatchObject({
       health: "NEEDS_ATTENTION",
-      findings: { blocking: 1, other: 0 },
+      findings: { blocking: 8, other: 0 },
     });
-    expect(day!.findings).toEqual([
+    expect(day!.findings.filter((f) => f.code === "NIGHT_REST")).toEqual([
       expect.objectContaining({
         code: "NIGHT_REST",
         scope: "NURSE",
@@ -212,7 +215,7 @@ describe("month overview", () => {
     const holidayDays = month.days.filter((d) => d.holiday);
     expect(holidayDays.map((d) => [d.date, d.health, d.holiday!.name])).toEqual(
       [
-        ["2026-10-24", "VALID", "تعطیل آزمایشی"],
+        ["2026-10-24", "NEEDS_ATTENTION", "تعطیل آزمایشی"],
         ["2026-10-30", "UNPLANNED", "تعطیل دوم"],
       ],
     );
@@ -250,9 +253,12 @@ describe("day detail", () => {
     const { day } = await review(actors.icuHead, { day: "2026-10-28" });
     expect(day).toMatchObject({
       date: "2026-10-28",
-      health: "VALID",
+      health: "NEEDS_ATTENTION",
       holiday: null,
-      findings: [],
+      findings: [
+        expect.objectContaining({ code: "UNDECIDED" }),
+        expect.objectContaining({ code: "UNDECIDED" }),
+      ],
     });
     const names = (code: ShiftCode) =>
       day!.shifts.find((s) => s.code === code)!.nurses;
@@ -306,9 +312,9 @@ describe("day detail", () => {
   it("reports operational coverage with no staffing requirement configured", async () => {
     const { day } = await review(actors.icuHead, { day: "2026-10-28" });
     expect(day!.coverage).toEqual([
-      { period: "M", covered: 2, bounds: null, status: "NOT_CONFIGURED" },
-      { period: "E", covered: 2, bounds: null, status: "NOT_CONFIGURED" },
-      { period: "N", covered: 1, bounds: null, status: "NOT_CONFIGURED" },
+      { period: "M", covered: 2, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
+      { period: "E", covered: 2, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
+      { period: "N", covered: 1, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
     ]);
   });
 
@@ -326,12 +332,14 @@ describe("day detail", () => {
     );
     expect(requirementsFor).toHaveBeenCalledWith({
       departmentId: DEMO_ICU.id,
-      dates: ["2026-10-28"],
+      dates: Array.from({ length: 30 }, (_, i) =>
+        addDays(isoDate("2026-10-23"), i),
+      ),
     });
     expect(day!.coverage.map((c) => [c.period, c.status])).toEqual([
       ["M", "BELOW_MINIMUM"],
       ["E", "ABOVE_MAXIMUM"],
-      ["N", "NOT_CONFIGURED"],
+      ["N", "WITHIN_BOUNDS"],
     ]);
   });
 
@@ -507,7 +515,7 @@ describe("performance", () => {
       addedBy: people[0]!.id,
     });
     // Rotating M, E, N-then-rest pattern: realistic and night-rest safe.
-    const pattern: (ShiftCode | null)[] = ["M", "E", "ME", "N", null];
+    const pattern: AssignmentCode[] = ["M", "E", "ME", "N", "OFF"];
     const rows = people.flatMap((p, i) =>
       Array.from({ length: 31 }, (_, d) => {
         const shift = pattern[(i + d) % pattern.length];
@@ -565,7 +573,8 @@ describe("performance", () => {
     const detail = withDay.result.day!;
     expect(
       detail.shifts.reduce((n, s) => n + s.nurses.length, 0) +
-        detail.unassigned.length,
+        detail.unassigned.length +
+        detail.off.length,
     ).toBe(60);
     // The month overview carries aggregates only, never people.
     expect(JSON.stringify(month.result.month)).not.toContain("پرستار");

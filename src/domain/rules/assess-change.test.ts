@@ -94,19 +94,19 @@ describe("assessChange", () => {
     });
   });
 
-  describe("soft rules (staffing warnings)", () => {
+  describe("staffing minima (blocking) and maxima (advisory)", () => {
     const requirements = new Map([[d("2026-10-25"), { M: { min: 2 } }]]);
     const staffed = [a("sara", "2026-10-25", "M"), a("ali", "2026-10-25", "M")];
 
-    it("reports a staffing shortfall as a warning that does not block", () => {
+    it("blocks a newly introduced staffing shortfall", () => {
       const result = assess(
         staffed,
         [{ nurseId: "sara", date: "2026-10-25", shift: null }],
         requirements,
       );
-      expect(result.blocked).toBe(false);
-      expect(result.blocking).toEqual([]);
-      expect(result.warnings).toMatchObject([
+      expect(result.blocked).toBe(true);
+      expect(result.warnings).toEqual([]);
+      expect(result.blocking).toMatchObject([
         { rule: "STAFFING", period: "M", covered: 1, status: "BELOW_MINIMUM" },
       ]);
     });
@@ -122,7 +122,7 @@ describe("assessChange", () => {
         [{ nurseId: "sara", date: "2026-10-25", shift: null }],
         req,
       );
-      expect(worse.warnings.map((v) => v.rule)).toEqual(["STAFFING"]);
+      expect(worse.blocking.map((v) => v.rule)).toEqual(["STAFFING"]);
       const same = assess(
         short,
         [{ nurseId: "reza", date: "2026-10-25", shift: "N" }],
@@ -132,7 +132,7 @@ describe("assessChange", () => {
       expect(same.persisting.map((v) => v.rule)).toEqual(["STAFFING"]);
     });
 
-    it("blocks on the hard rule and still lists the warning", () => {
+    it("blocks both night rest and staffing shortages", () => {
       const result = assess(
         staffed,
         [
@@ -142,8 +142,11 @@ describe("assessChange", () => {
         requirements,
       );
       expect(result.blocked).toBe(true);
-      expect(result.blocking.map((v) => v.rule)).toEqual(["NIGHT_REST"]);
-      expect(result.warnings.map((v) => v.rule)).toEqual(["STAFFING"]);
+      expect(result.blocking.map((v) => v.rule)).toEqual([
+        "STAFFING",
+        "NIGHT_REST",
+      ]);
+      expect(result.warnings).toEqual([]);
     });
   });
 });

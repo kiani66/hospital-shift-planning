@@ -17,10 +17,11 @@ import type { IsoDate } from "@/domain/shared/dates";
 import {
   SHIFT_TYPES,
   shiftDurationMinutes,
-  type ShiftCode,
+  isWorkingShift,
+  type AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 
 export interface PublicationPresentation {
   /** Compact label (badges, cell names). */
@@ -127,12 +128,16 @@ export function formatHours(minutes: number): string {
 }
 
 /** The catalog duration of one shift, e.g. "۱۲ ساعت". */
-export const shiftDurationLabel = (code: ShiftCode) =>
-  formatHours(shiftDurationMinutes(SHIFT_TYPES[code]));
+export const shiftDurationLabel = (code: AssignmentCode) =>
+  formatHours(
+    isWorkingShift(code) ? shiftDurationMinutes(SHIFT_TYPES[code]) : 0,
+  );
 
 /** "صبح (M)": the Persian name with the code, for text-only places. */
-export const shiftName = (code: ShiftCode) =>
-  `${SHIFT_PRESENTATION[code].name} (${code})`;
+export const shiftName = (code: AssignmentCode) =>
+  code === "OFF"
+    ? "استراحت"
+    : `${ASSIGNMENT_PRESENTATION[code].name} (${code})`;
 
 /**
  * The calendar cell's accessible name: the date, the shift(s) or "no shift",
@@ -145,7 +150,7 @@ export function dayCellLabel(
   const date = formatJalaliDate(day.date, { weekday: true });
   const parts =
     day.entries.length === 0
-      ? ["بدون شیفت"]
+      ? ["تعیین‌نشده"]
       : day.entries.map((e) =>
           [
             shiftName(e.shift),

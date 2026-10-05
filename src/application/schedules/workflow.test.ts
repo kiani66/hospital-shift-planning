@@ -186,7 +186,12 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
     });
     expect(w.actions.finalize).toEqual({ blockers: ["BLOCKING_FINDINGS"] });
     // The outside-period finding belongs to no day (D43) but still counts.
-    expect(w.blockingFindings).toEqual({ count: 2, dates: ["2026-10-26"] });
+    expect(w.blockingFindings).toEqual({
+      count: 2,
+      dates: ["2026-10-26"],
+      undecided: 0,
+      staffing: 0,
+    });
   });
 
   it("finalize is not blocked by an open preference window", () => {

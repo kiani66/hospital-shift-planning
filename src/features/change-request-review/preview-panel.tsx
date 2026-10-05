@@ -1,6 +1,7 @@
 import { Ban, CircleCheck, Info, TriangleAlert } from "lucide-react";
 
 import type { ChangePreviewView } from "@/application/schedules/change-preview";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import type { ReviewFinding } from "@/application/schedules/review";
 import { Callout } from "@/components/ui/callout";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
@@ -35,11 +36,11 @@ function FindingList({
   );
 }
 
-const Shift = ({ code }: { code: ReviewFinding["shift"] }) =>
+const Shift = ({ code }: { code: AssignmentCode | null }) =>
   code ? (
     <ShiftChip code={code} size="xs" label />
   ) : (
-    <span className="text-muted-foreground">بدون شیفت</span>
+    <span className="text-muted-foreground">تعیین‌نشده</span>
   );
 
 /**

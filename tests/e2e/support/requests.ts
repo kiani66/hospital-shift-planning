@@ -8,7 +8,10 @@ import {
 } from "../../../src/application/change-requests/commands";
 import { approveSchedule } from "../../../src/application/schedules/lifecycle";
 import { isoDate } from "../../../src/domain/shared/dates";
-import type { ShiftCode } from "../../../src/domain/shifts/shift-type";
+import type {
+  AssignmentCode,
+  ShiftCode,
+} from "../../../src/domain/shifts/shift-type";
 import { todayIn } from "../../../src/infrastructure/auth/actor";
 import { createDatabase } from "../../../src/infrastructure/db/database";
 import {
@@ -100,7 +103,7 @@ export async function setShift(
   department: ApprovalDepartment,
   email: string,
   date: string,
-  shift: ShiftCode | null,
+  shift: AssignmentCode | null,
 ) {
   await withDb(async (db) => {
     const user = (await findUserByEmail(db, email))!;

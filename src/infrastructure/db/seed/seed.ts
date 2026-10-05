@@ -123,15 +123,22 @@ export async function seedDemoData(db: Database): Promise<SeedSummary> {
 
     await tx
       .insert(shiftTypes)
-      .values(
-        Object.values(SHIFT_TYPES).map((s, i) => ({
+      .values([
+        ...Object.values(SHIFT_TYPES).map((s, i) => ({
           code: s.code,
           label: SHIFT_LABELS[s.code],
           covers: [...s.covers],
           isNight: s.isNight,
           sortOrder: i + 1,
         })),
-      )
+        {
+          code: "OFF",
+          label: "استراحت",
+          covers: [],
+          isNight: false,
+          sortOrder: 5,
+        },
+      ])
       .onConflictDoNothing();
 
     await tx.insert(departments).values([...DEMO_DEPARTMENTS]);

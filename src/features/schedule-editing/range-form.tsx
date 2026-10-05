@@ -3,9 +3,12 @@
 import { useId, useState } from "react";
 
 import type { IsoDate } from "@/domain/shared/dates";
-import { SHIFT_CODES, type ShiftCode } from "@/domain/shifts/shift-type";
+import {
+  ASSIGNMENT_CODES,
+  type AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 export interface DayOption {
@@ -17,7 +20,7 @@ const focusRing =
   "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
 
 /**
- * A bounded range edit for one nurse: one shift (or "no shift") from this
+ * A bounded range edit for one nurse: one decision (or clear to undecided) from this
  * day through a later day of the period, sent as one request (all or
  * nothing, audited per day, undoable).
  */
@@ -32,13 +35,15 @@ export function RangeForm({
 }: {
   id: string;
   nurseName: string;
-  initialShift: ShiftCode | null;
+  initialShift: AssignmentCode | null;
   date: IsoDate;
   rangeEnds: readonly DayOption[];
-  onApply: (shift: ShiftCode | null, dates: IsoDate[]) => void;
+  onApply: (shift: AssignmentCode | null, dates: IsoDate[]) => void;
   onCancel: () => void;
 }) {
-  const [shift, setShift] = useState<ShiftCode | "NONE">(initialShift ?? "M");
+  const [shift, setShift] = useState<AssignmentCode | "NONE">(
+    initialShift ?? "M",
+  );
   const [end, setEnd] = useState(
     rangeEnds[Math.min(rangeEnds.length, 6) - 1]!.date,
   );
@@ -46,11 +51,11 @@ export function RangeForm({
   const dates = [date, ...rangeEnds.slice(0, endIndex + 1).map((d) => d.date)];
   const endId = useId();
   const options = [
-    ...SHIFT_CODES.map((code) => ({
-      value: code as ShiftCode | "NONE",
-      label: `${SHIFT_PRESENTATION[code].name} (${code})`,
+    ...ASSIGNMENT_CODES.map((code) => ({
+      value: code as AssignmentCode | "NONE",
+      label: `${ASSIGNMENT_PRESENTATION[code].name} (${code})`,
     })),
-    { value: "NONE" as const, label: "بدون شیفت" },
+    { value: "NONE" as const, label: "تعیین‌نشده" },
   ];
 
   return (

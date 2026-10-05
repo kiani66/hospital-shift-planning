@@ -67,6 +67,8 @@ export interface ScheduleWorkflow {
   /** Blocking findings of the working copy and the period days they belong to. */
   readonly blockingFindings: {
     readonly count: number;
+    readonly undecided: number;
+    readonly staffing: number;
     readonly dates: readonly IsoDate[];
   };
   readonly preferenceWindowOpen: boolean;
@@ -164,6 +166,8 @@ export function describeWorkflow(
     lastDecision: lastDecided ? toSubmission(lastDecided) : null,
     blockingFindings: {
       count: blocking.length,
+      undecided: blocking.filter((v) => v.rule === "UNDECIDED").length,
+      staffing: blocking.filter((v) => v.rule === "STAFFING").length,
       dates: uniqueSortedDates(
         blocking.flatMap((v) => violationDay(v, schedule.period) ?? []),
       ),

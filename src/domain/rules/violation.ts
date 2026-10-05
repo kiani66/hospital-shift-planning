@@ -5,11 +5,17 @@ import type { StaffingBounds } from "./staffing";
 /**
  * `error` is a hard rule: it blocks FINALIZE and SUBMIT and a post-finalization
  * change that introduces it. `warning` is a soft rule: reported, never
- * blocking (e.g. staffing outside its configured bounds).
+ * blocking (e.g. staffing above its configured maximum).
  */
 export type ViolationSeverity = "error" | "warning";
 
 export type Violation =
+  | {
+      readonly rule: "UNDECIDED";
+      readonly severity: "error";
+      readonly nurseId: string;
+      readonly date: IsoDate;
+    }
   | {
       /** Night on `nightDate` followed by any shift on `date` (= nightDate + 1). */
       readonly rule: "NIGHT_REST";
@@ -40,7 +46,7 @@ export type Violation =
        * day's period, not one nurse.
        */
       readonly rule: "STAFFING";
-      readonly severity: "warning";
+      readonly severity: ViolationSeverity;
       readonly date: IsoDate;
       readonly period: BaseShift;
       readonly covered: number;
@@ -73,6 +79,7 @@ export function violationFootprint(violation: Violation): ViolationFootprint {
         nurseId: violation.nurseId,
         dates: [violation.nightDate, violation.date],
       };
+    case "UNDECIDED":
     case "DUPLICATE_ASSIGNMENT":
     case "OUTSIDE_PERIOD":
       return { nurseId: violation.nurseId, dates: [violation.date] };

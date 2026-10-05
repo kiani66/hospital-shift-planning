@@ -3,7 +3,7 @@ import { allow, deny, type Decision } from "../shared/decision";
 import { InvalidStateError, ValidationError } from "../shared/errors";
 import { isInPeriod, type DatePeriod } from "../shared/period";
 import { err, ok, type Result } from "../shared/result";
-import type { ShiftCode } from "../shifts/shift-type";
+import type { AssignmentCode } from "../shifts/shift-type";
 import type { ScheduleStatus } from "./status";
 
 export type AssignmentEditDenial =
@@ -52,19 +52,19 @@ export function canEditAssignment(
   }
 }
 
-/** One requested cell: the nurse's shift on `date`, or null for "no shift" (clear). */
+/** One requested cell: the nurse's shift on `date`, or null for "undecided" (clear). */
 export interface AssignmentEdit {
   readonly nurseId: string;
   readonly date: IsoDate;
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
 }
 
 /** An edit that changes the working copy, with the value it replaces. */
 export interface AssignmentChange {
   readonly nurseId: string;
   readonly date: IsoDate;
-  readonly before: ShiftCode | null;
-  readonly after: ShiftCode | null;
+  readonly before: AssignmentCode | null;
+  readonly after: AssignmentCode | null;
 }
 
 export type AssignmentPlanError = ValidationError | InvalidStateError;
@@ -97,7 +97,7 @@ export const assignmentKey = (nurseId: string, date: IsoDate) =>
 export function planAssignmentEdits(input: {
   readonly edits: readonly AssignmentEdit[];
   /** The stored shift of each nurse and day (`assignmentKey`); absent = none. */
-  readonly current: ReadonlyMap<string, ShiftCode>;
+  readonly current: ReadonlyMap<string, AssignmentCode>;
   readonly rosterNurseIds: ReadonlySet<string>;
   readonly schedule: Omit<AssignmentEditContext, "date">;
 }): Result<AssignmentChange[], AssignmentPlanError> {

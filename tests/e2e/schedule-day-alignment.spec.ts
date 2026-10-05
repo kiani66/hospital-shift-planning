@@ -102,7 +102,7 @@ test.describe("preference alignment summary and rows", () => {
       "هر نفر فقط در یکی از این چهار دسته است (جمع: ۴ نفر).",
     );
     await expect(count(dialog, "unassigned")).toHaveText(
-      /^بدون شیفت در این روز:\s*۰ نفر\s*جدا شمرده می‌شود/,
+      /^تعیین‌نشده در این روز:\s*۰ نفر\s*جدا شمرده می‌شود/,
     );
     await expect(alignment(dialog)).toContainText(
       "مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد",
@@ -126,13 +126,9 @@ test.describe("preference alignment summary and rows", () => {
 
     // No staffing bounds are configured: said once, never green.
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
-    await expect(coverage).toContainText(
-      "تأمین نفرات ارزیابی نشده است؛ حداقل و حداکثر نفرات تعریف نشده است.",
-    );
-    await expect(
-      coverage.locator('[data-staffing="NOT_EVALUATED"]'),
-    ).toHaveCount(3);
-    await expect(coverage).not.toContainText(/در محدوده|کمبود|مازاد/);
+    await expect(coverage).toContainText("حداقل ۱");
+    await expect(coverage.locator('[data-staffing="WITHIN"]')).toHaveCount(3);
+    await expect(coverage).toContainText("در محدوده تعریف‌شده");
     // The day itself still validates (D40): conflicts are not findings.
     await expect(dialog).toContainText("مغایرتی یافت نشد");
     await snapshot(page, `summary-${test.info().project.name}`);
@@ -262,7 +258,7 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     // Clear nurse 3's Night: no longer a conflict, but not a match either:
     // an OFF wish without an assignment is awaiting (D99).
     await controls(dialog, nurse3)
-      .getByRole("button", { name: "بدون شیفت" })
+      .getByRole("button", { name: "تعیین‌نشده" })
       .click();
     await saved(dialog, "در فهرست پرسنل می‌ماند");
     await expect(row(dialog, nurse3)).toContainText("در انتظار تخصیص");
@@ -305,7 +301,7 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     const dialog = dayDialog(page);
 
     // Reach the toggle with Tab from the last shift chip.
-    await chip(dialog, /^طولانی \(ME\)/).focus();
+    await chip(dialog, /^استراحت/).focus();
     await page.keyboard.press("Tab");
     await expect(conflictsOnly(dialog)).toBeFocused();
     expect(
@@ -384,7 +380,7 @@ test.describe("responsive layout", () => {
         conflictsOnly(dialog),
         chip(dialog, /^صبح \(M\)/),
         controls(dialog, nurse2).getByRole("button", { name: "شب (N)" }),
-        controls(dialog, nurse2).getByRole("button", { name: "بدون شیفت" }),
+        controls(dialog, nurse2).getByRole("button", { name: "تعیین‌نشده" }),
       ])
         expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
