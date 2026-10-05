@@ -73,7 +73,7 @@ const invalid = (message: string, field: string) =>
  * - The day must lie in the period and not in the past (historical
  *   correction is out of scope).
  * - It is about the requester's own assignment: they must be on the roster
- *   and work that day.
+ *   and have an explicit decision that day; UNAVAILABLE requires a working shift.
  * - CHANGE_SHIFT names a different shift; SWAP names another rostered nurse
  *   whose shift that day differs (same day, same schedule); other types name
  *   neither.
@@ -283,7 +283,7 @@ export function respondToSwap(
  * becomes both participants' current shifts and the partner's consent is
  * asked again (an earlier consent was for a different swap). Unchanged
  * context keeps the request as it is. A swap that no longer makes sense
- * (the requester is now off, or both have the same shift) cannot be
+ * (the requester is now undecided, or both have the same decision) cannot be
  * refreshed: cancel it and ask anew.
  */
 export function refreshSwap(

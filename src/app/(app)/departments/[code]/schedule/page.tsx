@@ -325,7 +325,7 @@ export default async function DepartmentSchedulePage({
                 (selected.status === "APPROVED" &&
                   review.day.date >= today)) && (
                 <DirectSwapForm
-                  key={review.day.date}
+                  key={`direct-swap:${review.day.date}`}
                   scheduleId={selected.id}
                   revision={review.month.revision}
                   date={review.day.date}

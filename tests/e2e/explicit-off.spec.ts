@@ -24,6 +24,12 @@ async function confirm(page: Page, trigger: string, label: string) {
   await expect(dialog(page)).toBeHidden();
 }
 
+async function closeDay(page: Page, url: string) {
+  await dialog(page).getByRole("button", { name: "بستن جزئیات روز" }).click();
+  await expect(page).toHaveURL(url);
+  await expect(dialog(page)).toBeHidden();
+}
+
 test("explicit OFF, pending clear, independent staffing and publication through approval", async ({
   page,
 }) => {
@@ -64,7 +70,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   });
   await head.getByRole("button", { name: "استراحت", exact: true }).click();
   await saved(page);
-  await dialog(page).getByRole("button", { name: "بستن جزئیات روز" }).click();
+  await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toContainText(
     "۲ نوبت با کمبود نیرو",
   );
@@ -80,7 +86,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
     .getByRole("button", { name: "طولانی (ME)" })
     .click();
   await saved(page);
-  await dialog(page).getByRole("button", { name: "بستن جزئیات روز" }).click();
+  await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toHaveCount(0);
   await confirm(page, "نهایی‌سازی برنامه", "بله، نهایی شود");
   await confirm(page, "ارسال برای تأیید", "بله، ارسال شود");
@@ -91,7 +97,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
     0,
   );
   await expect(dialog(page)).toContainText("استراحت");
-  await dialog(page).getByRole("button", { name: "بستن جزئیات روز" }).click();
+  await closeDay(page, `/review/${d.abanId}`);
   await confirm(page, "تأیید برنامه", "بله، تأیید شود");
   await page.context().clearCookies();
   await signInAndWait(page, d.nurseEmail);
