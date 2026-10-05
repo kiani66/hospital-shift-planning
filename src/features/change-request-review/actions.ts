@@ -67,7 +67,7 @@ export async function applyChangeRequestAction(
       requestId: value(formData, "requestId"),
       expectedRevision: Number(formData.get("expectedRevision")),
       replacementNurseId: value(formData, "replacementNurseId") ?? null,
-      // OTHER: "" is "no shift" (off); absent means not decided.
+      // OTHER: "" explicitly clears to undecided; absent means no manual result was chosen.
       ...(typeof shift === "string" && {
         requesterShift: shift === "" ? null : shift,
       }),
@@ -94,7 +94,7 @@ const adjustmentCell = z.object({
   scheduleId: z.uuid(),
   nurseId: z.uuid(),
   date: z.string().refine(isIsoDate),
-  /** "" is "no shift". */
+  /** "" explicitly clears to undecided. */
   shift: z.enum([...ASSIGNMENT_CODES, ""]),
 });
 

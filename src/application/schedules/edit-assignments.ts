@@ -29,7 +29,7 @@ const isoDateInput = z
 
 /**
  * One cell per change: the nurse's shift on the date, or null to clear it
- * ("no shift"; the nurse stays on the roster). A single edit is a request of
+ * (undecided; the nurse stays on the roster). A single edit is a request of
  * one change; a range edit (one nurse, several days) is bounded by the
  * longest period.
  */

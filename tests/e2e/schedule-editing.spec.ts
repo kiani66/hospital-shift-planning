@@ -126,7 +126,9 @@ test.describe("Head Nurse schedule editing", () => {
     // The calendar behind reflects the edits once the day is closed.
     await dialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
     await expect(
-      page.getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، نیاز به بررسی/ }),
+      page
+        .getByRole("region", { name: "تقویم ماه" })
+        .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، نیاز به بررسی/ }),
     ).toBeVisible();
 
     // Persisted: a reload shows the same.

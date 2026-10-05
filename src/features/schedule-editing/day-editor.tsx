@@ -75,7 +75,7 @@ export interface EditorNurse {
 
 export type { DayOption } from "./range-form";
 
-/** A nurse's controls in reading order: the four shifts, "no shift", the range form. */
+/** A nurse's controls in reading order: working decisions, OFF, clear to undecided, the range form. */
 const COLUMNS = [...ASSIGNMENT_CODES, null, "RANGE"] as const;
 const LAST_COLUMN = COLUMNS.length - 1;
 
@@ -784,7 +784,11 @@ function NurseRow({
                 {...cellProps(col)}
                 aria-pressed={selected}
                 aria-describedby={preferenceId}
-                aria-label={`${ASSIGNMENT_PRESENTATION[code].name} (${code})`}
+                aria-label={
+                  code === "OFF"
+                    ? ASSIGNMENT_PRESENTATION[code].name
+                    : `${ASSIGNMENT_PRESENTATION[code].name} (${code})`
+                }
                 onClick={() => onAssign(code)}
                 className={cn(
                   control,

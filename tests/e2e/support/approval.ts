@@ -22,8 +22,10 @@ import { setAssignment } from "../../../src/infrastructure/repositories/assignme
 import { findDepartmentByCode } from "../../../src/infrastructure/repositories/departments";
 import {
   assignSupervisor,
+  addMembership,
   loadActor,
 } from "../../../src/infrastructure/repositories/memberships";
+import { addToRoster } from "../../../src/infrastructure/repositories/roster";
 import { findScheduleById } from "../../../src/infrastructure/repositories/schedules";
 import {
   createUser,
@@ -62,10 +64,11 @@ export async function provisionApprovalDepartment(
     const supervisorEmail = `supervisor.${randomUUID().slice(0, 8)}@e2e.invalid`;
     const head = (await findUserByEmail(db, department.headEmail))!;
     const departmentId = (await findDepartmentByCode(db, department.code))!.id;
+    const passwordHash = await hashPassword(DEMO_PASSWORD);
     const supervisor = await createUser(db, {
       email: supervisorEmail,
       displayName: "سوپروایزر آزمایشی",
-      passwordHash: await hashPassword(DEMO_PASSWORD),
+      passwordHash,
     });
     await assignSupervisor(db, {
       userId: supervisor.id,
@@ -73,6 +76,25 @@ export async function provisionApprovalDepartment(
       startedOn: isoDate("2026-01-01"),
     });
 
+    // Every original nurse works on 24 Oct. A fifth roster member staffs the
+    // previous Night without breaking the required next-day rest.
+    const nightCover = await createUser(db, {
+      email: department.nurseEmail.replace("nurse1.", "nurse4."),
+      displayName: "پرستار پوشش شب آزمایشی",
+      passwordHash,
+    });
+    await addMembership(db, {
+      userId: nightCover.id,
+      departmentId,
+      role: "NURSE",
+      startedOn: isoDate("2026-01-01"),
+    });
+    await addToRoster(db, {
+      scheduleId: department.abanId,
+      userId: nightCover.id,
+      role: "NURSE",
+      addedBy: head.id,
+    });
     const actor = (await loadActor(db, head.id, todayIn("Asia/Tehran")))!;
     const ctx: AppContext = { db, actor };
     const step = async (
@@ -103,6 +125,7 @@ export async function provisionApprovalDepartment(
       head.id,
       nurse3.id,
       nurse2.id,
+      nightCover.id,
     ]);
     if (stage !== "planning") {
       // Explicit rest after the Night keeps every nurse-day decided.
@@ -126,7 +149,11 @@ export async function provisionApprovalDepartment(
       ))!;
       await step(approveSchedule, { db, actor: approver });
     }
-    return { ...department, supervisorEmail };
+    return {
+      ...department,
+      memberCount: department.memberCount + 1,
+      supervisorEmail,
+    };
   } finally {
     await pool.end();
   }

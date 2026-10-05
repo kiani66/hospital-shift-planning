@@ -281,6 +281,53 @@ describe("Explicit OFF end to end in the application", () => {
       snapshot,
     );
   });
+  it("a revision cannot submit an undecided day; reapproval snapshots explicit OFF without changing v1", async () => {
+    await complete();
+    const v1 = await approve();
+    const original = await listVersionAssignments(db, v1.versionId!);
+    ok(await exchange(U.icuNurse1.id, U.icuHead.id));
+    await edit([{ nurseId: U.icuNurse1.id, date: first, shift: null }]);
+    expect(
+      await submitSchedule(head, {
+        scheduleId: id,
+        expectedRevision: await revision(),
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: "RULE_VIOLATION",
+        violations: [
+          expect.objectContaining({
+            rule: "UNDECIDED",
+            nurseId: U.icuNurse1.id,
+            date: first,
+          }),
+        ],
+      },
+    });
+    await edit([{ nurseId: U.icuNurse1.id, date: first, shift: "OFF" }]);
+    await step(submitSchedule);
+    const v2 = await step(approveSchedule, supervisor);
+    expect(await listVersionAssignments(db, v1.versionId!)).toEqual(original);
+    expect(await listVersionAssignments(db, v2.versionId!)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nurseId: U.icuNurse1.id,
+          date: first,
+          shift: "OFF",
+        }),
+      ]),
+    );
+    const visible = await getMyShiftsMonth(await ctx(U.icuNurse1.id), {
+      period,
+      today,
+    });
+    expect(visible.days[0]!.entries[0]).toMatchObject({
+      shift: "OFF",
+      publication: "OFFICIAL",
+      changePending: false,
+    });
+  });
   it("My Shifts uses publication rules for OFF, separates totals, and leaves missing days distinct", async () => {
     await edit([{ nurseId: U.icuNurse1.id, date: first, shift: "OFF" }]);
     const nurse = await ctx(U.icuNurse1.id);
@@ -415,6 +462,20 @@ describe("Explicit OFF end to end in the application", () => {
       { code: "OFF", covers: [], is_night: false, sort_order: 5 },
     ]);
     await edit([{ nurseId: U.icuNurse1.id, date: first, shift: "OFF" }]);
+    const request = ok(
+      await createChangeRequest(await ctx(U.icuNurse1.id), {
+        scheduleId: id,
+        type: "CHANGE_SHIFT",
+        date: first,
+        targetShift: "M",
+        reasonCode: "ILLNESS",
+      }),
+    );
+    await expect(
+      db.execute(
+        sql`update shift_change_requests set target_shift_code = 'OFF' where id = ${request.id}`,
+      ),
+    ).rejects.toThrow();
     await expect(
       db.execute(
         sql`insert into shift_assignments (schedule_id, user_id, date, shift_code, updated_by) values (${id}, ${U.icuNurse2.id}, ${first}, 'UNKNOWN', ${U.icuHead.id})`,
@@ -439,7 +500,9 @@ describe("Head Nurse direct swaps", () => {
         appliedBy: U.icuHead.id,
         appliedAt: now,
         requestId: null,
-        cells: swapped.changes,
+        cells: [...swapped.changes].sort((a, b) =>
+          a.nurseId.localeCompare(b.nurseId),
+        ),
       }),
     ]);
     expect(await listAuditEventsForSchedule(db, id)).toEqual(

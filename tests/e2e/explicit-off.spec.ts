@@ -148,3 +148,38 @@ for (const width of [360, 390]) {
     ).toHaveAttribute("aria-pressed", "true");
   });
 }
+
+test("Head Nurse directly swaps an explicit rest and working decision without a request", async ({
+  page,
+}) => {
+  const d = await provisionExplicitOffDepartment();
+  await signInAndWait(page, d.headEmail);
+  await page.goto(
+    `/departments/${d.code}/schedule?month=1405-08&day=2026-10-28`,
+  );
+  await dialog(page).getByText("جابه‌جایی مستقیم", { exact: true }).click();
+  await dialog(page)
+    .getByLabel("پرستار اول", { exact: true })
+    .selectOption({ label: "سرپرستار آزمایشی — طولانی (ME)" });
+  await dialog(page)
+    .getByLabel("پرستار دوم", { exact: true })
+    .selectOption({ label: "پرستار آزمایشی ۱ — استراحت" });
+  await dialog(page)
+    .getByLabel("علت", { exact: true })
+    .selectOption({ label: "نیاز عملیاتی بخش" });
+  await dialog(page).getByRole("button", { name: "ثبت جابه‌جایی" }).click();
+  await expect(
+    dialog(page).getByRole("status").filter({ hasText: "جابه‌جایی ثبت شد" }),
+  ).toBeVisible();
+  await expect(
+    controls(page).getByRole("button", { name: "طولانی (ME)" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(await abanState(d, d.nurseEmail, "2026-10-28")).toMatchObject({
+    shift: "ME",
+    status: "PLANNING",
+  });
+  expect(await abanState(d, d.headEmail, "2026-10-28")).toMatchObject({
+    shift: "OFF",
+    status: "PLANNING",
+  });
+});

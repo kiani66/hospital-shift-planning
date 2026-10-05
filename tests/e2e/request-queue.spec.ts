@@ -255,7 +255,7 @@ test.describe("Head Nurse request queue", () => {
   }) => {
     const department = await provisionApprovalDepartment("submitted");
     await approveAban(department);
-    const nurse3 = nurseEmail(department, 3);
+    const nurse3 = nurseEmail(department, 1);
     await signInAndWait(page, department.headEmail);
     await page.goto(
       `/departments/${department.code}/schedule?month=1405-08&day=2026-10-27`,
@@ -264,7 +264,7 @@ test.describe("Head Nurse request queue", () => {
     await expect(form).toBeVisible();
     await form
       .getByLabel("پرستار")
-      .selectOption({ label: "پرستار آزمایشی ۳ — استراحت" });
+      .selectOption({ label: "پرستار آزمایشی ۱ — استراحت" });
     await form.getByLabel("شیفت جدید").selectOption({ label: "صبح (M)" });
     await form.getByRole("button", { name: "بررسی تغییر" }).click();
     await expect(
@@ -279,7 +279,7 @@ test.describe("Head Nurse request queue", () => {
     // The day is now in the revision's scope: the planning editor takes over.
     await expect(form).toHaveCount(0);
     await expect(
-      page.getByRole("group", { name: "شیفت پرستار آزمایشی ۳" }),
+      page.getByRole("group", { name: "شیفت پرستار آزمایشی ۱" }),
     ).toBeVisible();
     expect(await abanState(department, nurse3, "2026-10-27")).toEqual({
       status: "REVISING",

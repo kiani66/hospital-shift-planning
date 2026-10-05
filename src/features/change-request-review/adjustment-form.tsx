@@ -166,7 +166,7 @@ export function AdjustmentForm({
               <option value="NONE">تعیین‌نشده</option>
             )}
           </select>
-          {/* The server reads "" as "no shift". */}
+          {/* The server reads "" as explicit clearing to undecided. */}
           <input
             type="hidden"
             name="shift"

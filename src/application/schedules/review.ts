@@ -104,7 +104,7 @@ export interface ReviewNurse {
   readonly preference: PreferenceValue | null;
 }
 
-/** A rostered nurse on the selected day, with their shift (null: no shift). */
+/** A rostered nurse on the selected day, with their shift (null: undecided). */
 export interface ReviewRosterNurse extends ReviewNurse {
   readonly shift: AssignmentCode | null;
 }

@@ -209,7 +209,11 @@ describe("finalizeSchedule", () => {
       entityId: S,
       departmentId: DEMO_ICU.id,
       scheduleId: S,
-      data: { from: "PLANNING", to: "FINALIZED", assignmentCount: 2 },
+      data: {
+        from: "PLANNING",
+        to: "FINALIZED",
+        assignmentCount: assignments.length,
+      },
     });
   });
 

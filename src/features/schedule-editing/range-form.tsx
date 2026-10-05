@@ -20,7 +20,7 @@ const focusRing =
   "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
 
 /**
- * A bounded range edit for one nurse: one shift (or "no shift") from this
+ * A bounded range edit for one nurse: one decision (or clear to undecided) from this
  * day through a later day of the period, sent as one request (all or
  * nothing, audited per day, undoable).
  */

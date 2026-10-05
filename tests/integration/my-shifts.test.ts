@@ -17,6 +17,7 @@ import { adjustSchedule } from "../../src/application/schedules/schedule-changes
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
 import { ValidationError } from "../../src/domain/shared/errors";
+import { periodDays } from "../../src/domain/shared/period";
 import { isoDate } from "../../src/domain/shared/dates";
 import type { ShiftCode } from "../../src/domain/shifts/shift-type";
 import {
@@ -466,10 +467,10 @@ describe("getMyShiftsMonth: authorization", () => {
     const requestable = Object.fromEntries(
       m.days.flatMap((d) => d.entries.map((e) => [d.date, e.requestable])),
     );
-    expect(requestable).toEqual({
-      "2026-10-25": false,
-      "2026-10-27": true,
-      "2026-10-29": true,
-    });
+    expect(requestable).toEqual(
+      Object.fromEntries(
+        periodDays(ABAN).map((date) => [date, date >= "2026-10-27"]),
+      ),
+    );
   });
 });

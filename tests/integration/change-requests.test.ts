@@ -48,6 +48,7 @@ import {
   DEMO_USERS,
 } from "../../src/infrastructure/db/seed/demo-data";
 import {
+  clearAssignment,
   listAssignments,
   setAssignment,
 } from "../../src/infrastructure/repositories/assignments";
@@ -330,6 +331,11 @@ describe("creating requests (nurse)", () => {
   });
 
   it("refuses a day without an assignment and a day outside the period", async () => {
+    await clearAssignment(db, {
+      scheduleId: S,
+      userId: U.icuNurse3.id,
+      date: d("2026-10-25"),
+    });
     expect(failure(await unavailable(actors.nurse3))).toMatchObject({
       code: "VALIDATION",
       fieldErrors: { date: [expect.any(String)] },
@@ -664,8 +670,8 @@ describe("applying and rejecting (Head Nurse)", () => {
         .map((e) => e.action)
         .sort(),
     ).toEqual([
-      "assignment.cleared",
-      "assignment.created",
+      "assignment.changed",
+      "assignment.changed",
       "changeRequest.applied",
     ]);
     const [n] = await listNotificationsForRecipient(db, U.icuNurse1.id);
@@ -897,10 +903,10 @@ describe("approved schedules: revisions and versions", () => {
       (await listVersionAssignments(db, versions[1]!.id)).find(
         (a) => a.nurseId === U.icuNurse1.id && a.date === "2026-10-25",
       ),
-    ).toBeUndefined();
-    // 20. Nurses now see v2: the day is no longer theirs to request.
+    ).toMatchObject({ shift: "OFF" });
+    // 20. Explicit rest remains a requestable decision (including SWAP).
     const options = await getChangeRequestOptions(as(actors.nurse1));
-    expect(options.schedules[0]!.assignments.map((a) => a.date)).not.toContain(
+    expect(options.schedules[0]!.assignments.map((a) => a.date)).toContain(
       "2026-10-25",
     );
   });

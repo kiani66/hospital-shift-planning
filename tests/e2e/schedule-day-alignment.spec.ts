@@ -126,13 +126,9 @@ test.describe("preference alignment summary and rows", () => {
 
     // No staffing bounds are configured: said once, never green.
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
-    await expect(coverage).toContainText(
-      "تأمین نفرات ارزیابی نشده است؛ حداقل و حداکثر نفرات تعریف نشده است.",
-    );
-    await expect(
-      coverage.locator('[data-staffing="NOT_EVALUATED"]'),
-    ).toHaveCount(3);
-    await expect(coverage).not.toContainText(/در محدوده|کمبود|مازاد/);
+    await expect(coverage).toContainText("حداقل ۱");
+    await expect(coverage.locator('[data-staffing="WITHIN"]')).toHaveCount(3);
+    await expect(coverage).toContainText("در محدوده تعریف‌شده");
     // The day itself still validates (D40): conflicts are not findings.
     await expect(dialog).toContainText("مغایرتی یافت نشد");
     await snapshot(page, `summary-${test.info().project.name}`);
@@ -305,7 +301,7 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     const dialog = dayDialog(page);
 
     // Reach the toggle with Tab from the last shift chip.
-    await chip(dialog, /^طولانی \(ME\)/).focus();
+    await chip(dialog, /^استراحت/).focus();
     await page.keyboard.press("Tab");
     await expect(conflictsOnly(dialog)).toBeFocused();
     expect(

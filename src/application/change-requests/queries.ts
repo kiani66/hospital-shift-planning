@@ -361,7 +361,7 @@ export interface RequestableAssignment {
 }
 
 export interface SwapCandidate extends Person {
-  /** Their shift that day as nurses see it; null = off. */
+  /** Their shift that day as nurses see it; null = undecided. */
   readonly shift: AssignmentCode | null;
 }
 
