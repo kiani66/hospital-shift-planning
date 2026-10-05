@@ -45,7 +45,7 @@ const Shift = ({ code }: { code: AssignmentCode | null }) =>
   code ? (
     <ShiftChip code={code} size="xs" label />
   ) : (
-    <span className="text-xs text-muted-foreground">استراحت</span>
+    <span className="text-xs text-muted-foreground">تعیین‌نشده</span>
   );
 
 /** What the request asks for, compactly. */

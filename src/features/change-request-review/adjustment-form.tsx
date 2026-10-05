@@ -13,7 +13,7 @@ import {
 } from "@/domain/shifts/shift-type";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import { requestErrorMessage } from "@/features/change-requests/presentation";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName } from "@/features/shifts/catalog";
 
 import {
   adjustScheduleAction,
@@ -25,8 +25,7 @@ import { PreviewPanel } from "./preview-panel";
 const FIELD_CLASS =
   "min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
 
-const shiftLabel = (code: AssignmentCode | null) =>
-  code ? `${ASSIGNMENT_PRESENTATION[code].name} (${code})` : "تعیین‌نشده";
+const shiftLabel = assignmentName;
 
 /**
  * A Head Nurse's direct operational adjustment of one nurse's shift on this

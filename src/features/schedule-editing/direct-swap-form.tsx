@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 import type { ReasonView } from "@/application/change-requests/queries";
 import type { ReviewRosterNurse } from "@/application/schedules/review";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export function DirectSwapForm({
   const [state, action, pending] = useActionState(directSwapAction, {
     status: "idle",
   } as RequestFormState);
+  const id = useId();
   const decided = nurses.filter((n) => n.shift !== null);
   return (
     <details className="rounded-xl border bg-card p-3">
@@ -42,9 +43,17 @@ export function DirectSwapForm({
         <input type="hidden" name="expectedRevision" value={revision} />
         <input type="hidden" name="date" value={date} />
         {(["firstNurseId", "secondNurseId"] as const).map((name, i) => (
-          <label key={name} className="flex flex-col gap-1 text-sm">
-            {i === 0 ? "پرستار اول" : "پرستار دوم"}
-            <select name={name} required defaultValue="" className={fieldClass}>
+          <div key={name} className="flex flex-col gap-1 text-sm">
+            <label htmlFor={`${id}-${name}`}>
+              {i === 0 ? "پرستار اول" : "پرستار دوم"}
+            </label>
+            <select
+              id={`${id}-${name}`}
+              name={name}
+              required
+              defaultValue=""
+              className={fieldClass}
+            >
               <option value="" disabled>
                 انتخاب کنید
               </option>
@@ -54,11 +63,12 @@ export function DirectSwapForm({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         ))}
-        <label className="flex flex-col gap-1 text-sm">
-          علت
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor={`${id}-reason`}>علت</label>
           <select
+            id={`${id}-reason`}
             name="reasonCode"
             required
             defaultValue=""
@@ -73,11 +83,16 @@ export function DirectSwapForm({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          توضیح (برای سایر الزامی است)
-          <textarea name="note" maxLength={2000} className={fieldClass} />
-        </label>
+        </div>
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor={`${id}-note`}>توضیح (برای سایر الزامی است)</label>
+          <textarea
+            id={`${id}-note`}
+            name="note"
+            maxLength={2000}
+            className={fieldClass}
+          />
+        </div>
         {state.status !== "idle" && (
           <p
             role={state.status === "error" ? "alert" : "status"}

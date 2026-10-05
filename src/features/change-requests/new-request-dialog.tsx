@@ -238,9 +238,11 @@ export function NewRequestDialog({
                   {swapCandidates.map((c) => (
                     <option key={c.userId} value={c.userId}>
                       {c.displayName} —{" "}
-                      {c.shift
-                        ? `شیفت ${ASSIGNMENT_PRESENTATION[c.shift].name} (${c.shift})`
-                        : "استراحت"}
+                      {c.shift === null
+                        ? "تعیین‌نشده"
+                        : c.shift === "OFF"
+                          ? "استراحت"
+                          : `شیفت ${ASSIGNMENT_PRESENTATION[c.shift].name} (${c.shift})`}
                     </option>
                   ))}
                 </select>

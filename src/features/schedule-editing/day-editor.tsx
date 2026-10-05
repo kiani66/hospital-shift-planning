@@ -713,7 +713,7 @@ function NurseRow({
     onFocus: () => onFocusCell(col),
   });
   const control = cn(
-    "inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-sm font-bold transition-colors max-sm:flex-1 md:h-8 md:min-w-8 pointer-coarse:h-11 pointer-coarse:min-w-11",
+    "inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-sm font-bold transition-colors max-sm:h-11 max-sm:min-w-11 max-sm:flex-1 md:h-8 md:min-w-8 pointer-coarse:h-11 pointer-coarse:min-w-11",
     focusRing,
   );
 

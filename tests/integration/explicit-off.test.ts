@@ -462,6 +462,8 @@ describe("Explicit OFF end to end in the application", () => {
       { code: "OFF", covers: [], is_night: false, sort_order: 5 },
     ]);
     await edit([{ nurseId: U.icuNurse1.id, date: first, shift: "OFF" }]);
+    await complete();
+    await step(finalizeSchedule);
     const request = ok(
       await createChangeRequest(await ctx(U.icuNurse1.id), {
         scheduleId: id,
@@ -478,7 +480,7 @@ describe("Explicit OFF end to end in the application", () => {
     ).rejects.toThrow();
     await expect(
       db.execute(
-        sql`insert into shift_assignments (schedule_id, user_id, date, shift_code, updated_by) values (${id}, ${U.icuNurse2.id}, ${first}, 'UNKNOWN', ${U.icuHead.id})`,
+        sql`insert into shift_assignments (schedule_id, user_id, date, shift_code, updated_by) values (${DEMO_SCHEDULE.id}, ${U.icuNurse2.id}, ${isoDate("2026-10-25")}, 'UNKNOWN', ${U.icuHead.id})`,
       ),
     ).rejects.toThrow();
   });
@@ -558,6 +560,11 @@ describe("Head Nurse direct swaps", () => {
         code: "INVALID_STATE",
         reason: "EDIT_ASSIGNMENT_OUTSIDE_REVISION_SCOPE",
       },
+    });
+    await step(submitSchedule);
+    expect(await exchange(U.icuNurse1.id, U.icuHead.id)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_STATE", reason: "CHANGE_WHILE_SUBMITTED" },
     });
   });
   it("refuses stale revisions and undecided cells without writes", async () => {

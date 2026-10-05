@@ -142,7 +142,10 @@ export async function evaluateScheduleChange(
         date: edit.date,
         revisionDates: new Set(openRevision.dates),
       });
-      if (!permitted.allowed)
+      if (
+        !permitted.allowed &&
+        permitted.reason === "DATE_OUTSIDE_REVISION_SCOPE"
+      )
         throw new InvalidStateError(
           schedule.status,
           ASSIGNMENT_EDIT_REFUSALS.DATE_OUTSIDE_REVISION_SCOPE,
