@@ -10,7 +10,8 @@ import type { ActionResult } from "@/application/result";
 import type { PreferenceValue } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
 
-import { saveErrorMessage } from "./presentation";
+import { isRetryableSaveError, saveErrorMessage } from "./presentation";
+import type { SaveResult } from "./save-queue";
 
 /**
  * Thin adapters: load the trusted actor, call the use case, translate the
@@ -20,19 +21,23 @@ import { saveErrorMessage } from "./presentation";
  * window check and concurrency all live in the use cases.
  */
 
-export type PreferenceSaveState =
-  | { readonly ok: true; readonly value: PreferenceValue | null }
-  | { readonly ok: false; readonly message: string };
+export type PreferenceSaveState = SaveResult;
 
 function respond(
   result: ActionResult<{ value: PreferenceValue | null }>,
 ): PreferenceSaveState {
-  // Success re-renders the page with the saved value and summary; a failure
-  // re-renders too, so a window that just closed shows as read-only.
+  if (!result.ok)
+    // No refresh: the day keeps showing what was not saved and why (the
+    // stored value is unchanged). A reload shows a window that just closed.
+    return {
+      ok: false,
+      message: saveErrorMessage(result.error),
+      retryable: isRetryableSaveError(result.error),
+    };
+  // Keeps the server-rendered page (and the router cache) in step with
+  // what is stored; the client applies it to idle days only.
   refresh();
-  return result.ok
-    ? { ok: true, value: result.data.value }
-    : { ok: false, message: saveErrorMessage(result.error) };
+  return { ok: true, value: result.data.value };
 }
 
 export async function setMyPreferenceAction(

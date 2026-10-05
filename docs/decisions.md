@@ -1496,3 +1496,50 @@ Open questions:
 Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preference-alignment.ts`,
 `features/schedule-review/preference-alignment.tsx`, `features/schedule-review/day-detail.tsx`
 (`CoverageSummary`) and `features/schedule-editing/` (`filterEditorNurses`, `emptyListMessage`).
+
+### D100 · Nurse preferences by month, auto-save and the shared shift display
+
+Presentation only: preferences stay optional, advisory, one value per nurse and day (D35), and
+editable only through an active window (D36). No schema change, no new command, and no change to
+who opens or closes collection (D30, D65), authorization, concurrency (D38) or notifications.
+
+- **Month navigation (amends D37).** `/preferences` shows one Jalali month (`?month=1405-09`, the
+  My Shifts convention, D98). Default: the month of the earliest schedule whose collection is
+  open for the nurse, else the current month. Previous / next go to any calendar month (open,
+  closed or without a schedule); the header names the month, its state («باز برای ثبت» / «بسته»)
+  and links to the other months that still have collection. `?schedule=<id>` (notifications,
+  D33) still selects a schedule, after authorization, and shows its month. A month lists the
+  nurse's visible schedules that share a day with it, ended ones included (history, as a direct
+  link already allowed); two departments in one month get a switcher, the open one first.
+  Calendar conversion stays in the presentation layer: the page hands the query a
+  `PreferenceMonthCalendar` port.
+- **Open month.** Days are grouped by their real Jalali dates («۱ آبان», «۲ تا ۸ آبان»), never by
+  week number, in collapsible sections (`aria-expanded`); the section with today opens first, else
+  the first one. A compact summary counts M, E, N, ME, OFF and «بدون ترجیح» from the days already
+  loaded and follows each confirmed save; «بدون ترجیح» is neutral information, never a warning.
+  A day says «ترجیح من: شب» (short name) or «بدون ترجیح»; the explicit «پاک کردن» stays the only
+  way to clear, and no-preference is never a sixth option.
+- **Closed month.** When no day can be edited the month is a read-only summary: «مهلت ثبت ترجیحات
+  این ماه به پایان رسیده است» (or the reason that applies, D36), the counts, the submitted
+  preferences, and «مشاهده شیفت‌های من» to that month in My Shifts. Closing deletes nothing; if a
+  window is active again, the same values are editable again.
+- **Auto-save (amends D38's UI note).** A tap saves that day at once. Per day, saves are sent one
+  at a time; a choice made while one is in flight is queued and only the latest is sent, so the
+  last value chosen is the last one stored and stale responses never overwrite the screen.
+  «در حال ذخیره…», then «ذخیره شد ✓» (fades after about two seconds). A failure never stays shown
+  as chosen: the day returns to the stored value and says «… ذخیره نشد» with the reason, plus
+  «تلاش مجدد» when sending again can help (not for a closed window or a forbidden day). A failed
+  save does not refresh the page, so its message stays. Enforced in
+  `features/preferences/save-queue.ts`.
+- **Shared shift display (extends D42).** `SHIFT_DISPLAY` in `features/shifts/catalog.ts` gives
+  every displayable code its name, icon and existing color token: M صبح (sun), E عصر (sunset),
+  N شب (moon), ME طولانی (timer), OFF استراحت (bed, the existing `shift-off` token).
+  `ShiftDisplayCode` is a presentation type (`ShiftCode | "OFF"`), not a domain one: OFF is a
+  preference value here, not an assignment. `ShiftChip` accepts it and an optional icon. Icons
+  are decorative (`aria-hidden`) and always beside the code or name.
+- **Holidays.** Days carry the `HolidayCalendar` result (D41) and show a small «تعطیل» label;
+  informational only, it never changes what may be chosen. No source is connected yet
+  (`NO_HOLIDAY_DATA`), so none is shown.
+
+Enforced in `application/preferences/queries.ts` (`getMyPreferencesPage`),
+`features/preferences/` and `features/shifts/`.
