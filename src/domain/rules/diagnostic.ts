@@ -22,6 +22,7 @@ export type RuleCode = Violation["rule"];
 export const RULE_SCOPES: Readonly<Record<RuleCode, DiagnosticScope>> = {
   // A nurse's own sequence of days: a Night followed by any shift.
   NIGHT_REST: "NURSE",
+  UNDECIDED: "ASSIGNMENT",
   DUPLICATE_ASSIGNMENT: "ASSIGNMENT",
   OUTSIDE_PERIOD: "ASSIGNMENT",
   // One coverage period of one day.

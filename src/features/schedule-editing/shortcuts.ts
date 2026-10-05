@@ -1,4 +1,4 @@
-import type { ShiftCode } from "@/domain/shifts/shift-type";
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 
 /**
  * The day editor's keyboard model. Keys are matched by physical position
@@ -10,7 +10,7 @@ import type { ShiftCode } from "@/domain/shifts/shift-type";
  * button that does the same.
  */
 export type EditorKeyCommand =
-  | { readonly type: "SET"; readonly shift: ShiftCode }
+  | { readonly type: "SET"; readonly shift: AssignmentCode }
   | { readonly type: "CLEAR" }
   /** Move to the same control of the previous (-1) or next (+1) nurse. */
   | { readonly type: "ROW"; readonly delta: -1 | 1 }
@@ -28,10 +28,11 @@ export interface KeyLike {
   readonly shiftKey: boolean;
 }
 
-const SHIFT_KEYS: Readonly<Record<string, ShiftCode>> = {
+const SHIFT_KEYS: Readonly<Record<string, AssignmentCode>> = {
   KeyM: "M",
   KeyE: "E",
   KeyN: "N",
+  KeyO: "OFF",
   // L for "long" (طولانی): ME is one assignment, not M then E.
   KeyL: "ME",
 };
@@ -70,8 +71,9 @@ export const SHORTCUT_HELP: readonly { keys: string; action: string }[] = [
   { keys: "M", action: "شیفت صبح" },
   { keys: "E", action: "شیفت عصر" },
   { keys: "N", action: "شیفت شب" },
+  { keys: "O", action: "استراحت" },
   { keys: "L", action: "شیفت طولانی (صبح + عصر)" },
-  { keys: "Delete / Backspace", action: "بدون شیفت (پاک کردن)" },
+  { keys: "Delete / Backspace", action: "تعیین‌نشده (پاک کردن)" },
   { keys: "↑ / ↓", action: "پرستار قبلی / بعدی" },
   { keys: "← / →", action: "گزینه بعدی / قبلی همان پرستار" },
   { keys: "[ / ]", action: "روز قبل / روز بعد" },

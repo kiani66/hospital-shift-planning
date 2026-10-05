@@ -6,7 +6,7 @@ import type { DatePeriod } from "@/domain/shared/period";
 import type { IsoDate } from "@/domain/shared/dates";
 import { monthGrid } from "@/features/calendar/month-grid";
 import { LinkPending } from "@/features/schedule-review/link-pending";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
@@ -150,10 +150,10 @@ export function ShiftCalendar({
                               <span
                                 className={cn(
                                   "truncate text-xs font-medium max-lg:hidden",
-                                  SHIFT_PRESENTATION[e.shift].accentClass,
+                                  ASSIGNMENT_PRESENTATION[e.shift].accentClass,
                                 )}
                               >
-                                {SHIFT_PRESENTATION[e.shift].name}
+                                {ASSIGNMENT_PRESENTATION[e.shift].name}
                               </span>
                             </span>
                           ))}

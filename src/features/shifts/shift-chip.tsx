@@ -1,6 +1,7 @@
+import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import { cn } from "@/lib/utils";
 
-import { SHIFT_DISPLAY, type ShiftDisplayCode } from "./catalog";
+import { ASSIGNMENT_PRESENTATION } from "./catalog";
 
 const SIZES = {
   xs: "min-w-6 px-1 text-[0.6875rem] leading-4",
@@ -15,13 +16,15 @@ const ICON_SIZES = {
 } as const;
 
 /**
- * A shift code as a chip. The code text is always rendered (left-to-right,
- * so "ME" never flips); the color comes from the catalog's `shift-*` tokens
- * and only reinforces it. `solid` fills the chip (a selected or assigned
- * shift); `soft` keeps a neutral surface with the shift's text color, for
+ * A scheduling decision as a chip. A working shift shows its code
+ * (left-to-right, so "ME" never flips); the color comes from the catalog's
+ * `shift-*` tokens and only reinforces it. OFF is not a working shift: it
+ * reads «استراحت» on a neutral surface. `solid` fills the chip (a selected or
+ * assigned decision); `soft` keeps a neutral surface with the text color, for
  * dense views where many chips would otherwise turn into a rainbow.
- * `label` adds the Persian name after the code; `icon` adds the catalog's
- * decorative glyph before it (hidden from assistive technology).
+ * `label` adds the Persian name after a working shift's code (OFF already
+ * shows it); `icon` adds the catalog's decorative glyph before it (hidden
+ * from assistive technology).
  */
 export function ShiftChip({
   code,
@@ -31,14 +34,14 @@ export function ShiftChip({
   icon = false,
   className,
 }: {
-  code: ShiftDisplayCode;
+  code: AssignmentCode;
   size?: keyof typeof SIZES;
   variant?: "solid" | "soft";
   label?: boolean | "full";
   icon?: boolean;
   className?: string;
 }) {
-  const shift = SHIFT_DISPLAY[code];
+  const shift = ASSIGNMENT_PRESENTATION[code];
   const Icon = shift.icon;
   return (
     <span
@@ -54,8 +57,10 @@ export function ShiftChip({
       {icon && (
         <Icon aria-hidden="true" className={cn("shrink-0", ICON_SIZES[size])} />
       )}
-      <span dir="ltr">{code}</span>
-      {label && (
+      <span dir={code === "OFF" ? undefined : "ltr"}>
+        {code === "OFF" ? shift.name : code}
+      </span>
+      {label && code !== "OFF" && (
         <span className="font-medium">
           {label === "full" ? shift.fullName : shift.name}
         </span>

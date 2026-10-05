@@ -1,19 +1,19 @@
 import type { ChangeRequestState } from "../../domain/change-requests/request";
 import type { IsoDate } from "../../domain/shared/dates";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import type { AssignmentCode } from "../../domain/shifts/shift-type";
 import type { DbExecutor } from "../../infrastructure/db/database";
 import { listAssignmentsFor } from "../../infrastructure/repositories/assignments";
 import type { ChangeRequestRecord } from "../../infrastructure/repositories/change-requests";
 import type { ScheduleRecord } from "../../infrastructure/repositories/schedules";
 import { listVersionAssignmentsFor } from "../../infrastructure/repositories/versions";
 
-/** The nurses' shifts on one day; a nurse without an entry is off. */
+/** The nurses' shifts on one day; a nurse without an entry is undecided. */
 export interface DayCells {
-  shiftOf(nurseId: string | null | undefined): ShiftCode | null;
+  shiftOf(nurseId: string | null | undefined): AssignmentCode | null;
 }
 
 const cellsOf = (
-  rows: readonly { nurseId: string; shift: ShiftCode }[],
+  rows: readonly { nurseId: string; shift: AssignmentCode }[],
 ): DayCells => {
   const byNurse = new Map(rows.map((r) => [r.nurseId, r.shift]));
   return { shiftOf: (id) => (id ? (byNurse.get(id) ?? null) : null) };

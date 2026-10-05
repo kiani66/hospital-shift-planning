@@ -15,7 +15,7 @@ import {
 } from "@/application/schedules/change-preview";
 import { adjustSchedule } from "@/application/schedules/schedule-changes";
 import { isIsoDate, type IsoDate } from "@/domain/shared/dates";
-import { SHIFT_CODES } from "@/domain/shifts/shift-type";
+import { ASSIGNMENT_CODES } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import {
@@ -67,7 +67,7 @@ export async function applyChangeRequestAction(
       requestId: value(formData, "requestId"),
       expectedRevision: Number(formData.get("expectedRevision")),
       replacementNurseId: value(formData, "replacementNurseId") ?? null,
-      // OTHER: "" is "no shift" (off); absent means not decided.
+      // OTHER: "" explicitly clears to undecided; absent means no manual result was chosen.
       ...(typeof shift === "string" && {
         requesterShift: shift === "" ? null : shift,
       }),
@@ -94,8 +94,8 @@ const adjustmentCell = z.object({
   scheduleId: z.uuid(),
   nurseId: z.uuid(),
   date: z.string().refine(isIsoDate),
-  /** "" is "no shift". */
-  shift: z.enum([...SHIFT_CODES, ""]),
+  /** "" explicitly clears to undecided. */
+  shift: z.enum([...ASSIGNMENT_CODES, ""]),
 });
 
 const cellOf = (formData: FormData) => {

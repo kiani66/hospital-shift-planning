@@ -2,6 +2,9 @@
 
 import { refresh } from "next/cache";
 
+import { directSwap } from "@/application/schedules/direct-swap";
+import { requestErrorMessage } from "@/features/change-requests/presentation";
+import type { RequestFormState } from "@/features/change-requests/actions";
 import { setAssignments } from "@/application/schedules/edit-assignments";
 import type { AssignmentChange } from "@/domain/schedule/assignment-editing";
 import { requireRequestContext } from "@/features/auth/guards";
@@ -36,4 +39,28 @@ export async function setAssignmentsAction(
   return result.ok
     ? { ok: true, revision: result.data.revision, changes: result.data.changes }
     : { ok: false, ...editFailure(result.error) };
+}
+
+export async function directSwapAction(
+  _previous: RequestFormState,
+  formData: FormData,
+): Promise<RequestFormState> {
+  const ctx = await requireRequestContext();
+  const result = await directSwap(ctx, {
+    scheduleId: formData.get("scheduleId"),
+    expectedRevision: Number(formData.get("expectedRevision")),
+    date: formData.get("date"),
+    firstNurseId: formData.get("firstNurseId"),
+    secondNurseId: formData.get("secondNurseId"),
+    reasonCode: formData.get("reasonCode"),
+    note: formData.get("note"),
+  });
+  refresh();
+  return result.ok
+    ? { status: "success", message: "جابه‌جایی ثبت شد.", at: Date.now() }
+    : {
+        status: "error",
+        message: requestErrorMessage("adjust", result.error),
+        at: Date.now(),
+      };
 }

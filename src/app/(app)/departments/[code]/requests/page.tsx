@@ -11,7 +11,7 @@ import {
   type ChangeRequestStatus,
 } from "@/domain/change-requests/model";
 import type { RequestResolution } from "@/domain/change-requests/plan-change";
-import { isShiftCode } from "@/domain/shifts/shift-type";
+import { isAssignmentCode } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
 import { QueueList, QueueTabs } from "@/features/change-request-review/queue";
 import { RequestReview } from "@/features/change-request-review/request-review";
@@ -59,9 +59,9 @@ export default async function DepartmentRequestsPage({
   const resolution: RequestResolution = {
     ...(typeof query.replacement === "string" &&
       query.replacement !== "" && { replacementNurseId: query.replacement }),
-    ...(query.shift === "OFF"
+    ...(query.shift === "UNDECIDED"
       ? { requesterShift: null }
-      : isShiftCode(query.shift) && { requesterShift: query.shift }),
+      : isAssignmentCode(query.shift) && { requesterShift: query.shift }),
   };
 
   const [queue, review] = await Promise.all([

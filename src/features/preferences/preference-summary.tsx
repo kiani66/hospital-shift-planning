@@ -42,8 +42,8 @@ export function PreferenceSummary({
             data-summary={o.value}
             className="flex min-h-8 items-center gap-1.5 rounded-md border px-1.5"
           >
-            <ShiftChip code={o.value} size="xs" icon />
-            <span>{o.short}</span>
+            {/* OFF's chip already reads «استراحت»; the others add their name. */}
+            <ShiftChip code={o.value} size="xs" icon label />
             <span className="ms-auto font-semibold tabular-nums">
               <span className="sr-only">: </span>
               {faNumber(counts.byValue[o.value])}

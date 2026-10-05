@@ -3,8 +3,9 @@ import { Bed, Moon, Sun, Sunset, Timer, type LucideIcon } from "lucide-react";
 import {
   SHIFT_TYPES,
   crossesMidnight,
+  isWorkingShift,
+  type AssignmentCode,
   type BaseShift,
-  type PreferenceValue,
   type ShiftCode,
 } from "@/domain/shifts/shift-type";
 
@@ -34,9 +35,10 @@ export interface ShiftPresentation<C extends string = ShiftCode> {
   readonly icon: LucideIcon;
 }
 
-export const SHIFT_PRESENTATION: Readonly<
-  Record<ShiftCode, ShiftPresentation>
-> = {
+/** The working shifts (`ShiftCode`): what has hours and staffs coverage. */
+export const SHIFT_PRESENTATION: Readonly<{
+  [C in ShiftCode]: ShiftPresentation<C>;
+}> = {
   M: {
     code: "M",
     name: "صبح",
@@ -79,36 +81,6 @@ export const SHIFT_PRESENTATION: Readonly<
   },
 };
 
-/**
- * Every code a day can be shown with: the assignable shifts plus OFF (rest),
- * which today exists only as a preference value (D35). A presentation type,
- * not a domain one: the domain decides what may be assigned or preferred,
- * this only decides how each code looks.
- */
-export type ShiftDisplayCode = ShiftCode | "OFF";
-
-/** OFF (rest): the neutral `shift-off` token, a bed, and «استراحت». */
-export const OFF_PRESENTATION: ShiftPresentation<"OFF"> = {
-  code: "OFF",
-  name: "استراحت",
-  fullName: "استراحت",
-  tokenClass: "bg-shift-off text-shift-off-foreground",
-  accentClass: "text-shift-off-foreground",
-  dotClass: "bg-shift-off-foreground",
-  softClass: "bg-shift-off/45",
-  icon: Bed,
-};
-
-/** The one visual identity of every displayable code (code, name, icon, color). */
-export const SHIFT_DISPLAY: Readonly<
-  Record<ShiftDisplayCode, ShiftPresentation<ShiftDisplayCode>>
-> = { ...SHIFT_PRESENTATION, OFF: OFF_PRESENTATION };
-
-/** Every preference value has a display entry (compile-time check). */
-export const preferencePresentation = (
-  value: PreferenceValue,
-): ShiftPresentation<ShiftDisplayCode> => SHIFT_DISPLAY[value];
-
 /** Names of the coverage periods (what staffing is counted against). */
 export const COVERAGE_PERIOD_NAMES: Readonly<Record<BaseShift, string>> = {
   M: "صبح",
@@ -123,8 +95,42 @@ export const faClock = (time: string) =>
   time.replace(/\d/g, (d) => PERSIAN_DIGITS[Number(d)]!);
 
 /** "۰۷:۰۰ تا ۱۴:۰۰", or "۱۹:۰۰ تا ۰۷:۰۰ روز بعد" for a shift that crosses midnight. */
-export function shiftHoursLabel(code: ShiftCode): string {
+export function shiftHoursLabel(code: AssignmentCode): string {
+  if (!isWorkingShift(code)) return "استراحت";
   const shift = SHIFT_TYPES[code];
   const range = `${faClock(shift.start)} تا ${faClock(shift.end)}`;
   return crossesMidnight(shift) ? `${range} روز بعد` : range;
 }
+
+/**
+ * OFF (rest) is an explicit scheduling decision, not a working shift: it has
+ * no hours and no shift color. Neutral tokens and a bed keep it from looking
+ * like work; its Persian name «استراحت» is what screens show, never the code.
+ */
+export const OFF_PRESENTATION: ShiftPresentation<"OFF"> = {
+  code: "OFF",
+  name: "استراحت",
+  fullName: "استراحت",
+  tokenClass: "bg-muted text-muted-foreground",
+  accentClass: "text-muted-foreground",
+  dotClass: "bg-muted-foreground",
+  softClass: "bg-muted",
+  icon: Bed,
+};
+
+/**
+ * The one visual identity of every explicit scheduling decision (code,
+ * name, icon, color): the working shifts plus OFF. A missing assignment is
+ * UNDECIDED and has no entry (see `assignmentName`). Preference values are
+ * the same codes (a wish, not a decision), so they share these entries.
+ */
+export const ASSIGNMENT_PRESENTATION: Readonly<{
+  [C in AssignmentCode]: ShiftPresentation<C>;
+}> = { ...SHIFT_PRESENTATION, OFF: OFF_PRESENTATION };
+
+export const assignmentName = (code: AssignmentCode | null): string =>
+  code === null
+    ? "تعیین‌نشده"
+    : code === "OFF"
+      ? "استراحت"
+      : `${SHIFT_PRESENTATION[code].name} (${code})`;

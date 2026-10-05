@@ -3,7 +3,10 @@ import type { RuleCode } from "@/domain/rules/diagnostic";
 import type { StaffingBounds, StaffingStatus } from "@/domain/rules/staffing";
 import type { DayHealth } from "@/domain/schedule/day-health";
 import type { IsoDate } from "@/domain/shared/dates";
-import type { PreferenceValue, ShiftCode } from "@/domain/shifts/shift-type";
+import type {
+  PreferenceValue,
+  AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 
@@ -33,23 +36,22 @@ export interface HealthPresentation {
 /**
  * VALID is worded as the result of a check («بدون مغایرت», «مغایرتی یافت
  * نشد»; D51), not as a quality of the day: it only says that no violation
- * was found among the implemented, applicable rules. Staffing requirements
- * are not defined yet, so nothing here may imply a fully staffed, complete,
- * approved or finalization-ready day.
+ * was found among the implemented, applicable rules. The checks now include decision completeness and staffing minima, but
+ * the wording still claims only the result of the implemented rules.
  */
 export const HEALTH_PRESENTATION: Readonly<
   Record<DayHealth, HealthPresentation>
 > = {
   UNPLANNED: {
     label: "برنامه‌ریزی‌نشده",
-    description: "برای این روز هنوز شیفتی ثبت نشده است.",
+    description: "برای این روز هنوز تصمیمی ثبت نشده است.",
     tone: "unplanned",
     cellClass: "bg-health-unplanned/5",
   },
   VALID: {
     label: "بدون مغایرت",
     description:
-      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تأمین نفرات هنوز بررسی نمی‌شود.",
+      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.",
     tone: "valid",
     cellClass: "",
   },
@@ -63,7 +65,7 @@ export const HEALTH_PRESENTATION: Readonly<
 };
 
 /** What VALID does and does not mean, once for the whole month (legend). */
-export const VALID_CAVEAT = `«${HEALTH_PRESENTATION.VALID.label}» یعنی در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تأمین نفرات هنوز بررسی نمی‌شود.`;
+export const VALID_CAVEAT = `«${HEALTH_PRESENTATION.VALID.label}» یعنی در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.`;
 
 export const HOLIDAY_LABEL = "تعطیل رسمی";
 
@@ -85,6 +87,7 @@ export const dayCount = (n: number) => `${faNumber(n)} روز`;
 /** Short title of each rule, shown above its message. */
 export const RULE_TITLES: Readonly<Record<RuleCode, string>> = {
   NIGHT_REST: "استراحت پس از شیفت شب",
+  UNDECIDED: "تصمیم تعیین‌نشده",
   DUPLICATE_ASSIGNMENT: "بیش از یک شیفت در یک روز",
   OUTSIDE_PERIOD: "شیفت خارج از دوره برنامه",
   STAFFING: "تأمین نفرات",
@@ -101,6 +104,8 @@ export function findingMessage(finding: ReviewFinding): string {
   const name = `«${finding.nurses.map((n) => n.displayName).join("، ")}»`;
   const v = finding.violation;
   switch (v.rule) {
+    case "UNDECIDED":
+      return `برای ${name} در ${day(v.date)} هنوز تصمیمی ثبت نشده است؛ شیفت کاری یا استراحت را تعیین کنید.`;
     case "NIGHT_REST":
       return `${name} در ${day(v.nightDate)} شیفت شب دارد و روز بعد (${day(v.date)}) شیفت ${SHIFT_PRESENTATION[v.shift].name} برایش ثبت شده است؛ پس از شیفت شب، روز بعد باید استراحت باشد.`;
     case "DUPLICATE_ASSIGNMENT":
@@ -123,7 +128,7 @@ export interface FindingFact {
   readonly role: string;
   readonly date: IsoDate;
   readonly dateLabel: string;
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
 }
 
 /**
@@ -149,6 +154,7 @@ export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
           shift: v.shift,
         },
       ];
+    case "UNDECIDED":
     case "DUPLICATE_ASSIGNMENT":
     case "OUTSIDE_PERIOD":
       return [
@@ -180,6 +186,8 @@ export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
 export function findingResolution(finding: ReviewFinding): string {
   const v = finding.violation;
   switch (v.rule) {
+    case "UNDECIDED":
+      return "برای رفع: شیفت کاری یا استراحت را تعیین کنید.";
     case "NIGHT_REST":
       return `برای رفع: شیفت ${SHIFT_PRESENTATION[v.shift].name} روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.`;
     case "DUPLICATE_ASSIGNMENT":
@@ -278,10 +286,10 @@ export const ALIGNMENT_LABELS = {
   differs: "مغایر ترجیح",
   pending: "ترجیح ثبت‌شده، در انتظار تخصیص",
   noPreference: "ترجیحی ثبت نشده",
-  unassigned: "بدون شیفت در این روز",
+  unassigned: "تعیین‌نشده در این روز",
 } as const;
 
-/** Why the four fit counts add up to the roster and «بدون شیفت» does not join them. */
+/** Why the four fit counts add up to the roster and «تعیین‌نشده» does not join them. */
 export const alignmentPartitionNote = (rostered: number) =>
   `هر نفر فقط در یکی از این چهار دسته است (جمع: ${faNumber(rostered)} نفر).`;
 

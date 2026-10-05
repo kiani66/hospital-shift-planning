@@ -7,7 +7,7 @@ import {
   scheduleChanges,
   type ScheduleChangeKind,
 } from "../db/schema";
-import { asIsoDate, asShiftCode } from "./mappers";
+import { asIsoDate, asAssignmentCode } from "./mappers";
 
 /**
  * Changes applied to a schedule after finalization (an applied request or a
@@ -103,8 +103,12 @@ export async function listScheduleChanges(
       .map((cell) => ({
         nurseId: cell.userId,
         date: asIsoDate(cell.date),
-        before: cell.beforeShiftCode ? asShiftCode(cell.beforeShiftCode) : null,
-        after: cell.afterShiftCode ? asShiftCode(cell.afterShiftCode) : null,
+        before: cell.beforeShiftCode
+          ? asAssignmentCode(cell.beforeShiftCode)
+          : null,
+        after: cell.afterShiftCode
+          ? asAssignmentCode(cell.afterShiftCode)
+          : null,
       })),
   }));
 }

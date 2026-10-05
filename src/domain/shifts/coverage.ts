@@ -1,6 +1,8 @@
 import {
   SHIFT_CODES,
   SHIFT_TYPES,
+  isWorkingShift,
+  type AssignmentCode,
   type BaseShift,
   type ShiftCode,
 } from "./shift-type";
@@ -18,9 +20,11 @@ export const emptyShiftCounts = (): Record<ShiftCode, number> => ({
   ME: 0,
 });
 
-export function countByShift(shifts: Iterable<ShiftCode>): ShiftCounts {
+export function countByShift(
+  shifts: Iterable<AssignmentCode | null>,
+): ShiftCounts {
   const counts = emptyShiftCounts();
-  for (const shift of shifts) counts[shift] += 1;
+  for (const shift of shifts) if (isWorkingShift(shift)) counts[shift] += 1;
   return counts;
 }
 

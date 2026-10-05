@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { eachDay, isoDate } from "@/domain/shared/dates";
 import { PREFERENCE_VALUES } from "@/domain/shifts/shift-type";
 import { formatJalaliDate } from "@/features/calendar/jalali";
-import { SHIFT_DISPLAY } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 
 import {
   CLOSED_HEADLINE,
@@ -32,9 +32,9 @@ describe("preference options", () => {
     ]);
     for (const o of PREFERENCE_OPTIONS) {
       expect(o.code).toBe(o.value);
-      expect(o.short).toBe(SHIFT_DISPLAY[o.value].name);
-      expect(o.className).toBe(SHIFT_DISPLAY[o.value].tokenClass);
-      expect(o.icon).toBe(SHIFT_DISPLAY[o.value].icon);
+      expect(o.short).toBe(ASSIGNMENT_PRESENTATION[o.value].name);
+      expect(o.className).toBe(ASSIGNMENT_PRESENTATION[o.value].tokenClass);
+      expect(o.icon).toBe(ASSIGNMENT_PRESENTATION[o.value].icon);
     }
     // "No preference" is the absence of a value, never a sixth option.
     expect(PREFERENCE_OPTIONS.map((o) => o.short)).not.toContain(NO_PREFERENCE);

@@ -6,9 +6,12 @@ import type {
   AssignmentEditDenial,
 } from "@/domain/schedule/assignment-editing";
 import { ASSIGNMENT_EDIT_REFUSALS } from "@/domain/schedule/assignment-editing";
-import type { PreferenceValue, ShiftCode } from "@/domain/shifts/shift-type";
+import type {
+  PreferenceValue,
+  AssignmentCode,
+} from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 
 /**
  * Wording of the Head Nurse's assignment editing. Pure: the server action
@@ -75,9 +78,13 @@ export const NETWORK_FAILURE: EditFailure = {
 /** The id of a nurse's row in the day editor; findings link to it. */
 export const nurseRowId = (userId: string) => `nurse-${userId}`;
 
-/** "صبح (M)", or "بدون شیفت". */
-export const shiftWord = (shift: ShiftCode | null) =>
-  shift === null ? "بدون شیفت" : `${SHIFT_PRESENTATION[shift].name} (${shift})`;
+/** "صبح (M)", or "تعیین‌نشده". */
+export const shiftWord = (shift: AssignmentCode | null) =>
+  shift === null
+    ? "تعیین‌نشده"
+    : shift === "OFF"
+      ? "استراحت"
+      : `${ASSIGNMENT_PRESENTATION[shift].name} (${shift})`;
 
 /**
  * One sentence for a saved edit. `names` maps nurse ids to display names;
@@ -144,7 +151,7 @@ export function preferenceFitLabel(fit: PreferenceFit): string | null {
 export const NO_PREFERENCE_LABEL = "ترجیحی ثبت نشده";
 
 /** The editor's list filters. They only choose rows; they never change assignments. */
-export type ShiftFilter = "ALL" | "UNASSIGNED" | ShiftCode;
+export type ShiftFilter = "ALL" | "UNASSIGNED" | AssignmentCode;
 
 export interface EditorFilters {
   readonly shift: ShiftFilter;
@@ -165,7 +172,7 @@ export const normalizeName = (text: string) =>
 
 export const matchesShiftFilter = (
   filter: ShiftFilter,
-  shift: ShiftCode | null,
+  shift: AssignmentCode | null,
 ) =>
   filter === "ALL" ||
   (filter === "UNASSIGNED" ? shift === null : shift === filter);
@@ -183,7 +190,7 @@ export function filterEditorNurses<
   },
 >(
   nurses: readonly N[],
-  shiftOf: (userId: string) => ShiftCode | null,
+  shiftOf: (userId: string) => AssignmentCode | null,
   filters: EditorFilters,
   kept: ReadonlySet<string> = new Set(),
 ): N[] {

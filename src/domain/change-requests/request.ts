@@ -3,7 +3,11 @@ import { compareIsoDates, type IsoDate } from "../shared/dates";
 import { InvalidStateError, ValidationError } from "../shared/errors";
 import { isInPeriod, type DatePeriod } from "../shared/period";
 import { err, ok, type Result } from "../shared/result";
-import type { ShiftCode } from "../shifts/shift-type";
+import {
+  isWorkingShift,
+  type AssignmentCode,
+  type ShiftCode,
+} from "../shifts/shift-type";
 import {
   acceptsChangeRequests,
   CHANGE_REQUEST_REFUSALS,
@@ -16,8 +20,8 @@ import { checkReason, type ChangeReason } from "./reason";
 /** The swap partner named by the requester, with their shift that day as the requester saw it. */
 export interface SwapCounterpart {
   readonly nurseId: string;
-  /** Null: the partner is off that day. */
-  readonly shift: ShiftCode | null;
+  /** Null: no explicit decision is recorded for the partner. */
+  readonly shift: AssignmentCode | null;
 }
 
 export interface NewChangeRequestInput {
@@ -30,8 +34,8 @@ export interface NewChangeRequestInput {
     readonly period: DatePeriod;
   };
   readonly requesterId: string;
-  /** The requester's shift that day as they see it (D11); null when off. */
-  readonly requesterShift: ShiftCode | null;
+  /** The requester's shift that day as they see it (D11); null when undecided. */
+  readonly requesterShift: AssignmentCode | null;
   /** CHANGE_SHIFT only: the shift asked for. */
   readonly targetShift: ShiftCode | null;
   /** SWAP only. */
@@ -47,10 +51,10 @@ export interface NewChangeRequest {
   readonly type: ChangeRequestType;
   readonly date: IsoDate;
   readonly requesterId: string;
-  readonly requesterShift: ShiftCode;
+  readonly requesterShift: AssignmentCode;
   readonly targetShift: ShiftCode | null;
   readonly counterpartId: string | null;
-  readonly counterpartShift: ShiftCode | null;
+  readonly counterpartShift: AssignmentCode | null;
   readonly reasonCode: string;
   readonly note: string | null;
   readonly status: "PENDING";
@@ -69,7 +73,7 @@ const invalid = (message: string, field: string) =>
  * - The day must lie in the period and not in the past (historical
  *   correction is out of scope).
  * - It is about the requester's own assignment: they must be on the roster
- *   and work that day.
+ *   and have an explicit decision that day; UNAVAILABLE requires a working shift.
  * - CHANGE_SHIFT names a different shift; SWAP names another rostered nurse
  *   whose shift that day differs (same day, same schedule); other types name
  *   neither.
@@ -97,6 +101,9 @@ export function validateNewChangeRequest(
     return invalid("You are not on this schedule's roster", "requesterId");
   if (requesterShift === null)
     return invalid("You have no assignment on this day", "date");
+
+  if (type === "UNAVAILABLE" && !isWorkingShift(requesterShift))
+    return invalid("Unavailability requires a working shift", "type");
 
   if (type === "CHANGE_SHIFT") {
     if (input.targetShift === null)
@@ -156,18 +163,18 @@ export interface ChangeRequestState {
   readonly date: IsoDate;
   readonly requesterId: string;
   /** Snapshot: the requester's shift when the request was made (or last refreshed). */
-  readonly requesterShift: ShiftCode;
+  readonly requesterShift: AssignmentCode;
   readonly targetShift: ShiftCode | null;
   readonly counterpartId: string | null;
   /** Snapshot: the partner's shift when the request was made (or last refreshed). */
-  readonly counterpartShift: ShiftCode | null;
+  readonly counterpartShift: AssignmentCode | null;
   readonly consent: SwapConsentStatus | null;
 }
 
 /** Both participants' shifts that day in the schedule's current working copy. */
 export interface CurrentSwapCells {
-  readonly requester: ShiftCode | null;
-  readonly counterpart: ShiftCode | null;
+  readonly requester: AssignmentCode | null;
+  readonly counterpart: AssignmentCode | null;
 }
 
 /** Closing decisions on a request. Every one needs a pending request. */
@@ -276,7 +283,7 @@ export function respondToSwap(
  * becomes both participants' current shifts and the partner's consent is
  * asked again (an earlier consent was for a different swap). Unchanged
  * context keeps the request as it is. A swap that no longer makes sense
- * (the requester is now off, or both have the same shift) cannot be
+ * (the requester is now undecided, or both have the same decision) cannot be
  * refreshed: cancel it and ask anew.
  */
 export function refreshSwap(
@@ -284,8 +291,8 @@ export function refreshSwap(
   current: CurrentSwapCells,
 ): Result<
   {
-    requesterShift: ShiftCode;
-    counterpartShift: ShiftCode | null;
+    requesterShift: AssignmentCode;
+    counterpartShift: AssignmentCode | null;
     consent: SwapConsentStatus;
     changed: boolean;
   },

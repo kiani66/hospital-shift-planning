@@ -23,7 +23,7 @@ import {
   toJalali,
   type JalaliMonth,
 } from "@/features/calendar/jalali";
-import { SHIFT_DISPLAY } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 
 /**
  * Persian wording and calendar layout of the nurse's preference page. Dates
@@ -51,13 +51,13 @@ export interface PreferenceOption {
 
 /**
  * The approved preference values in display order, from the shared shift
- * presentation (`SHIFT_DISPLAY`). `OFF` exists in the persisted model as
+ * presentation (`ASSIGNMENT_PRESENTATION`). `OFF` exists in the persisted model as
  * "leave / unavailable" and is offered as a rest request (D35); it is a
  * preference here, not an assignment.
  */
 export const PREFERENCE_OPTIONS: readonly PreferenceOption[] =
   PREFERENCE_VALUES.map((value) => {
-    const shift = SHIFT_DISPLAY[value];
+    const shift = ASSIGNMENT_PRESENTATION[value];
     return {
       value,
       code: shift.code,

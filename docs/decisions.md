@@ -1445,23 +1445,18 @@ and the lifecycle (D58) are reused as they are.
 - **OFF follows the same lifecycle as M, E, N and ME (approved; amends D50).** A recorded
   preference is neither a match nor a mismatch until the Head Nurse makes an assignment decision.
 
-  | Preference     | Working copy for the day | Fit                               |
-  | -------------- | ------------------------ | --------------------------------- |
-  | M / E / N / ME | no row                   | awaiting assignment (`PENDING`)   |
-  | OFF            | no row                   | awaiting assignment (`PENDING`)   |
-  | X              | shift X                  | match                             |
-  | X (incl. OFF)  | another shift            | mismatch                          |
-  | OFF            | explicit OFF decision    | match — **not representable yet** |
+  | Preference     | Working copy for the day | Fit                             |
+  | -------------- | ------------------------ | ------------------------------- |
+  | M / E / N / ME | no row                   | awaiting assignment (`PENDING`) |
+  | OFF            | no row                   | awaiting assignment (`PENDING`) |
+  | X              | shift X                  | match                           |
+  | X (incl. OFF)  | another shift            | mismatch                        |
+  | OFF            | explicit OFF decision    | match (since D100)              |
 
   OFF is never a match merely because no working shift exists, and absence is never read as an
-  OFF decision. **Model limitation:** the working copy cannot record an explicit OFF decision.
-  `shift_assignments.shift_code` is `NOT NULL` and references `shift_types` (M, E, N, ME only);
-  clearing a shift deletes the row (D48); there is no rest / leave / day-off record. "The Head
-  Nurse decided this nurse is off" and "not planned yet" are therefore the same stored state (no
-  row), and the audit trail is not a scheduling source. Until an explicit OFF decision is
-  approved (a schema and business-rule change: for example an OFF assignment value or a rest
-  record, and how it interacts with night rest D7, coverage D42, versions D17 and My Shifts D98),
-  an OFF wish shows as awaiting until a shift is assigned (mismatch) and is never shown as matched.
+  OFF decision. (The model limitation recorded here originally, that the working copy could not
+  record an explicit OFF decision, is resolved by D100: OFF is now an explicit assignment, and an
+  OFF wish matches an OFF decision.)
 
 - **Rows.** Each row: name (truncated, full name as `title`), the Head Nurse badge, the finding
   marker, then one line with the recorded preference and its fit: «ترجیح: شب» + «مطابق ترجیح»
@@ -1489,15 +1484,47 @@ and the lifecycle (D58) are reused as they are.
 
 Open questions:
 
-1. **Explicit OFF decision** (see the model limitation above): needs an approved schema and
-   business-rule change before an OFF wish can show as matched.
+1. ~~**Explicit OFF decision**~~: resolved by D100.
 2. **Staffing numbers** remain undecided (D44): storage, values, and whether a shortage blocks.
 
 Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preference-alignment.ts`,
 `features/schedule-review/preference-alignment.tsx`, `features/schedule-review/day-detail.tsx`
 (`CoverageSummary`) and `features/schedule-editing/` (`filterEditorNurses`, `emptyListMessage`).
 
-### D100 · Nurse preferences by month, auto-save and the shared shift display
+## D100 — Explicit OFF scheduling (approved; supersedes conflicting D40/D44/D48/D98/D99 details)
+
+- A missing assignment row is UNDECIDED («تعیین‌نشده»), never OFF. An assignment
+  with code OFF is an explicit rest decision («استراحت»). `ShiftCode` remains
+  M/E/N/ME; `AssignmentCode` includes OFF. The existing nurse/day unique key and
+  assignment/version foreign keys remain the source of truth.
+- Migration `0010_explicit_off` adds only the OFF reference value (sort order 5,
+  no coverage, not night) and keeps CHANGE_SHIFT targets working-only. It does
+  not backfill historical assignments. The staged personnel-number migration
+  stays outside the active migration journal.
+- Draft/Planning may contain undecided days. Finalize and Submit enforce an
+  explicit decision for every roster member on every period day and staffing
+  minima for M/E/N. A configured minimum overrides the default minimum of one;
+  ME retains its existing M+E coverage. Coverage and completeness are separate
+  findings. Staffing maxima remain warnings; insufficient minima are errors.
+- OFF contributes no working minutes, working shift count or coverage. My Shifts
+  counts rest days separately and applies the same publication/version rules to
+  OFF as working decisions. Missing legacy rows stay missing.
+- Any preference with an undecided assignment is pending. Identical explicit
+  preference/decision codes match; all other explicit decisions mismatch,
+  including working versus OFF. N followed by OFF satisfies night rest. No
+  automatic OFF decisions are created.
+- Approved UNAVAILABLE changes the working assignment to OFF. OFF may initiate
+  or participate in SWAP. OTHER may resolve to working/OFF or explicitly clear
+  to undecided. Audit payloads preserve OFF versus null.
+- Head Nurse direct swaps exchange two explicit decisions atomically through
+  the normal authorization, lifecycle, staffing/night-rest assessment and audit
+  pipeline. An open revision's existing date scope is enforced. Approved
+  snapshots remain immutable; revision discard restores explicit OFF too.
+- Necessary editor controls add OFF and physical O shortcut with a separate
+  clear operation. OFF uses neutral presentation. No preference redesign,
+  notification behavior, schedule copy or staffing configuration UI is added.
+
+### D101 · Nurse preferences by month, auto-save and the shared shift display
 
 Presentation only: preferences stay optional, advisory, one value per nurse and day (D35), and
 editable only through an active window (D36). No schema change, no new command, and no change to
@@ -1531,12 +1558,17 @@ who opens or closes collection (D30, D65), authorization, concurrency (D38) or n
   «تلاش مجدد» when sending again can help (not for a closed window or a forbidden day). A failed
   save does not refresh the page, so its message stays. Enforced in
   `features/preferences/save-queue.ts`.
-- **Shared shift display (extends D42).** `SHIFT_DISPLAY` in `features/shifts/catalog.ts` gives
-  every displayable code its name, icon and existing color token: M صبح (sun), E عصر (sunset),
-  N شب (moon), ME طولانی (timer), OFF استراحت (bed, the existing `shift-off` token).
-  `ShiftDisplayCode` is a presentation type (`ShiftCode | "OFF"`), not a domain one: OFF is a
-  preference value here, not an assignment. `ShiftChip` accepts it and an optional icon. Icons
-  are decorative (`aria-hidden`) and always beside the code or name.
+- **Shared shift display (extends D42, follows D100).** `features/shifts/catalog.ts` has one
+  presentation per explicit decision: `SHIFT_PRESENTATION` for the working shifts (`ShiftCode`)
+  and `ASSIGNMENT_PRESENTATION` for every `AssignmentCode` (the working shifts plus OFF), each
+  with its code, Persian name, icon and color: M صبح (sun), E عصر (sunset), N شب (moon), ME
+  طولانی (timer) on their `shift-*` tokens, OFF استراحت (bed) on D100's neutral tokens, so rest
+  never looks like work. An UNDECIDED day (no row) has no entry and reads «تعیین‌نشده»
+  (`assignmentName`). Preferences use the same entries: a preference value is one of the same
+  codes, a wish rather than a decision. `ShiftChip` takes an `AssignmentCode` and an optional
+  icon; OFF reads «استراحت», never the code. Icons are decorative (`aria-hidden`) and always
+  beside the code or name. Inside the preference choice buttons the codes M, E, N, ME and OFF
+  stay visible (with «استراحت» under OFF); OFF there is still only a wish (D35).
 - **Holidays.** Days carry the `HolidayCalendar` result (D41) and show a small «تعطیل» label;
   informational only, it never changes what may be chosen. No source is connected yet
   (`NO_HOLIDAY_DATA`), so none is shown.

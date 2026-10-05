@@ -398,3 +398,56 @@ describe("refreshSwap", () => {
     );
   });
 });
+
+describe("explicit OFF request contexts", () => {
+  it("an OFF nurse initiates a swap with a working nurse", () => {
+    expect(
+      validateNewChangeRequest(
+        base({
+          type: "SWAP",
+          requesterShift: "OFF",
+          counterpart: { nurseId: "ali", shift: "M" },
+        }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        requesterShift: "OFF",
+        counterpartShift: "M",
+        consent: "PENDING",
+      },
+    });
+  });
+  it("unavailability requires a working decision", () => {
+    expect(field(base({ requesterShift: "OFF" }))).toBe("type");
+  });
+  it("OFF and legacy undecided are different stale contexts", () => {
+    const request: ChangeRequestState = {
+      type: "SWAP",
+      status: "PENDING",
+      date: today,
+      requesterId: "sara",
+      requesterShift: "M",
+      targetShift: null,
+      counterpartId: "ali",
+      counterpartShift: "OFF",
+      consent: "ACCEPTED",
+    };
+    expect(
+      swapContextChanged(request, { requester: "M", counterpart: null }),
+    ).toBe(true);
+    expect(
+      swapContextChanged(request, { requester: "M", counterpart: "OFF" }),
+    ).toBe(false);
+    expect(
+      refreshSwap(request, { requester: "OFF", counterpart: "M" }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        requesterShift: "OFF",
+        counterpartShift: "M",
+        consent: "PENDING",
+      },
+    });
+  });
+});

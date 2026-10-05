@@ -2,6 +2,8 @@ import {
   SHIFT_CODES,
   SHIFT_TYPES,
   isNightShift,
+  isWorkingShift,
+  type AssignmentCode,
   shiftDurationMinutes,
   type ShiftCode,
 } from "./shift-type";
@@ -15,24 +17,30 @@ import {
  */
 export interface ShiftTotals {
   readonly shiftCount: number;
+  readonly offCount: number;
   readonly minutes: number;
   readonly nightCount: number;
   readonly byCode: Readonly<Record<ShiftCode, number>>;
 }
 
-export function summarizeShifts(codes: Iterable<ShiftCode>): ShiftTotals {
+export function summarizeShifts(
+  codes: Iterable<AssignmentCode | null>,
+): ShiftTotals {
   const byCode = Object.fromEntries(SHIFT_CODES.map((c) => [c, 0])) as Record<
     ShiftCode,
     number
   >;
   let shiftCount = 0;
+  let offCount = 0;
   let minutes = 0;
   let nightCount = 0;
   for (const code of codes) {
+    if (code === "OFF") offCount++;
+    if (!isWorkingShift(code)) continue;
     shiftCount++;
     byCode[code]++;
     minutes += shiftDurationMinutes(SHIFT_TYPES[code]);
     if (isNightShift(code)) nightCount++;
   }
-  return { shiftCount, minutes, nightCount, byCode };
+  return { shiftCount, offCount, minutes, nightCount, byCode };
 }

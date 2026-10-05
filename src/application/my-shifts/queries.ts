@@ -14,7 +14,10 @@ import {
   type DatePeriod,
 } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
-import type { ShiftCode } from "../../domain/shifts/shift-type";
+import {
+  isWorkingShift,
+  type AssignmentCode,
+} from "../../domain/shifts/shift-type";
 import {
   summarizeShifts,
   type ShiftTotals,
@@ -47,7 +50,7 @@ import type { AppContext } from "../use-case";
 
 export interface MyShiftEntry {
   readonly scheduleId: string;
-  readonly shift: ShiftCode;
+  readonly shift: AssignmentCode;
   readonly publication: ShiftPublication;
   /**
    * The day is in an open revision of the approved schedule: a change may
@@ -79,6 +82,7 @@ export interface MyShiftSchedule {
   readonly publication: ShiftPublication;
   /** The actor's visible shifts of this schedule inside the requested period. */
   readonly shiftCount: number;
+  readonly offCount: number;
   /** Days of the requested period in an open revision (OFFICIAL only). */
   readonly pendingChangeDates: readonly IsoDate[];
 }
@@ -167,7 +171,9 @@ async function visibleSchedule(
       period: schedule.period,
       status: schedule.status,
       publication,
-      shiftCount: entries.size,
+      shiftCount: [...entries.values()].filter((e) => isWorkingShift(e.shift))
+        .length,
+      offCount: [...entries.values()].filter((e) => e.shift === "OFF").length,
       pendingChangeDates,
     },
     entries,

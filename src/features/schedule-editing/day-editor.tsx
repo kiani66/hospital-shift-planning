@@ -35,14 +35,14 @@ import {
 } from "@/domain/schedule/assignment-editing";
 import type { IsoDate } from "@/domain/shared/dates";
 import {
-  SHIFT_CODES,
+  ASSIGNMENT_CODES,
   type PreferenceValue,
-  type ShiftCode,
+  type AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import { PreferenceContext } from "@/features/schedule-review/preference-alignment";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 import type { DayOption } from "./range-form";
@@ -67,7 +67,7 @@ export interface EditorNurse {
   readonly userId: string;
   readonly displayName: string;
   readonly role: MembershipRole;
-  readonly shift: ShiftCode | null;
+  readonly shift: AssignmentCode | null;
   readonly preference: PreferenceValue | null;
   /** Involved in a finding on this day (or one involving it). */
   readonly flagged: boolean;
@@ -75,8 +75,8 @@ export interface EditorNurse {
 
 export type { DayOption } from "./range-form";
 
-/** A nurse's controls in reading order: the four shifts, "no shift", the range form. */
-const COLUMNS = [...SHIFT_CODES, null, "RANGE"] as const;
+/** A nurse's controls in reading order: working decisions, OFF, clear to undecided, the range form. */
+const COLUMNS = [...ASSIGNMENT_CODES, null, "RANGE"] as const;
 const LAST_COLUMN = COLUMNS.length - 1;
 
 type Status =
@@ -243,7 +243,7 @@ export function DayEditor({
     });
   }
 
-  function assign(nurseId: string, shift: ShiftCode | null) {
+  function assign(nurseId: string, shift: AssignmentCode | null) {
     // Repeating the value on screen (a double click, a repeated key) sends nothing.
     if ((shifts.get(nurseId) ?? null) === shift) return;
     keep(nurseId);
@@ -385,13 +385,13 @@ export function DayEditor({
   const shiftFilters: readonly {
     value: ShiftFilter;
     label: string;
-    code?: ShiftCode;
+    code?: AssignmentCode;
   }[] = [
     { value: "ALL", label: "همه" },
-    { value: "UNASSIGNED", label: "بدون شیفت" },
-    ...SHIFT_CODES.map((code) => ({
+    { value: "UNASSIGNED", label: "تعیین‌نشده" },
+    ...ASSIGNMENT_CODES.map((code) => ({
       value: code,
-      label: SHIFT_PRESENTATION[code].name,
+      label: ASSIGNMENT_PRESENTATION[code].name,
       code,
     })),
   ];
@@ -469,7 +469,7 @@ export function DayEditor({
                       aria-hidden="true"
                       className={cn(
                         "size-2 rounded-full",
-                        SHIFT_PRESENTATION[f.code].dotClass,
+                        ASSIGNMENT_PRESENTATION[f.code].dotClass,
                       )}
                     />
                     {/* Phones show only the code (the aria-label keeps the name). */}
@@ -687,7 +687,7 @@ function NurseRow({
 }: {
   nurse: EditorNurse;
   /** The shift shown: the stored one or a pending edit. */
-  shift: ShiftCode | null;
+  shift: AssignmentCode | null;
   pending: boolean;
   /** The column that is the list's tab stop, when it is in this row. */
   tabCol: number | null;
@@ -695,9 +695,9 @@ function NurseRow({
   rangeEnds: readonly DayOption[];
   registerCell: (key: string, el: HTMLButtonElement | null) => void;
   onFocusCell: (col: number) => void;
-  onAssign: (shift: ShiftCode | null) => void;
+  onAssign: (shift: AssignmentCode | null) => void;
   onToggleRange: () => void;
-  onApplyRange: (shift: ShiftCode | null, dates: IsoDate[]) => void;
+  onApplyRange: (shift: AssignmentCode | null, dates: IsoDate[]) => void;
   date: IsoDate;
 }) {
   const rangeId = useId();
@@ -713,7 +713,7 @@ function NurseRow({
     onFocus: () => onFocusCell(col),
   });
   const control = cn(
-    "inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-sm font-bold transition-colors max-sm:flex-1 md:h-8 md:min-w-8 pointer-coarse:h-11 pointer-coarse:min-w-11",
+    "inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-sm font-bold transition-colors max-sm:h-11 max-sm:min-w-11 max-sm:flex-1 md:h-8 md:min-w-8 pointer-coarse:h-11 pointer-coarse:min-w-11",
     focusRing,
   );
 
@@ -773,9 +773,9 @@ function NurseRow({
         <div
           role="group"
           aria-label={`شیفت ${nurse.displayName}`}
-          className="flex items-center gap-1 max-sm:w-full"
+          className="flex flex-wrap items-center gap-1 max-sm:w-full"
         >
-          {SHIFT_CODES.map((code, col) => {
+          {ASSIGNMENT_CODES.map((code, col) => {
             const selected = shift === code;
             return (
               <button
@@ -784,29 +784,35 @@ function NurseRow({
                 {...cellProps(col)}
                 aria-pressed={selected}
                 aria-describedby={preferenceId}
-                aria-label={`${SHIFT_PRESENTATION[code].name} (${code})`}
+                aria-label={
+                  code === "OFF"
+                    ? ASSIGNMENT_PRESENTATION[code].name
+                    : `${ASSIGNMENT_PRESENTATION[code].name} (${code})`
+                }
                 onClick={() => onAssign(code)}
                 className={cn(
                   control,
                   selected
                     ? cn(
-                        SHIFT_PRESENTATION[code].tokenClass,
+                        ASSIGNMENT_PRESENTATION[code].tokenClass,
                         "border-current shadow-sm ring-1 ring-current/25",
                       )
                     : "border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
                   selected && pending && "opacity-70",
                 )}
               >
-                <span dir="ltr">{code}</span>
+                <span dir={code === "OFF" ? undefined : "ltr"}>
+                  {code === "OFF" ? "استراحت" : code}
+                </span>
               </button>
             );
           })}
           <button
             type="button"
-            {...cellProps(SHIFT_CODES.length)}
+            {...cellProps(ASSIGNMENT_CODES.length)}
             aria-pressed={shift === null}
             aria-describedby={preferenceId}
-            aria-label="بدون شیفت"
+            aria-label="تعیین‌نشده"
             onClick={() => onAssign(null)}
             className={cn(
               control,

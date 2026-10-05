@@ -241,7 +241,7 @@ function CellCoverage({ day }: { day: ReviewDay }) {
         aria-hidden="true"
         className="mt-auto text-[0.6875rem] text-muted-foreground max-md:hidden"
       >
-        بدون شیفت
+        تعیین‌نشده
       </span>
     );
   return (

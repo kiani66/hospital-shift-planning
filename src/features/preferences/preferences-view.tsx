@@ -48,7 +48,6 @@ import {
   groupDays,
   initiallyOpenGroup,
   monthOfPeriod,
-  preferenceOption,
   preferencesHref,
 } from "./presentation";
 
@@ -263,7 +262,6 @@ function ClosedMonth({
           <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {chosen.map((day) => {
               const view = dayView(day, today);
-              const option = preferenceOption(day.value);
               return (
                 <li
                   key={day.date}
@@ -272,10 +270,8 @@ function ClosedMonth({
                 >
                   <DateBlock view={view} className="w-11 py-0.5" />
                   <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <ShiftChip code={day.value} size="sm" icon />
-                    <span className="truncate font-medium">
-                      ترجیح من: {option.short}
-                    </span>
+                    <span className="font-medium">ترجیح من:</span>
+                    <ShiftChip code={day.value} size="sm" icon label />
                   </span>
                 </li>
               );
