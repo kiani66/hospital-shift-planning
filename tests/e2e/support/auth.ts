@@ -42,8 +42,25 @@ const HOME = /\/(my-shifts|home|review)$/;
 export async function signInAndWait(page: Page, email: string) {
   await signIn(page, email);
   await expect(page).toHaveURL(HOME);
-  await expect(page.getByRole("button", { name: "خروج" })).toBeVisible();
+  await expect(accountMenuButton(page)).toBeVisible();
   await page.waitForLoadState("networkidle");
+}
+
+/** The header's account button (who is signed in), on every authenticated page. */
+export const accountMenuButton = (page: Page) =>
+  page.getByRole("banner").getByRole("button", { name: /^حساب کاربری/ });
+
+/** The account panel the button opens (name, roles, password, sign-out). */
+export const accountPanel = (page: Page) =>
+  page.getByRole("region", { name: "حساب کاربری" });
+
+/** Opens the account panel (idempotent). */
+export async function openAccountMenu(page: Page) {
+  const button = accountMenuButton(page);
+  if ((await button.getAttribute("aria-expanded")) !== "true")
+    await button.click();
+  await expect(accountPanel(page)).toBeVisible();
+  return accountPanel(page);
 }
 
 /**
@@ -53,7 +70,15 @@ export async function signInAndWait(page: Page, email: string) {
  * in CI that race was lost on every attempt).
  */
 export async function signOut(page: Page) {
-  await page.getByRole("button", { name: "خروج" }).click();
+  // Desktop shows «خروج» in the top bar; on mobile it is in the account menu.
+  const direct = page.getByRole("banner").getByRole("button", { name: "خروج" });
+  if (await direct.isVisible()) await direct.click();
+  else
+    await (
+      await openAccountMenu(page)
+    )
+      .getByRole("button", { name: "خروج" })
+      .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByLabel(IDENTIFIER_LABEL)).toBeVisible();
 }

@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { DEMO_USERS, isDesktop, signInAndWait } from "./support/auth";
+import {
+  DEMO_USERS,
+  accountMenuButton,
+  isDesktop,
+  signInAndWait,
+} from "./support/auth";
 
 test.describe("authenticated shell", () => {
   test.beforeEach(async ({ page }) => {
@@ -52,6 +57,51 @@ test.describe("authenticated shell", () => {
           document.documentElement.clientWidth,
       );
       expect(overflow, path).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test("switches navigation at 768px with no overlap or overflow on either side", async ({
+    page,
+  }) => {
+    test.skip(
+      !isDesktop(page),
+      "resizes a desktop browser across the breakpoint",
+    );
+    const sidebar = page.getByRole("navigation", { name: "ناوبری اصلی" });
+    const bottom = page.getByRole("navigation", { name: "ناوبری پایین" });
+    for (const width of [600, 767, 768, 900, 1023, 1024]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const path of [
+        "/home",
+        "/preferences",
+        "/departments/icu/schedule",
+      ]) {
+        await page.goto(path);
+        const step = `${width}px ${path}`;
+        if (width < 768) {
+          await expect(bottom, step).toBeVisible();
+          await expect(sidebar, step).toBeHidden();
+        } else {
+          await expect(sidebar, step).toBeVisible();
+          await expect(bottom, step).toBeHidden();
+          // The content starts where the sidebar ends (RTL: to its left).
+          const nav = (await page.locator("aside").boundingBox())!;
+          const main = (await page.locator("main").boundingBox())!;
+          expect(main.x + main.width, step).toBeLessThanOrEqual(nav.x + 0.5);
+          expect(main.width, step).toBeGreaterThanOrEqual(width - 17 * 16);
+        }
+        const overflow = await page.evaluate(() => {
+          const header = document.querySelector("header")!;
+          return {
+            page:
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+            header: header.scrollWidth - header.clientWidth,
+          };
+        });
+        expect(overflow, step).toEqual({ page: 0, header: 0 });
+        await expect(accountMenuButton(page), step).toBeVisible();
+      }
     }
   });
 
