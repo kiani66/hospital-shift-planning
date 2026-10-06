@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   check,
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -26,6 +28,10 @@ import {
 } from "./enums";
 import { departments, users } from "./identity";
 import { shiftTypes } from "./reference";
+import {
+  LEGACY_BASELINE_VERSION_ID,
+  staffingRuleSetVersions,
+} from "./staffing-rules";
 
 /**
  * One department's schedule for one period. The period is calendar agnostic
@@ -49,6 +55,15 @@ export const schedules = pgTable(
     revision: integer().notNull().default(0),
     /** Latest approved version; null until the first approval. */
     currentVersionId: uuid().references((): AnyPgColumn => scheduleVersions.id),
+    /**
+     * The one staffing rule-set version the schedule is validated against
+     * (D106). Changed only by an explicit Apply (D107) or a revision discard.
+     * The default (legacy baseline) only serves the expand step of 0011.
+     */
+    staffingRuleSetVersionId: uuid()
+      .notNull()
+      .default(LEGACY_BASELINE_VERSION_ID)
+      .references(() => staffingRuleSetVersions.id),
     createdBy: uuid()
       .notNull()
       .references(() => users.id),
@@ -284,6 +299,11 @@ export const scheduleVersions = pgTable(
       .notNull()
       .references(() => users.id),
     approvedAt: instant().notNull().defaultNow(),
+    /** The rule-set version the schedule was pinned to when approved (D106). */
+    staffingRuleSetVersionId: uuid()
+      .notNull()
+      .default(LEGACY_BASELINE_VERSION_ID)
+      .references(() => staffingRuleSetVersions.id),
   },
   (t) => [
     unique("schedule_versions_schedule_version_key").on(
@@ -311,5 +331,44 @@ export const scheduleVersionAssignments = pgTable(
   (t) => [
     primaryKey({ columns: [t.versionId, t.userId, t.date] }),
     index("schedule_version_assignments_user_date_idx").on(t.userId, t.date),
+  ],
+);
+
+/**
+ * Every explicit Apply of a rule-set version to a schedule (D107, D110),
+ * with its before/after impact. Append-only.
+ */
+export const scheduleRuleSetApplications = pgTable(
+  "schedule_rule_set_applications",
+  {
+    id: id(),
+    scheduleId: uuid()
+      .notNull()
+      .references(() => schedules.id),
+    fromVersionId: uuid()
+      .notNull()
+      .references(() => staffingRuleSetVersions.id),
+    toVersionId: uuid()
+      .notNull()
+      .references(() => staffingRuleSetVersions.id),
+    /** The open revision the Apply belongs to (an approved schedule, D109). */
+    revisionId: uuid().references(() => scheduleRevisions.id),
+    rollback: boolean().notNull().default(false),
+    appliedBy: uuid()
+      .notNull()
+      .references(() => users.id),
+    appliedAt: createdAt(),
+    /** Before/after category counts, introduced problems, added scope days, assignmentsChanged: 0. */
+    impact: jsonb().$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [
+    index("schedule_rule_set_applications_schedule_idx").on(
+      t.scheduleId,
+      t.appliedAt,
+    ),
+    check(
+      "schedule_rule_set_applications_change_check",
+      sql`${t.fromVersionId} <> ${t.toVersionId}`,
+    ),
   ],
 );

@@ -15,6 +15,8 @@ export interface ScheduleRecord {
   /** Optimistic-concurrency counter. */
   readonly revision: number;
   readonly currentVersionId: string | null;
+  /** The staffing rule-set version the schedule is validated against (D106). */
+  readonly staffingRuleSetVersionId: string;
   readonly createdBy: string;
 }
 
@@ -27,6 +29,7 @@ const columns = {
   status: schedules.status,
   revision: schedules.revision,
   currentVersionId: schedules.currentVersionId,
+  staffingRuleSetVersionId: schedules.staffingRuleSetVersionId,
   createdBy: schedules.createdBy,
 };
 
@@ -49,6 +52,12 @@ export async function createSchedule(
     period: DatePeriod;
     label: string;
     createdBy: string;
+    /**
+     * The pinned rule-set version. `createSchedule` (the use case) always
+     * passes the version selected for the period; without it the column
+     * default (the legacy baseline) applies, which only fixtures rely on.
+     */
+    staffingRuleSetVersionId?: string;
   },
 ): Promise<ScheduleRecord> {
   const [row] = await db
@@ -60,6 +69,7 @@ export async function createSchedule(
       periodEnd: input.period.end,
       label: input.label,
       createdBy: input.createdBy,
+      staffingRuleSetVersionId: input.staffingRuleSetVersionId,
     })
     .returning(columns);
   return toRecord(row!);
@@ -198,6 +208,8 @@ export async function updateSchedule(
     expectedRevision: number;
     status?: ScheduleStatus;
     currentVersionId?: string;
+    /** Only an explicit Apply or a revision discard changes the pin (D106, D107). */
+    staffingRuleSetVersionId?: string;
   },
 ): Promise<ScheduleRecord | null> {
   const [row] = await db
@@ -206,6 +218,9 @@ export async function updateSchedule(
       ...(input.status && { status: input.status }),
       ...(input.currentVersionId && {
         currentVersionId: input.currentVersionId,
+      }),
+      ...(input.staffingRuleSetVersionId && {
+        staffingRuleSetVersionId: input.staffingRuleSetVersionId,
       }),
       revision: sql`${schedules.revision} + 1`,
       updatedAt: new Date(),

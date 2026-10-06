@@ -35,6 +35,7 @@ import {
   listSchedulesForDepartment,
 } from "../../src/infrastructure/repositories/schedules";
 import { createUser } from "../../src/infrastructure/repositories/users";
+import { LEGACY_BASELINE_VERSION_ID } from "../../src/infrastructure/db/schema";
 import { setupTestDatabase } from "./support/database";
 
 const { db } = setupTestDatabase();
@@ -97,6 +98,8 @@ describe("createSchedule", () => {
         scheduleId: expect.any(String),
         revision: 0,
         roster: { total: 4, nurses: 3, headNurses: 1 },
+        // No override exists: the Hospital Default legacy baseline (D106).
+        staffingRuleSetVersionId: LEGACY_BASELINE_VERSION_ID,
       },
     });
     const id = result.ok ? result.data.scheduleId : "";
@@ -124,6 +127,9 @@ describe("createSchedule", () => {
           label: "آبان ۱۴۰۵",
           status: "DRAFT",
           roster: { total: 4, nurses: 3, headNurses: 1 },
+          staffingRuleSetVersionId: LEGACY_BASELINE_VERSION_ID,
+          staffingRuleSetVersionNo: 1,
+          staffingRuleSetDepartmentId: null,
         },
       }),
     ]);

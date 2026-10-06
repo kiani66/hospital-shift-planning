@@ -78,6 +78,13 @@
       "when": 1791190800000,
       "tag": "0010_explicit_off",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791291354768,
+      "tag": "0011_staffing_rule_sets",
+      "breakpoints": true
     }
   ]
 }

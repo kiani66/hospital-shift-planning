@@ -5,7 +5,6 @@ import type { HolidayCalendar } from "../../src/application/calendar/holidays";
 import { NotFoundError } from "../../src/application/errors";
 import { getDepartmentSchedules } from "../../src/application/schedules/queries";
 import { getScheduleReview } from "../../src/application/schedules/review";
-import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
 import {
@@ -38,6 +37,11 @@ import { snapshotRosterFromMemberships } from "../../src/infrastructure/reposito
 import { createSchedule } from "../../src/infrastructure/repositories/schedules";
 import { setUserActive } from "../../src/infrastructure/repositories/users";
 import { setupTestDatabase } from "./support/database";
+import {
+  pinTestRuleSet,
+  publishTestRuleSet,
+  ruleContent,
+} from "./support/rule-sets";
 
 const { db, pool } = setupTestDatabase();
 const U = DEMO_USERS;
@@ -318,28 +322,47 @@ describe("day detail", () => {
     ]);
   });
 
-  it("compares coverage (not codes) with requirements once a source provides them", async () => {
-    const requirementsFor = vi.fn<
-      StaffingRequirementsSource["requirementsFor"]
-    >(
-      async () =>
-        new Map([[isoDate("2026-10-28"), { M: { min: 3 }, E: { max: 1 } }]]),
+  it("compares coverage (not codes) with the PINNED version's bounds (D106)", async () => {
+    const versionId = await publishTestRuleSet(db, {
+      departmentId: DEMO_ICU.id,
+      createdBy: DEMO_USERS.supervisor.id,
+      content: ruleContent(
+        { min: 1, max: null },
+        {
+          holiday: { E: { min: 0, max: 1 } },
+          exceptions: [
+            {
+              date: isoDate("2026-10-28"),
+              period: "M",
+              bounds: { min: 3, max: null },
+              note: null,
+            },
+          ],
+        },
+      ),
+    });
+    // Publishing alone changes nothing: the schedule is still on its pin.
+    const unpinned = await review(actors.icuHead, { day: "2026-10-28" });
+    expect(unpinned.day!.coverage.map((c) => c.status)).toEqual([
+      "WITHIN_BOUNDS",
+      "WITHIN_BOUNDS",
+      "WITHIN_BOUNDS",
+    ]);
+
+    await pinTestRuleSet(db, DEMO_SCHEDULE.id, versionId);
+    const listOfficialHolidays = vi.fn<HolidayCalendar["listOfficialHolidays"]>(
+      async () => [{ date: isoDate("2026-10-28"), name: "تعطیل آزمایشی" }],
     );
     const { day } = await review(
       actors.icuHead,
       { day: "2026-10-28" },
-      { staffing: { requirementsFor } },
+      { holidays: { listOfficialHolidays } },
     );
-    expect(requirementsFor).toHaveBeenCalledWith({
-      departmentId: DEMO_ICU.id,
-      dates: Array.from({ length: 30 }, (_, i) =>
-        addDays(isoDate("2026-10-23"), i),
-      ),
-    });
-    expect(day!.coverage.map((c) => [c.period, c.status])).toEqual([
-      ["M", "BELOW_MINIMUM"],
-      ["E", "ABOVE_MAXIMUM"],
-      ["N", "WITHIN_BOUNDS"],
+    // M: the date exception (3) wins; E: the holiday bound (max 1); N: normal.
+    expect(day!.coverage.map((c) => [c.period, c.status, c.bounds])).toEqual([
+      ["M", "BELOW_MINIMUM", { min: 3 }],
+      ["E", "ABOVE_MAXIMUM", { min: 0, max: 1 }],
+      ["N", "WITHIN_BOUNDS", { min: 1 }],
     ]);
   });
 
@@ -559,17 +582,18 @@ describe("performance", () => {
     expect(month.result.month.days).toHaveLength(31);
     expect(month.result.month.totals.NEEDS_ATTENTION).toBe(0);
     expect(month.count).toBe((await queriesFor(small)).count);
-    // Schedule, assignments, adjacent boundary days; and for the Phase 8
-    // workflow the preference windows and submissions (their people's names
-    // are one more query once a submission exists), all independent of size.
-    expect(month.count).toBeGreaterThanOrEqual(4);
-    expect(month.count).toBeLessThanOrEqual(5);
+    // Schedule, assignments, adjacent boundary days; the pinned rule-set
+    // version (head, day-type bounds, date exceptions, D106); and for the
+    // Phase 8 workflow the preference windows and submissions (their people's
+    // names are one more query once a submission exists), all independent of size.
+    expect(month.count).toBeGreaterThanOrEqual(7);
+    expect(month.count).toBeLessThanOrEqual(8);
 
     const withDay = await queriesFor(large, isoDate("2027-04-01"));
     expect(withDay.count).toBe(
       (await queriesFor(small, isoDate("2027-04-01"))).count,
     );
-    expect(withDay.count).toBeLessThanOrEqual(7);
+    expect(withDay.count).toBeLessThanOrEqual(10);
     const detail = withDay.result.day!;
     expect(
       detail.shifts.reduce((n, s) => n + s.nurses.length, 0) +

@@ -41,6 +41,11 @@ import { findScheduleById } from "../../src/infrastructure/repositories/schedule
 import { listVersionAssignments } from "../../src/infrastructure/repositories/versions";
 import { runMigrations } from "../../src/infrastructure/db/migrate";
 import { setupTestDatabase } from "./support/database";
+import {
+  pinTestRuleSet,
+  publishTestRuleSet,
+  ruleContent,
+} from "./support/rule-sets";
 
 const { db, url } = setupTestDatabase();
 const now = new Date("2026-10-01T08:00:00Z");
@@ -216,16 +221,28 @@ describe("Explicit OFF end to end in the application", () => {
       ).day!.health,
     ).toBe("NEEDS_ATTENTION");
   });
-  it("configured minimum is enforced by the command, not only the UI", async () => {
+  it("the pinned minimum is enforced by the command, not only the UI", async () => {
     await complete();
-    const configured = {
-      ...head,
-      staffing: {
-        requirementsFor: async () => new Map([[first, { M: { min: 2 } }]]),
-      },
-    };
+    const versionId = await publishTestRuleSet(db, {
+      departmentId: DEMO_ICU.id,
+      createdBy: U.supervisor.id,
+      content: ruleContent(
+        { min: 1, max: null },
+        {
+          exceptions: [
+            {
+              date: first,
+              period: "M",
+              bounds: { min: 2, max: null },
+              note: null,
+            },
+          ],
+        },
+      ),
+    });
+    await pinTestRuleSet(db, id, versionId);
     expect(
-      await finalizeSchedule(configured, {
+      await finalizeSchedule(head, {
         scheduleId: id,
         expectedRevision: await revision(),
       }),
@@ -243,6 +260,7 @@ describe("Explicit OFF end to end in the application", () => {
       },
     });
   });
+
   it("versions preserve OFF and deterministic fingerprints; pending revisions keep the approved OFF visible and discard restores it", async () => {
     await complete();
     const approved = await approve();

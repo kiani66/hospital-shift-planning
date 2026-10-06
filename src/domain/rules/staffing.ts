@@ -77,27 +77,6 @@ export function findStaffingViolations(input: {
   return violations;
 }
 
-/** Configured minima override the baseline of one nurse per M/E/N period. */
-export function requiredStaffing(
-  dates: readonly IsoDate[],
-  configured: ReadonlyMap<IsoDate, StaffingRequirement>,
-): ReadonlyMap<IsoDate, StaffingRequirement> {
-  return new Map(
-    dates.map((date) => [
-      date,
-      Object.fromEntries(
-        COVERAGE_PERIODS.map((period) => [
-          period,
-          {
-            ...configured.get(date)?.[period],
-            min: configured.get(date)?.[period]?.min ?? 1,
-          },
-        ]),
-      ),
-    ]),
-  );
-}
-
 /** A bucket's coverage against its bounds, with the distance to the bound it misses. */
 export interface BucketCoverage {
   readonly covered: number;

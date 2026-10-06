@@ -44,10 +44,6 @@ import {
 import { NotFoundError } from "../errors";
 import type { AppContext } from "../use-case";
 import {
-  NO_STAFFING_REQUIREMENTS,
-  type StaffingRequirementsSource,
-} from "./staffing-requirements";
-import {
   describeWorkflow,
   workflowPeople,
   type ScheduleWorkflow,
@@ -164,7 +160,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ReviewSources {
   readonly holidays?: HolidayCalendar;
-  readonly staffing?: StaffingRequirementsSource;
 }
 
 /**
@@ -178,8 +173,7 @@ export async function getScheduleReview(
   sources: ReviewSources = {},
 ): Promise<ScheduleReview> {
   const { db, actor } = ctx;
-  const holidays = sources.holidays ?? NO_HOLIDAY_DATA;
-  const staffing = sources.staffing ?? ctx.staffing ?? NO_STAFFING_REQUIREMENTS;
+  const holidays = sources.holidays ?? ctx.holidays ?? NO_HOLIDAY_DATA;
 
   const schedule = UUID.test(input.scheduleId)
     ? await findScheduleById(db, input.scheduleId)
@@ -203,7 +197,7 @@ export async function getScheduleReview(
     submissions,
   ] = await Promise.all([
     // The same validation FINALIZE and SUBMIT are gated by (D58).
-    validateWorkingCopy(db, schedule, staffing),
+    validateWorkingCopy(db, schedule, holidays),
     holidays.listOfficialHolidays(period),
     listPreferenceWindows(db, schedule.id),
     listSubmissions(db, schedule.id),

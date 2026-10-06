@@ -5,6 +5,7 @@ import type { IsoDate } from "../../domain/shared/dates";
 import type { Assignment } from "../../domain/shifts/assignment";
 import type { DbExecutor } from "../db/database";
 import {
+  schedules,
   scheduleVersionAssignments,
   scheduleVersions,
   shiftAssignments,
@@ -23,11 +24,14 @@ export interface VersionRecord {
   readonly submissionId: string;
   readonly approvedBy: string;
   readonly approvedAt: Date;
+  /** The rule-set version the schedule was pinned to when approved (D106). */
+  readonly staffingRuleSetVersionId: string;
 }
 
 /**
  * Snapshots the schedule's current working copy as the next version
- * (1, 2, …). Run inside the approving transaction, after locking the schedule.
+ * (1, 2, …), together with the rule-set version it is pinned to. Run inside
+ * the approving transaction, after locking the schedule.
  */
 export async function createVersionFromWorkingCopy(
   db: DbExecutor,
@@ -40,6 +44,7 @@ export async function createVersionFromWorkingCopy(
       submissionId: input.submissionId,
       approvedBy: input.approvedBy,
       versionNo: sql`(select coalesce(max(${scheduleVersions.versionNo}), 0) + 1 from ${scheduleVersions} where ${scheduleVersions.scheduleId} = ${input.scheduleId})`,
+      staffingRuleSetVersionId: sql`(select ${schedules.staffingRuleSetVersionId} from ${schedules} where ${schedules.id} = ${input.scheduleId})`,
     })
     .returning();
 

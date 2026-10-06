@@ -27,7 +27,11 @@ export async function loadScheduleForUpdate(
 export async function saveSchedule(
   uow: UnitOfWork,
   schedule: ScheduleRecord,
-  changes: { status?: ScheduleStatus; currentVersionId?: string },
+  changes: {
+    status?: ScheduleStatus;
+    currentVersionId?: string;
+    staffingRuleSetVersionId?: string;
+  },
 ): Promise<ScheduleRecord> {
   const saved = await updateSchedule(uow.tx, {
     id: schedule.id,

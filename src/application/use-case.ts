@@ -17,10 +17,7 @@ import {
   type NewNotification,
 } from "../infrastructure/repositories/notifications";
 import { toActionError, type ActionResult } from "./result";
-import {
-  NO_STAFFING_REQUIREMENTS,
-  type StaffingRequirementsSource,
-} from "./schedules/staffing-requirements";
+import { NO_HOLIDAY_DATA, type HolidayCalendar } from "./calendar/holidays";
 
 /** Who is calling and with what. Built per request by the (Phase 3) adapter. */
 export interface AppContext {
@@ -29,10 +26,11 @@ export interface AppContext {
   /** Injectable clock for deterministic tests. */
   readonly clock?: () => Date;
   /**
-   * Where staffing bounds come from (D44). Defaults to the source that
-   * configures no overrides; required minima still default to one per M/E/N.
+   * Official holidays (D41), which select HOLIDAY bounds inside a pinned
+   * rule-set version (D106). Defaults to no holiday data. Staffing bounds
+   * themselves always come from the schedule's pinned version.
    */
-  readonly staffing?: StaffingRequirementsSource;
+  readonly holidays?: HolidayCalendar;
 }
 
 /** What a command handler works with: one transaction plus audit and notification writers bound to it. */
@@ -40,8 +38,8 @@ export interface UnitOfWork {
   readonly tx: Transaction;
   readonly actor: Actor;
   readonly now: Date;
-  /** Staffing bounds for validation (`AppContext.staffing` or none configured). */
-  readonly staffing: StaffingRequirementsSource;
+  /** Official holidays for rule resolution (`AppContext.holidays` or none). */
+  readonly holidays: HolidayCalendar;
   /** Throws `ForbiddenError` (rolling back) unless the policy allows the action. */
   authorize<A extends Action>(action: A, resource: ActionResources[A]): void;
   /** Appends an audit event in this transaction; the actor is filled in. */
@@ -82,7 +80,7 @@ export function defineCommand<S extends z.ZodType, O>(definition: {
           tx,
           actor: ctx.actor,
           now: ctx.clock?.() ?? new Date(),
-          staffing: ctx.staffing ?? NO_STAFFING_REQUIREMENTS,
+          holidays: ctx.holidays ?? NO_HOLIDAY_DATA,
           authorize(action, resource) {
             unwrap(authorize(ctx.actor, action, resource));
             authorized = true;

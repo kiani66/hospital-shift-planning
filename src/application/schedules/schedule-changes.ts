@@ -8,7 +8,6 @@ import {
   type ChangeAssessment,
   type DayStaffingImpact,
 } from "../../domain/rules/assess-change";
-import { requiredStaffing } from "../../domain/rules/staffing";
 import { validateSchedule } from "../../domain/rules/validate-schedule";
 import {
   assignmentKey,
@@ -69,16 +68,21 @@ import {
   findScheduleById,
   type ScheduleRecord,
 } from "../../infrastructure/repositories/schedules";
-import { listVersionAssignments } from "../../infrastructure/repositories/versions";
+import {
+  findVersionById,
+  listVersionAssignments,
+} from "../../infrastructure/repositories/versions";
 import { ConflictError, NotFoundError } from "../errors";
 import { toActionError, type ActionError } from "../result";
 import { defineCommand, type AppContext, type UnitOfWork } from "../use-case";
 import { assignmentAuditAction } from "./edit-assignments";
 import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
+import { NO_HOLIDAY_DATA, type HolidayCalendar } from "../calendar/holidays";
 import {
-  NO_STAFFING_REQUIREMENTS,
-  type StaffingRequirementsSource,
-} from "./staffing-requirements";
+  holidayDates,
+  loadRuleSet,
+  requirementsUnder,
+} from "../staffing-rules/pinned";
 
 /**
  * Post-finalization schedule changes (Phase 9): an applied change request or
@@ -91,9 +95,10 @@ import {
  * 2. which cells change (`planAssignmentEdits`: roster, period, status and
  *    revision scope, exactly the editor's rules);
  * 3. validation of the destination before and after the change, with the
- *    neighbouring schedules' boundary days and configured staffing bounds:
- *    a new or worse hard finding on the changed cells blocks it
- *    (`assessChange`); warnings do not;
+ *    neighbouring schedules' boundary days and the staffing bounds of the
+ *    schedule's pinned rule-set version (D106): a new or worse hard finding
+ *    on the changed cells blocks it (`assessChange`), shortages and
+ *    overstaffing included (D102); warnings do not;
  * 4. on write: the revision step, the cells (audited one by one like the
  *    editor's), the `schedule_changes` record, and the schedule revision bump.
  *
@@ -126,7 +131,7 @@ export async function evaluateScheduleChange(
   edits: readonly AssignmentEdit[],
   options: {
     readonly today: IsoDate;
-    readonly staffing: StaffingRequirementsSource;
+    readonly holidays: HolidayCalendar;
     readonly directSwap?: boolean;
   },
 ): Promise<ScheduleChangeEvaluation> {
@@ -212,19 +217,17 @@ export async function evaluateScheduleChange(
   );
   const dates = uniqueSortedDates(changes.map((c) => c.date));
   const { period } = schedule;
-  const [adjacent, configured] = await Promise.all([
+  const [adjacent, ruleSet, holidays] = await Promise.all([
     listAdjacentAssignments(db, {
       departmentId: schedule.departmentId,
       excludeScheduleId: schedule.id,
       nurseIds: roster.map((r) => r.userId),
       dates: [addDays(period.start, -1), addDays(period.end, 1)],
     }),
-    options.staffing.requirementsFor({
-      departmentId: schedule.departmentId,
-      dates,
-    }),
+    loadRuleSet(db, schedule.staffingRuleSetVersionId),
+    holidayDates(options.holidays, period),
   ]);
-  const requirements = requiredStaffing(dates, configured);
+  const requirements = requirementsUnder(ruleSet, dates, holidays);
   const validate = (cells: typeof assignments) =>
     validateSchedule({
       period,
@@ -291,7 +294,7 @@ export async function writeScheduleChange(
     input.edits,
     {
       today: todayFor(uow.now),
-      staffing: uow.staffing,
+      holidays: uow.holidays,
       directSwap: input.directSwap,
     },
   );
@@ -508,10 +511,18 @@ export const discardRevision = defineCommand({
     if (!revision)
       throw new InvalidStateError(schedule.status, "DISCARD_REVISION");
 
-    const [working, approved] = await Promise.all([
+    const [working, approved, approvedVersion] = await Promise.all([
       listAssignments(uow.tx, schedule.id),
       listVersionAssignments(uow.tx, schedule.currentVersionId!),
+      findVersionById(uow.tx, schedule.currentVersionId!),
     ]);
+    // The approved version keeps the rule set it was approved under; a rule
+    // set applied during the revision is discarded with it (D106, D109).
+    const restoredRuleSet =
+      approvedVersion!.staffingRuleSetVersionId !==
+      schedule.staffingRuleSetVersionId
+        ? approvedVersion!.staffingRuleSetVersionId
+        : null;
     const restored = planRevisionDiscard({ working, approved });
     for (const change of restored) {
       const cell = {
@@ -566,7 +577,10 @@ export const discardRevision = defineCommand({
         data: { label: schedule.label, outcome: "REVISION_DISCARDED" },
       })),
     );
-    const saved = await saveSchedule(uow, schedule, { status });
+    const saved = await saveSchedule(uow, schedule, {
+      status,
+      ...(restoredRuleSet && { staffingRuleSetVersionId: restoredRuleSet }),
+    });
     await uow.audit({
       ...auditBase(schedule),
       action: "revision.discarded",
@@ -580,6 +594,10 @@ export const discardRevision = defineCommand({
         restoredFromVersionId: schedule.currentVersionId,
         restoredCells: restored.length,
         appliedRequestIds: discardedRequests,
+        ...(restoredRuleSet && {
+          ruleSetRestoredFrom: schedule.staffingRuleSetVersionId,
+          ruleSetRestoredTo: restoredRuleSet,
+        }),
       },
     });
     return {
@@ -630,7 +648,7 @@ export async function previewScheduleAdjustment(
   return previewOf(() =>
     evaluateScheduleChange(ctx.db, schedule, input.changes, {
       today: todayFor(ctx.clock?.() ?? new Date()),
-      staffing: ctx.staffing ?? NO_STAFFING_REQUIREMENTS,
+      holidays: ctx.holidays ?? NO_HOLIDAY_DATA,
     }),
   );
 }

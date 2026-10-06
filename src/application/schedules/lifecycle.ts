@@ -169,7 +169,7 @@ export const finalizeSchedule = defineCommand({
     const { assignments, violations } = await validateWorkingCopy(
       uow.tx,
       schedule,
-      uow.staffing,
+      uow.holidays,
     );
     const status = next(schedule, { type: "FINALIZE", violations });
     const saved = await saveSchedule(uow, schedule, { status });
@@ -204,7 +204,7 @@ export const submitSchedule = defineCommand({
       uow.authorize("schedule.submit", { departmentId: s.departmentId }),
     );
     const [{ assignments, violations }, windows] = await Promise.all([
-      validateWorkingCopy(uow.tx, schedule, uow.staffing),
+      validateWorkingCopy(uow.tx, schedule, uow.holidays),
       listPreferenceWindows(uow.tx, schedule.id),
     ]);
     const status = next(schedule, {
@@ -357,6 +357,7 @@ export const approveSchedule = defineCommand({
         submittedBy: submission.submittedBy,
         versionId: version.id,
         versionNo: version.versionNo,
+        staffingRuleSetVersionId: version.staffingRuleSetVersionId,
         ...(revision && { revisionId: revision.id }),
         assignmentCount: assignments.length,
         assignmentsFingerprint: assignmentsFingerprint(assignments),

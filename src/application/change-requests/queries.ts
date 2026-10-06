@@ -76,7 +76,7 @@ import {
   type ChangePreviewView,
   type PreviewCell,
 } from "../schedules/change-preview";
-import { NO_STAFFING_REQUIREMENTS } from "../schedules/staffing-requirements";
+import { NO_HOLIDAY_DATA } from "../calendar/holidays";
 import type { AppContext } from "../use-case";
 import { toRequestState, visibleDayCells, workingDayCells } from "./context";
 
@@ -680,7 +680,7 @@ export async function getChangeRequestReview(
     preview = await previewOf(() =>
       evaluateScheduleChange(ctx.db, schedule, edits, {
         today: todayFor(ctx.clock?.() ?? new Date()),
-        staffing: ctx.staffing ?? NO_STAFFING_REQUIREMENTS,
+        holidays: ctx.holidays ?? NO_HOLIDAY_DATA,
       }),
     );
   } catch (error) {
