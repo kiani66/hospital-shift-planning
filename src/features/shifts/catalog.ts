@@ -1,3 +1,5 @@
+import { Bed, Moon, Sun, Sunset, Timer, type LucideIcon } from "lucide-react";
+
 import {
   SHIFT_TYPES,
   crossesMidnight,
@@ -12,10 +14,11 @@ import {
  * tokens: every screen takes them from here; hours come from the domain
  * catalog (`SHIFT_TYPES`). Typed by `ShiftCode`, so a new code does not
  * compile until it has an entry. Colors are the `shift-*` tokens of
- * `globals.css` and are always shown with the code text.
+ * `globals.css` and are always shown with the code text; the icon only
+ * reinforces the code and the name, never replaces them.
  */
-export interface ShiftPresentation {
-  readonly code: ShiftCode;
+export interface ShiftPresentation<C extends string = ShiftCode> {
+  readonly code: C;
   /** Short Persian name, e.g. "صبح". */
   readonly name: string;
   /** Name with its meaning, for legends and headings. */
@@ -28,11 +31,14 @@ export interface ShiftPresentation {
   readonly dotClass: string;
   /** A faint wash of the shift's color, for a tile that also shows the code. */
   readonly softClass: string;
+  /** Decorative glyph of the shift (always `aria-hidden`, always beside the code or name). */
+  readonly icon: LucideIcon;
 }
 
-export const SHIFT_PRESENTATION: Readonly<
-  Record<ShiftCode, ShiftPresentation>
-> = {
+/** The working shifts (`ShiftCode`): what has hours and staffs coverage. */
+export const SHIFT_PRESENTATION: Readonly<{
+  [C in ShiftCode]: ShiftPresentation<C>;
+}> = {
   M: {
     code: "M",
     name: "صبح",
@@ -41,6 +47,7 @@ export const SHIFT_PRESENTATION: Readonly<
     accentClass: "text-shift-m-foreground",
     dotClass: "bg-shift-m-foreground",
     softClass: "bg-shift-m/45",
+    icon: Sun,
   },
   E: {
     code: "E",
@@ -50,6 +57,7 @@ export const SHIFT_PRESENTATION: Readonly<
     accentClass: "text-shift-e-foreground",
     dotClass: "bg-shift-e-foreground",
     softClass: "bg-shift-e/45",
+    icon: Sunset,
   },
   N: {
     code: "N",
@@ -59,6 +67,7 @@ export const SHIFT_PRESENTATION: Readonly<
     accentClass: "text-shift-n-foreground",
     dotClass: "bg-shift-n-foreground",
     softClass: "bg-shift-n/45",
+    icon: Moon,
   },
   ME: {
     code: "ME",
@@ -68,6 +77,7 @@ export const SHIFT_PRESENTATION: Readonly<
     accentClass: "text-shift-me-foreground",
     dotClass: "bg-shift-me-foreground",
     softClass: "bg-shift-me/45",
+    icon: Timer,
   },
 };
 
@@ -92,19 +102,32 @@ export function shiftHoursLabel(code: AssignmentCode): string {
   return crossesMidnight(shift) ? `${range} روز بعد` : range;
 }
 
-/** OFF is a neutral scheduling decision, with no working hours or shift token. */
-export const ASSIGNMENT_PRESENTATION = {
-  ...SHIFT_PRESENTATION,
-  OFF: {
-    code: "OFF",
-    name: "استراحت",
-    fullName: "استراحت",
-    tokenClass: "bg-muted text-muted-foreground",
-    accentClass: "text-muted-foreground",
-    dotClass: "bg-muted-foreground",
-    softClass: "bg-muted",
-  },
-} as const;
+/**
+ * OFF (rest) is an explicit scheduling decision, not a working shift: it has
+ * no hours and no shift color. Neutral tokens and a bed keep it from looking
+ * like work; its Persian name «استراحت» is what screens show, never the code.
+ */
+export const OFF_PRESENTATION: ShiftPresentation<"OFF"> = {
+  code: "OFF",
+  name: "استراحت",
+  fullName: "استراحت",
+  tokenClass: "bg-muted text-muted-foreground",
+  accentClass: "text-muted-foreground",
+  dotClass: "bg-muted-foreground",
+  softClass: "bg-muted",
+  icon: Bed,
+};
+
+/**
+ * The one visual identity of every explicit scheduling decision (code,
+ * name, icon, color): the working shifts plus OFF. A missing assignment is
+ * UNDECIDED and has no entry (see `assignmentName`). Preference values are
+ * the same codes (a wish, not a decision), so they share these entries.
+ */
+export const ASSIGNMENT_PRESENTATION: Readonly<{
+  [C in AssignmentCode]: ShiftPresentation<C>;
+}> = { ...SHIFT_PRESENTATION, OFF: OFF_PRESENTATION };
+
 export const assignmentName = (code: AssignmentCode | null): string =>
   code === null
     ? "تعیین‌نشده"

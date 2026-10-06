@@ -182,6 +182,21 @@ export function formatJalaliRange(from: IsoDate, to: IsoDate): string {
   return `${formatJalaliDate(from)} تا ${formatJalaliDate(to)}`;
 }
 
+/**
+ * A short range of days without the year, for headings inside one month's
+ * view: "۱ آبان" (one day), "۲ تا ۸ آبان", or "۲۹ مهر تا ۴ آبان" across months.
+ */
+export function formatJalaliDayRange(from: IsoDate, to: IsoDate): string {
+  const a = toJalali(from);
+  const b = toJalali(to);
+  const day = (j: JalaliDate) =>
+    `${faDigits(j.day)} ${JALALI_MONTHS[j.month - 1]}`;
+  if (compareIsoDates(from, to) === 0) return day(a);
+  if (a.year === b.year && a.month === b.month)
+    return `${faDigits(a.day)} تا ${day(b)}`;
+  return `${day(a)} تا ${day(b)}`;
+}
+
 /** A point in time (audit, window open/close) as Tehran-local Jalali date and time. */
 export function formatJalaliDateTime(instant: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {

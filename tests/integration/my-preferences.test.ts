@@ -10,6 +10,7 @@ import {
   getMyPreferences,
   getMyPreferencesPage,
 } from "../../src/application/preferences/queries";
+import type { HolidayCalendar } from "../../src/application/calendar/holidays";
 import { createSchedule } from "../../src/application/schedules/create-schedule";
 import {
   closePreferenceWindow,
@@ -17,7 +18,11 @@ import {
 } from "../../src/application/schedules/preference-windows";
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
-import { isoDate } from "../../src/domain/shared/dates";
+import { eachDay, isoDate, type IsoDate } from "../../src/domain/shared/dates";
+import {
+  jalaliMonthPeriod,
+  toJalali,
+} from "../../src/features/calendar/jalali";
 import {
   DEMO_ER,
   DEMO_ICU,
@@ -226,7 +231,7 @@ describe("getMyPreferences", () => {
     });
     expect(mine.days).toHaveLength(30);
     expect(mine.days.filter((d) => d.value !== null)).toEqual([
-      { date: DAY, value: "N", lock: null },
+      { date: DAY, value: "N", lock: null, holiday: null },
     ]);
     // Nurse 2's M on 2026-10-26 is not in nurse 1's view.
     expect(mine.days.find((d) => d.date === "2026-10-26")?.value).toBeNull();
@@ -313,6 +318,7 @@ describe("getMyPreferences", () => {
       date: DAY,
       value: "ME",
       lock: "WINDOW_CLOSED",
+      holiday: null,
     });
     expect(view.days.every((d) => d.lock === "WINDOW_CLOSED")).toBe(true);
   });
@@ -333,8 +339,49 @@ describe("getMyPreferences", () => {
   });
 });
 
+/** The page's calendar: Jalali months, as `/preferences` hands it in. */
+const calendar = {
+  monthOf: (date: IsoDate) => {
+    const j = toJalali(date);
+    return jalaliMonthPeriod({ year: j.year, month: j.month });
+  },
+};
+const MEHR = { start: isoDate("2026-09-23"), end: isoDate("2026-10-22") };
+const ABAN = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
+const AZAR = { start: isoDate("2026-11-22"), end: isoDate("2026-12-21") };
+
+const page = (
+  actor: Actor,
+  input: { scheduleId?: string; month?: { start: IsoDate; end: IsoDate } } = {},
+  at: Date = NOW,
+  today: IsoDate = TODAY,
+) => getMyPreferencesPage(as(actor, at), { ...input, today, calendar });
+
+/** A second ICU schedule (Azar 1405) with preference collection open. */
+async function openIcuAzar(): Promise<string> {
+  const created = await createSchedule(as(actors.icuHead), {
+    departmentId: DEMO_ICU.id,
+    periodStart: AZAR.start,
+    periodEnd: AZAR.end,
+    label: "آذر ۱۴۰۵",
+  });
+  if (!created.ok) throw new Error(created.error.message);
+  const opened = await openPreferenceWindow(as(actors.icuHead), {
+    scheduleId: created.data.scheduleId,
+    expectedRevision: created.data.revision,
+  });
+  if (!opened.ok) throw new Error(opened.error.message);
+  return created.data.scheduleId;
+}
+
+const closeIcu = (revision: number) =>
+  closePreferenceWindow(as(actors.icuHead, LATER), {
+    scheduleId: S,
+    expectedRevision: revision,
+  });
+
 describe("getMyPreferencesPage and the notification deep link (21)", () => {
-  it("selects the schedule of a PREFERENCES_OPENED notification after authorizing it", async () => {
+  it("selects the schedule of a PREFERENCES_OPENED notification and its month after authorizing it", async () => {
     await openIcu();
     const [notification] = await listNotificationsForRecipient(
       db,
@@ -344,47 +391,183 @@ describe("getMyPreferencesPage and the notification deep link (21)", () => {
       type: "PREFERENCES_OPENED",
       scheduleId: S,
     });
-    const page = await getMyPreferencesPage(as(actors.icuNurse1), {
+    const view = await page(actors.icuNurse1, {
       scheduleId: notification!.scheduleId!,
-      today: TODAY,
     });
-    expect(page.requestedNotFound).toBe(false);
-    expect(page.selected?.id).toBe(S);
-    expect(page.schedules.map((s) => s.id)).toEqual([S]);
+    expect(view.requestedNotFound).toBe(false);
+    expect(view.selected?.id).toBe(S);
+    expect(view.month).toEqual(ABAN);
+    expect(view.schedules.map((s) => s.id)).toEqual([S]);
+    expect(view.monthSchedules.map((s) => s.id)).toEqual([S]);
   });
 
   it("treats a foreign or unknown schedule id as not found and falls back to the default", async () => {
     await openIcu();
     const erId = await openEr();
     for (const id of [erId, UNKNOWN, "garbage"]) {
-      const page = await getMyPreferencesPage(as(actors.icuNurse1), {
-        scheduleId: id,
-        today: TODAY,
-      });
-      expect(page.requestedNotFound).toBe(true);
-      expect(page.selected?.id).toBe(S);
-      expect(page.schedules.map((s) => s.id)).toEqual([S]);
+      const view = await page(actors.icuNurse1, { scheduleId: id });
+      expect(view.requestedNotFound).toBe(true);
+      expect(view.selected?.id).toBe(S);
+      expect(view.schedules.map((s) => s.id)).toEqual([S]);
+      // Never the other department's schedule of the same month.
+      expect(view.monthSchedules.map((s) => s.id)).toEqual([S]);
     }
   });
 
-  it("has no selection when nothing is available", async () => {
-    expect(
-      await getMyPreferencesPage(as(actors.icuNurse1), { today: TODAY }),
-    ).toEqual({ schedules: [], selected: null, requestedNotFound: false });
+  it("has no selection, on the current month, when nothing is available", async () => {
+    expect(await page(actors.icuNurse1)).toEqual({
+      month: MEHR,
+      schedules: [],
+      monthSchedules: [],
+      selected: null,
+      requestedNotFound: false,
+    });
   });
 
   it("still opens a directly requested schedule that the list leaves out", async () => {
     const revision = await openIcu();
-    await closePreferenceWindow(as(actors.icuHead, LATER), {
-      scheduleId: S,
-      expectedRevision: revision,
+    await closeIcu(revision);
+    const view = await page(
+      actors.icuNurse1,
+      { scheduleId: S },
+      LATER,
+      isoDate("2026-12-01"),
+    );
+    expect(view.selected?.id).toBe(S);
+    expect(view.schedules).toEqual([]);
+    expect(view.monthSchedules.map((s) => s.id)).toEqual([S]);
+  });
+});
+
+describe("getMyPreferencesPage: month navigation", () => {
+  it("defaults to the earliest month whose collection is open", async () => {
+    await openIcu();
+    const azar = await openIcuAzar();
+    const view = await page(actors.icuNurse1);
+    expect(view.month).toEqual(ABAN);
+    expect(view.selected).toMatchObject({ id: S, editable: true });
+    expect(view.schedules.map((s) => [s.id, s.state])).toEqual([
+      [S, "OPEN"],
+      [azar, "OPEN"],
+    ]);
+  });
+
+  it("skips a closed month: Aban closed, Azar open → Azar", async () => {
+    const revision = await openIcu();
+    const azar = await openIcuAzar();
+    await closeIcu(revision);
+    const view = await page(actors.icuNurse1, {}, LATER);
+    expect(view.month).toEqual(AZAR);
+    expect(view.selected).toMatchObject({ id: azar, editable: true });
+    expect(view.schedules.map((s) => [s.id, s.state])).toEqual([
+      [S, "CLOSED"],
+      [azar, "OPEN"],
+    ]);
+  });
+
+  it("falls back to the current month when no collection is open", async () => {
+    const revision = await openIcu();
+    await closeIcu(revision);
+    const view = await page(actors.icuNurse1, {}, LATER);
+    expect(view.month).toEqual(MEHR);
+    expect(view.selected).toBeNull();
+    // The closed month stays reachable.
+    expect(view.schedules.map((s) => [s.id, s.state])).toEqual([[S, "CLOSED"]]);
+  });
+
+  it("navigates to a closed month: read-only, saved preferences kept", async () => {
+    const revision = await openIcu();
+    await openIcuAzar();
+    expect((await set(actors.icuNurse1, "OFF")).ok).toBe(true);
+    await closeIcu(revision);
+    const view = await page(actors.icuNurse1, { month: ABAN }, LATER);
+    expect(view.month).toEqual(ABAN);
+    expect(view.selected).toMatchObject({
+      id: S,
+      state: "CLOSED",
+      editable: false,
+      summary: { total: 1, OFF: 1 },
     });
-    const page = await getMyPreferencesPage(as(actors.icuNurse1, LATER), {
+    expect(view.selected!.days.find((d) => d.date === DAY)?.value).toBe("OFF");
+  });
+
+  it("navigates to another open month", async () => {
+    await openIcu();
+    const azar = await openIcuAzar();
+    const view = await page(actors.icuNurse1, { month: AZAR });
+    expect(view.month).toEqual(AZAR);
+    expect(view.selected).toMatchObject({ id: azar, editable: true });
+  });
+
+  it("shows a month without a schedule as empty, and never another department's", async () => {
+    await openIcu();
+    await openEr();
+    expect(
+      await page(actors.icuNurse1, {
+        month: { start: isoDate("2027-01-21"), end: isoDate("2027-02-19") },
+      }),
+    ).toMatchObject({ selected: null, monthSchedules: [] });
+    const er = await page(actors.erNurse1, { month: ABAN });
+    expect(er.monthSchedules.map((s) => s.departmentName)).toEqual([
+      DEMO_ER.name,
+    ]);
+    expect(er.selected?.departmentName).toBe(DEMO_ER.name);
+  });
+
+  it("a reopened window makes the same saved preferences editable again", async () => {
+    const revision = await openIcu();
+    expect((await set(actors.icuNurse1, "N")).ok).toBe(true);
+    await closeIcu(revision);
+    const closed = await page(actors.icuNurse1, { month: ABAN }, LATER);
+    expect(closed.selected?.editable).toBe(false);
+
+    // Collection active again for the whole period (closing deleted nothing).
+    await createPreferenceWindow(db, {
       scheduleId: S,
-      today: isoDate("2026-12-01"),
+      kind: "REOPEN",
+      scope: { kind: "PERIOD", dates: eachDay(ABAN.start, ABAN.end) },
+      openedBy: U.icuHead.id,
     });
-    expect(page.selected?.id).toBe(S);
-    expect(page.schedules.map((s) => s.id)).toEqual([S]);
+    const reopened = await page(actors.icuNurse1, {}, LATER);
+    expect(reopened.month).toEqual(ABAN);
+    expect(reopened.selected).toMatchObject({
+      id: S,
+      state: "OPEN",
+      editable: true,
+      summary: { total: 1, N: 1 },
+    });
+    expect(reopened.selected!.days.find((d) => d.date === DAY)).toMatchObject({
+      value: "N",
+      lock: null,
+    });
+    expect((await set(actors.icuNurse1, "E", DAY, S, LATER)).ok).toBe(true);
+    expect(await rows()).toMatchObject([{ date: DAY, value: "E" }]);
+  });
+
+  it("marks official holidays from the calendar source without locking them", async () => {
+    await openIcu();
+    const holidays: HolidayCalendar = {
+      listOfficialHolidays: async () => [
+        { date: isoDate(DAY), name: "تعطیل آزمایشی" },
+      ],
+    };
+    const view = await getMyPreferences(
+      as(actors.icuNurse1),
+      { scheduleId: S },
+      { holidays },
+    );
+    expect(view.days.find((d) => d.date === DAY)).toEqual({
+      date: DAY,
+      value: null,
+      lock: null,
+      holiday: { date: DAY, name: "تعطیل آزمایشی" },
+    });
+    expect(view.days.filter((d) => d.holiday !== null)).toHaveLength(1);
+    // No holiday data is connected by default (D41): nothing is invented.
+    const plain = await getMyPreferences(as(actors.icuNurse1), {
+      scheduleId: S,
+    });
+    expect(plain.days.every((d) => d.holiday === null)).toBe(true);
   });
 });
 

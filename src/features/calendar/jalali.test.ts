@@ -7,6 +7,7 @@ import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 import {
   adjacentJalaliMonth,
   formatJalaliDate,
+  formatJalaliDayRange,
   formatJalaliDateTime,
   formatJalaliRange,
   isJalaliMonth,
@@ -258,5 +259,22 @@ describe("jalaliMonthOptions with a focused month", () => {
       year: 1405,
       month: 8,
     });
+  });
+});
+
+describe("formatJalaliDayRange: short day ranges without the year", () => {
+  it("names one day, a range in one month, and a range across months", () => {
+    expect(
+      formatJalaliDayRange(isoDate("2026-10-23"), isoDate("2026-10-23")),
+    ).toBe("۱ آبان");
+    expect(
+      formatJalaliDayRange(isoDate("2026-10-24"), isoDate("2026-10-30")),
+    ).toBe("۲ تا ۸ آبان");
+    expect(
+      formatJalaliDayRange(isoDate("2026-10-21"), isoDate("2026-10-27")),
+    ).toBe("۲۹ مهر تا ۵ آبان");
+    expect(
+      formatJalaliDayRange(isoDate("2027-03-20"), isoDate("2027-03-21")),
+    ).toBe("۲۹ اسفند تا ۱ فروردین");
   });
 });

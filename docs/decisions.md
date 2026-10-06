@@ -1445,23 +1445,18 @@ and the lifecycle (D58) are reused as they are.
 - **OFF follows the same lifecycle as M, E, N and ME (approved; amends D50).** A recorded
   preference is neither a match nor a mismatch until the Head Nurse makes an assignment decision.
 
-  | Preference     | Working copy for the day | Fit                               |
-  | -------------- | ------------------------ | --------------------------------- |
-  | M / E / N / ME | no row                   | awaiting assignment (`PENDING`)   |
-  | OFF            | no row                   | awaiting assignment (`PENDING`)   |
-  | X              | shift X                  | match                             |
-  | X (incl. OFF)  | another shift            | mismatch                          |
-  | OFF            | explicit OFF decision    | match — **not representable yet** |
+  | Preference     | Working copy for the day | Fit                             |
+  | -------------- | ------------------------ | ------------------------------- |
+  | M / E / N / ME | no row                   | awaiting assignment (`PENDING`) |
+  | OFF            | no row                   | awaiting assignment (`PENDING`) |
+  | X              | shift X                  | match                           |
+  | X (incl. OFF)  | another shift            | mismatch                        |
+  | OFF            | explicit OFF decision    | match (since D100)              |
 
   OFF is never a match merely because no working shift exists, and absence is never read as an
-  OFF decision. **Model limitation:** the working copy cannot record an explicit OFF decision.
-  `shift_assignments.shift_code` is `NOT NULL` and references `shift_types` (M, E, N, ME only);
-  clearing a shift deletes the row (D48); there is no rest / leave / day-off record. "The Head
-  Nurse decided this nurse is off" and "not planned yet" are therefore the same stored state (no
-  row), and the audit trail is not a scheduling source. Until an explicit OFF decision is
-  approved (a schema and business-rule change: for example an OFF assignment value or a rest
-  record, and how it interacts with night rest D7, coverage D42, versions D17 and My Shifts D98),
-  an OFF wish shows as awaiting until a shift is assigned (mismatch) and is never shown as matched.
+  OFF decision. (The model limitation recorded here originally, that the working copy could not
+  record an explicit OFF decision, is resolved by D100: OFF is now an explicit assignment, and an
+  OFF wish matches an OFF decision.)
 
 - **Rows.** Each row: name (truncated, full name as `title`), the Head Nurse badge, the finding
   marker, then one line with the recorded preference and its fit: «ترجیح: شب» + «مطابق ترجیح»
@@ -1489,8 +1484,7 @@ and the lifecycle (D58) are reused as they are.
 
 Open questions:
 
-1. **Explicit OFF decision** (see the model limitation above): needs an approved schema and
-   business-rule change before an OFF wish can show as matched.
+1. ~~**Explicit OFF decision**~~: resolved by D100.
 2. **Staffing numbers** remain undecided (D44): storage, values, and whether a shortage blocks.
 
 Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preference-alignment.ts`,
@@ -1529,3 +1523,55 @@ Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preferen
 - Necessary editor controls add OFF and physical O shortcut with a separate
   clear operation. OFF uses neutral presentation. No preference redesign,
   notification behavior, schedule copy or staffing configuration UI is added.
+
+### D101 · Nurse preferences by month, auto-save and the shared shift display
+
+Presentation only: preferences stay optional, advisory, one value per nurse and day (D35), and
+editable only through an active window (D36). No schema change, no new command, and no change to
+who opens or closes collection (D30, D65), authorization, concurrency (D38) or notifications.
+
+- **Month navigation (amends D37).** `/preferences` shows one Jalali month (`?month=1405-09`, the
+  My Shifts convention, D98). Default: the month of the earliest schedule whose collection is
+  open for the nurse, else the current month. Previous / next go to any calendar month (open,
+  closed or without a schedule); the header names the month, its state («باز برای ثبت» / «بسته»)
+  and links to the other months that still have collection. `?schedule=<id>` (notifications,
+  D33) still selects a schedule, after authorization, and shows its month. A month lists the
+  nurse's visible schedules that share a day with it, ended ones included (history, as a direct
+  link already allowed); two departments in one month get a switcher, the open one first.
+  Calendar conversion stays in the presentation layer: the page hands the query a
+  `PreferenceMonthCalendar` port.
+- **Open month.** Days are grouped by their real Jalali dates («۱ آبان», «۲ تا ۸ آبان»), never by
+  week number, in collapsible sections (`aria-expanded`); the section with today opens first, else
+  the first one. A compact summary counts M, E, N, ME, OFF and «بدون ترجیح» from the days already
+  loaded and follows each confirmed save; «بدون ترجیح» is neutral information, never a warning.
+  A day says «ترجیح من: شب» (short name) or «بدون ترجیح»; the explicit «پاک کردن» stays the only
+  way to clear, and no-preference is never a sixth option.
+- **Closed month.** When no day can be edited the month is a read-only summary: «مهلت ثبت ترجیحات
+  این ماه به پایان رسیده است» (or the reason that applies, D36), the counts, the submitted
+  preferences, and «مشاهده شیفت‌های من» to that month in My Shifts. Closing deletes nothing; if a
+  window is active again, the same values are editable again.
+- **Auto-save (amends D38's UI note).** A tap saves that day at once. Per day, saves are sent one
+  at a time; a choice made while one is in flight is queued and only the latest is sent, so the
+  last value chosen is the last one stored and stale responses never overwrite the screen.
+  «در حال ذخیره…», then «ذخیره شد ✓» (fades after about two seconds). A failure never stays shown
+  as chosen: the day returns to the stored value and says «… ذخیره نشد» with the reason, plus
+  «تلاش مجدد» when sending again can help (not for a closed window or a forbidden day). A failed
+  save does not refresh the page, so its message stays. Enforced in
+  `features/preferences/save-queue.ts`.
+- **Shared shift display (extends D42, follows D100).** `features/shifts/catalog.ts` has one
+  presentation per explicit decision: `SHIFT_PRESENTATION` for the working shifts (`ShiftCode`)
+  and `ASSIGNMENT_PRESENTATION` for every `AssignmentCode` (the working shifts plus OFF), each
+  with its code, Persian name, icon and color: M صبح (sun), E عصر (sunset), N شب (moon), ME
+  طولانی (timer) on their `shift-*` tokens, OFF استراحت (bed) on D100's neutral tokens, so rest
+  never looks like work. An UNDECIDED day (no row) has no entry and reads «تعیین‌نشده»
+  (`assignmentName`). Preferences use the same entries: a preference value is one of the same
+  codes, a wish rather than a decision. `ShiftChip` takes an `AssignmentCode` and an optional
+  icon; OFF reads «استراحت», never the code. Icons are decorative (`aria-hidden`) and always
+  beside the code or name. Inside the preference choice buttons the codes M, E, N, ME and OFF
+  stay visible (with «استراحت» under OFF); OFF there is still only a wish (D35).
+- **Holidays.** Days carry the `HolidayCalendar` result (D41) and show a small «تعطیل» label;
+  informational only, it never changes what may be chosen. No source is connected yet
+  (`NO_HOLIDAY_DATA`), so none is shown.
+
+Enforced in `application/preferences/queries.ts` (`getMyPreferencesPage`),
+`features/preferences/` and `features/shifts/`.
