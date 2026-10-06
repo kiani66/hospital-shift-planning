@@ -47,6 +47,11 @@ export const HOSPITAL_ADMIN_ACTIONS = [
   "user.issueTemporaryPassword",
   /** Preview and commit a CSV personnel import. */
   "personnel.import",
+  /**
+   * Staffing/coverage rule sets (D108): drafts, date exceptions, publish
+   * and retire, for the Hospital Default and every Department Override.
+   */
+  "staffingRules.manage",
 ] as const;
 export type HospitalAdminAction = (typeof HOSPITAL_ADMIN_ACTIONS)[number];
 
@@ -62,6 +67,17 @@ export interface ActionResources
     Record<HeadNurseAction, DepartmentResource>,
     Record<HospitalAdminAction, Record<string, never>> {
   "personnel.view": DepartmentResource;
+  /**
+   * A department's applicable rule-set versions (its override and the
+   * Hospital Default), its schedules' pins and the read-only history (D108).
+   */
+  "staffingRules.view": DepartmentResource;
+  /**
+   * Preview and apply another rule-set version to one of the department's
+   * schedules, seeing aggregate schedule data only (D107, D108). Not a
+   * general schedule read: `schedule.viewDepartment` is unchanged.
+   */
+  "staffingRules.applyToSchedule": DepartmentResource;
   /** Department grid: every nurse's preferences and assignments. */
   "schedule.viewDepartment": DepartmentResource & {
     readonly status: ScheduleStatus;
@@ -153,13 +169,20 @@ export function decide<A extends Action>(
   }
   if ((HOSPITAL_ADMIN_ACTIONS as readonly string[]).includes(action))
     return actor.isHospitalAdmin ? allow : deny("NOT_HOSPITAL_ADMIN");
-  if (action === "personnel.view") {
+  if (action === "personnel.view" || action === "staffingRules.view") {
     const { departmentId } = resource as DepartmentResource;
     return actor.isHospitalAdmin ||
       isHeadNurseOf(actor, departmentId) ||
       isSupervisorOf(actor, departmentId)
       ? allow
       : deny("NO_DEPARTMENT_ACCESS");
+  }
+  if (action === "staffingRules.applyToSchedule") {
+    // Never the Head Nurse: they read the rules but do not choose them (D108).
+    const { departmentId } = resource as DepartmentResource;
+    return actor.isHospitalAdmin || isSupervisorOf(actor, departmentId)
+      ? allow
+      : deny("NOT_SUPERVISOR_OF_DEPARTMENT");
   }
   const { departmentId } = resource as DepartmentResource;
   const headNurse = isHeadNurseOf(actor, departmentId);
@@ -174,6 +197,8 @@ export function decide<A extends Action>(
     | HeadNurseAction
     | HospitalAdminAction
     | "personnel.view"
+    | "staffingRules.view"
+    | "staffingRules.applyToSchedule"
     | "notification.access"
     | "account.changeOwnPassword"
   >;

@@ -18,16 +18,15 @@ export interface ScheduleValidationInput {
    */
   readonly adjacentAssignments?: readonly Assignment[];
   /**
-   * Configured staffing bounds per day (D44); days without an entry are not
-   * checked. Minimum shortfalls block; maximum excesses remain warnings.
+   * Staffing bounds per day, resolved from the pinned rule-set version
+   * (D106); days without an entry are not checked. Both bounds block (D102).
    */
   readonly staffingRequirements?: ReadonlyMap<IsoDate, StaffingRequirement>;
 }
 
 /**
  * All rule violations that involve this schedule, sorted by date then nurse.
- * Violations may exist while planning; `hasBlockingViolations` gates FINALIZE/SUBMIT
- * (errors only; staffing maximum warnings never block).
+ * Violations may exist while planning; `hasBlockingViolations` gates FINALIZE/SUBMIT.
  */
 export function validateSchedule(input: ScheduleValidationInput): Violation[] {
   const { period, assignments } = input;

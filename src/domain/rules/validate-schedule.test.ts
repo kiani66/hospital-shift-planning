@@ -164,7 +164,7 @@ describe("hasBlockingViolations", () => {
   });
 });
 
-describe("staffing (warnings)", () => {
+describe("staffing", () => {
   it("adds blocking staffing shortages next to hard findings", () => {
     const result = validateSchedule({
       period,
