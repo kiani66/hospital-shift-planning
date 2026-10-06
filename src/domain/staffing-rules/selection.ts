@@ -13,9 +13,7 @@ import type { RuleSetVersionHead } from "./model";
 export type EffectiveState =
   "DRAFT" | "SCHEDULED" | "EFFECTIVE" | "SUPERSEDED" | "RETIRED";
 
-const isPublished = (
-  v: RuleSetVersionHead,
-): v is RuleSetVersionHead & { effectiveFrom: IsoDate } =>
+const isPublished = (v: RuleSetVersionHead): boolean =>
   v.status === "PUBLISHED" && v.effectiveFrom !== null;
 
 /**
@@ -24,17 +22,17 @@ const isPublished = (
  * never selected. Unambiguous because no two published versions of a lineage
  * share an `effective_from` (unique index).
  */
-export function selectEffective(
-  lineage: readonly RuleSetVersionHead[],
+export function selectEffective<V extends RuleSetVersionHead>(
+  lineage: readonly V[],
   date: IsoDate,
-): RuleSetVersionHead | null {
-  let selected: (RuleSetVersionHead & { effectiveFrom: IsoDate }) | null = null;
+): V | null {
+  let selected: V | null = null;
   for (const version of lineage) {
     if (!isPublished(version)) continue;
-    if (compareIsoDates(version.effectiveFrom, date) > 0) continue;
+    if (compareIsoDates(version.effectiveFrom!, date) > 0) continue;
     if (
       !selected ||
-      compareIsoDates(version.effectiveFrom, selected.effectiveFrom) > 0
+      compareIsoDates(version.effectiveFrom!, selected.effectiveFrom!) > 0
     )
       selected = version;
   }

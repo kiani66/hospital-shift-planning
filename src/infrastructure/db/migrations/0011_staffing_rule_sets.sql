@@ -111,7 +111,7 @@ VALUES ('5ca1ab1e-0000-4000-8000-000000000001', NULL);--> statement-breakpoint
 INSERT INTO "staffing_rule_set_versions"
   ("id", "rule_set_id", "version_no", "status", "effective_from", "note", "origin", "published_at")
 VALUES ('5ca1ab1e-0000-4000-8000-000000000002', '5ca1ab1e-0000-4000-8000-000000000001', 1,
-  'PUBLISHED', '1900-01-01', 'Legacy baseline: the staffing rule in force before versioned rule sets', 'MIGRATION', now());--> statement-breakpoint
+  'PUBLISHED', '1900-01-01', 'قانون پایه پیشین سامانه: دست‌کم یک نفر در هر نوبت، بدون حداکثر', 'MIGRATION', now());--> statement-breakpoint
 INSERT INTO "staffing_rule_set_requirements" ("version_id", "day_type", "coverage_period", "min_staff", "max_staff")
 VALUES
   ('5ca1ab1e-0000-4000-8000-000000000002', 'NORMAL', 'M', 1, NULL),

@@ -132,7 +132,7 @@ async function restoreLegacyBaseline(db: DbExecutor): Promise<void> {
     versionNo: 1,
     status: "PUBLISHED",
     effectiveFrom: LEGACY_BASELINE_EFFECTIVE_FROM,
-    note: "Legacy baseline: the staffing rule in force before versioned rule sets",
+    note: "قانون پایه پیشین سامانه: دست‌کم یک نفر در هر نوبت، بدون حداکثر",
     origin: "MIGRATION",
     publishedAt: new Date(),
   });

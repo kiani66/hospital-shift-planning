@@ -19,6 +19,7 @@ export type NavIcon =
   | "history"
   | "review"
   | "personnel"
+  | "staffingRules"
   | "more";
 
 export interface NavItem {
@@ -78,6 +79,12 @@ const ITEMS = {
     href: "/admin/personnel",
     label: "کاربران بیمارستان",
     icon: "personnel",
+  },
+  staffingRules: {
+    id: "staffing-rules",
+    href: "/admin/staffing-rules",
+    label: "قوانین پوشش نفرات",
+    icon: "staffingRules",
   },
   home: { id: "home", href: "/home", label: "نمای کلی", icon: "home" },
   myShifts: {
@@ -191,7 +198,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
     sections.push({
       id: "administration",
       title: "مدیریت بیمارستان",
-      items: [ITEMS.personnel],
+      items: [ITEMS.personnel, ITEMS.staffingRules],
     });
   if (supervisor)
     sections.push({

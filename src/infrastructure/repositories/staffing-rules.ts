@@ -1,4 +1,4 @@
-import { asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { BaseShift } from "../../domain/shifts/shift-type";
 import type {
@@ -7,8 +7,10 @@ import type {
   RuleSetRetireReason,
   RuleSetVersionHead,
 } from "../../domain/staffing-rules/model";
-import type { DbExecutor } from "../db/database";
+import type { DbExecutor, Transaction } from "../db/database";
 import {
+  schedules,
+  scheduleVersions,
   staffingRuleSetDateExceptions,
   staffingRuleSetRequirements,
   staffingRuleSets,
@@ -212,4 +214,256 @@ export async function findRuleSetLineage(
         : eq(staffingRuleSets.departmentId, departmentId),
     );
   return row ?? null;
+}
+
+// --- Writes -----------------------------------------------------------------
+// Content is written only for DRAFT versions (every statement below that
+// touches content or deletes filters on status = 'DRAFT'). Publishing and
+// retiring change lifecycle columns only, never content.
+
+/**
+ * Locks the lineage of a scope for the rest of the transaction, creating it
+ * first if needed. Every rule-set write of a scope is serialized on it.
+ */
+export async function lockRuleSetLineage(
+  tx: Transaction,
+  departmentId: string | null,
+): Promise<{ id: string; departmentId: string | null }> {
+  await tx
+    .insert(staffingRuleSets)
+    .values({ departmentId })
+    .onConflictDoNothing();
+  const [row] = await tx
+    .select({
+      id: staffingRuleSets.id,
+      departmentId: staffingRuleSets.departmentId,
+    })
+    .from(staffingRuleSets)
+    .where(
+      departmentId === null
+        ? isNull(staffingRuleSets.departmentId)
+        : eq(staffingRuleSets.departmentId, departmentId),
+    )
+    .for("update");
+  return row!;
+}
+
+async function writeContent(
+  db: DbExecutor,
+  versionId: string,
+  content: RuleSetContent,
+): Promise<void> {
+  const requirements = [
+    ...Object.entries(content.normal).map(([p, b]) => ({
+      dayType: "NORMAL" as const,
+      p,
+      b,
+    })),
+    ...Object.entries(content.holiday).map(([p, b]) => ({
+      dayType: "HOLIDAY" as const,
+      p,
+      b,
+    })),
+  ].filter((r) => r.b);
+  await db.insert(staffingRuleSetRequirements).values(
+    requirements.map(({ dayType, p, b }) => ({
+      versionId,
+      dayType,
+      coveragePeriod: p as BaseShift,
+      minStaff: b!.min,
+      maxStaff: b!.max,
+    })),
+  );
+  if (content.exceptions.length > 0)
+    await db.insert(staffingRuleSetDateExceptions).values(
+      content.exceptions.map((e) => ({
+        versionId,
+        date: e.date,
+        coveragePeriod: e.period,
+        minStaff: e.bounds.min,
+        maxStaff: e.bounds.max,
+        note: e.note,
+      })),
+    );
+}
+
+/** Inserts the next version of a lineage as a DRAFT with its content. */
+export async function insertRuleSetDraft(
+  db: DbExecutor,
+  input: {
+    ruleSetId: string;
+    basedOnVersionId: string | null;
+    content: RuleSetContent;
+    note: string | null;
+    createdBy: string;
+  },
+): Promise<string> {
+  const [row] = await db
+    .insert(staffingRuleSetVersions)
+    .values({
+      ruleSetId: input.ruleSetId,
+      versionNo: sql`(select coalesce(max(${staffingRuleSetVersions.versionNo}), 0) + 1 from ${staffingRuleSetVersions} where ${staffingRuleSetVersions.ruleSetId} = ${input.ruleSetId})`,
+      basedOnVersionId: input.basedOnVersionId,
+      note: input.note,
+      createdBy: input.createdBy,
+    })
+    .returning({ id: staffingRuleSetVersions.id });
+  await writeContent(db, row!.id, input.content);
+  return row!.id;
+}
+
+/**
+ * Replaces a DRAFT's content when its revision still matches; returns false
+ * when the version is not a draft any more or was changed meanwhile.
+ */
+export async function replaceRuleSetDraft(
+  db: DbExecutor,
+  input: {
+    versionId: string;
+    expectedRevision: number;
+    content: RuleSetContent;
+    note: string | null;
+  },
+): Promise<boolean> {
+  const updated = await db
+    .update(staffingRuleSetVersions)
+    .set({
+      note: input.note,
+      revision: sql`${staffingRuleSetVersions.revision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(staffingRuleSetVersions.id, input.versionId),
+        eq(staffingRuleSetVersions.status, "DRAFT"),
+        eq(staffingRuleSetVersions.revision, input.expectedRevision),
+      ),
+    )
+    .returning({ id: staffingRuleSetVersions.id });
+  if (updated.length === 0) return false;
+  await db
+    .delete(staffingRuleSetRequirements)
+    .where(eq(staffingRuleSetRequirements.versionId, input.versionId));
+  await db
+    .delete(staffingRuleSetDateExceptions)
+    .where(eq(staffingRuleSetDateExceptions.versionId, input.versionId));
+  await writeContent(db, input.versionId, input.content);
+  return true;
+}
+
+/** Deletes a never-published DRAFT (its content cascades). */
+export async function deleteRuleSetDraft(
+  db: DbExecutor,
+  input: { versionId: string; expectedRevision: number },
+): Promise<boolean> {
+  const deleted = await db
+    .delete(staffingRuleSetVersions)
+    .where(
+      and(
+        eq(staffingRuleSetVersions.id, input.versionId),
+        eq(staffingRuleSetVersions.status, "DRAFT"),
+        eq(staffingRuleSetVersions.revision, input.expectedRevision),
+      ),
+    )
+    .returning({ id: staffingRuleSetVersions.id });
+  return deleted.length > 0;
+}
+
+/** DRAFT → PUBLISHED (lifecycle columns only). */
+export async function markRuleSetPublished(
+  db: DbExecutor,
+  input: {
+    versionId: string;
+    expectedRevision: number;
+    effectiveFrom: string;
+    publishedBy: string;
+    now: Date;
+  },
+): Promise<boolean> {
+  const updated = await db
+    .update(staffingRuleSetVersions)
+    .set({
+      status: "PUBLISHED",
+      effectiveFrom: input.effectiveFrom,
+      publishedBy: input.publishedBy,
+      publishedAt: input.now,
+      revision: sql`${staffingRuleSetVersions.revision} + 1`,
+      updatedAt: input.now,
+    })
+    .where(
+      and(
+        eq(staffingRuleSetVersions.id, input.versionId),
+        eq(staffingRuleSetVersions.status, "DRAFT"),
+        eq(staffingRuleSetVersions.revision, input.expectedRevision),
+      ),
+    )
+    .returning({ id: staffingRuleSetVersions.id });
+  return updated.length > 0;
+}
+
+/** PUBLISHED → RETIRED (lifecycle columns only). */
+export async function markRuleSetRetired(
+  db: DbExecutor,
+  input: {
+    versionId: string;
+    reason: RuleSetRetireReason;
+    retiredBy: string;
+    replacedByVersionId: string | null;
+    now: Date;
+  },
+): Promise<boolean> {
+  const updated = await db
+    .update(staffingRuleSetVersions)
+    .set({
+      status: "RETIRED",
+      retiredBy: input.retiredBy,
+      retiredAt: input.now,
+      retiredReason: input.reason,
+      replacedByVersionId: input.replacedByVersionId,
+      updatedAt: input.now,
+    })
+    .where(
+      and(
+        eq(staffingRuleSetVersions.id, input.versionId),
+        eq(staffingRuleSetVersions.status, "PUBLISHED"),
+      ),
+    )
+    .returning({ id: staffingRuleSetVersions.id });
+  return updated.length > 0;
+}
+
+/**
+ * How many schedules (working pins) and approved versions reference each
+ * version; two grouped queries whatever the number of versions.
+ */
+export async function countRuleSetPins(
+  db: DbExecutor,
+  versionIds: readonly string[],
+): Promise<Map<string, { schedules: number; approvedVersions: number }>> {
+  const ids = [...new Set(versionIds)];
+  const counts = new Map(
+    ids.map((id) => [id, { schedules: 0, approvedVersions: 0 }]),
+  );
+  if (ids.length === 0) return counts;
+  const [pins, approved] = await Promise.all([
+    db
+      .select({
+        id: schedules.staffingRuleSetVersionId,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(schedules)
+      .where(inArray(schedules.staffingRuleSetVersionId, ids))
+      .groupBy(schedules.staffingRuleSetVersionId),
+    db
+      .select({
+        id: scheduleVersions.staffingRuleSetVersionId,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(scheduleVersions)
+      .where(inArray(scheduleVersions.staffingRuleSetVersionId, ids))
+      .groupBy(scheduleVersions.staffingRuleSetVersionId),
+  ]);
+  for (const p of pins) counts.get(p.id)!.schedules = p.n;
+  for (const a of approved) counts.get(a.id)!.approvedVersions = a.n;
+  return counts;
 }
