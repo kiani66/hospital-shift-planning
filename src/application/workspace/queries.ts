@@ -21,6 +21,8 @@ export interface ShellContext {
   readonly user: {
     readonly displayName: string;
     readonly email: string | null;
+    /** Shown in the account menu so a shared device shows whose session it is. */
+    readonly personnelNumber: string | null;
   };
   /** Current memberships (a HEAD_NURSE is also a nurse), ordered by department code. */
   readonly memberships: readonly {
@@ -57,7 +59,11 @@ export async function getShellContext(ctx: AppContext): Promise<ShellContext> {
 
   return {
     isHospitalAdmin: actor.isHospitalAdmin,
-    user: { displayName: user.displayName, email: user.email },
+    user: {
+      displayName: user.displayName,
+      email: user.email,
+      personnelNumber: user.personnelNumber,
+    },
     memberships: actor.memberships
       .flatMap((m) => {
         const department = departments.get(m.departmentId);

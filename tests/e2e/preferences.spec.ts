@@ -492,3 +492,95 @@ test.describe("nurse preferences on narrow phones", () => {
     });
   }
 });
+
+test.describe("nurse preferences: one day per row at every width", () => {
+  // Phones, both sides of the sidebar breakpoint (768px), the range where the
+  // summary sits above the days, and desktop with the summary beside them.
+  const WIDTHS = [360, 390, 767, 768, 900, 1024, 1279, 1280, 1536];
+
+  test("days never share a row, fill it, and stay usable", async ({ page }) => {
+    test.setTimeout(120_000);
+    const department = await provisionNotifiedDepartment(1);
+    await signInAndWait(page, department.nurseEmail);
+    await page.goto("/preferences");
+    await openGroup(page, WEEK_2_8);
+    const panelId = await groupToggle(page, WEEK_2_8).getAttribute(
+      "aria-controls",
+    );
+    const panel = page.locator(`[id="${panelId}"]`);
+    const cards = panel.getByRole("listitem");
+    await expect(cards).toHaveCount(7);
+
+    const saved: Record<string, string> = {};
+    const codes = ["M", "E", "N", "ME", "OFF"];
+    for (const [i, width] of WIDTHS.entries()) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page, `${width}px`);
+
+      const list = (await panel.getByRole("list").boundingBox())!;
+      const boxes = await cards.evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, bottom: r.bottom };
+        }),
+      );
+      for (const [n, box] of boxes.entries()) {
+        // The full width of the list: one column, never a half-width card.
+        expect(box.width, `${width}px day ${n}`).toBeCloseTo(list.width, 0);
+        expect(box.x, `${width}px day ${n}`).toBeCloseTo(list.x, 0);
+        // Each day starts below the previous one: never side by side.
+        if (n > 0)
+          expect(box.y, `${width}px day ${n}`).toBeGreaterThanOrEqual(
+            boxes[n - 1]!.bottom,
+          );
+      }
+
+      const card = day(page, SAT_2_ABAN);
+      for (const code of codes) {
+        const box = (await option(card, code).boundingBox())!;
+        expect(box.height, `${width}px ${code} height`).toBeGreaterThanOrEqual(
+          44,
+        );
+        expect(box.width, `${width}px ${code} width`).toBeGreaterThanOrEqual(
+          40,
+        );
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        // The code and its Persian name are shown in full (not truncated).
+        const clipped = await option(card, code).evaluate((button) =>
+          [...button.querySelectorAll("span")].some(
+            (s) => s.scrollWidth > s.clientWidth + 1,
+          ),
+        );
+        expect(clipped, `${width}px ${code} label clipped`).toBe(false);
+      }
+      // «ترجیح من: …» is readable beside or above the choices.
+      const status = card.getByText(/^(ترجیح من: |بدون ترجیح)/);
+      expect(
+        await status.evaluate((s) => s.scrollWidth <= s.clientWidth + 1),
+        `${width}px current preference clipped`,
+      ).toBe(true);
+
+      // Auto-save still works at this width (a different day each time).
+      if (i % 3 === 0) {
+        const label = [SAT_2_ABAN, SUN_3_ABAN, MON_4_ABAN][i / 3]!;
+        const code = codes[i / 3]!;
+        await choose(page, label, code);
+        saved[label] = code;
+      }
+    }
+    expect(await storedPreferencesOf(department.nurseEmail)).toEqual({
+      "2026-10-24": saved[SAT_2_ABAN],
+      "2026-10-25": saved[SUN_3_ABAN],
+      "2026-10-26": saved[MON_4_ABAN],
+    });
+
+    // The accordion still collapses and reopens.
+    await groupToggle(page, WEEK_2_8).click();
+    await expect(day(page, SAT_2_ABAN)).toBeHidden();
+    await openGroup(page, WEEK_2_8);
+    await expect(
+      option(day(page, SAT_2_ABAN), saved[SAT_2_ABAN]!),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+});

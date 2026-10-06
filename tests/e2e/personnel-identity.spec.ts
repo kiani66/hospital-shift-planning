@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   DEMO_PASSWORD,
+  accountMenuButton,
   GENERIC_ERROR,
   signIn,
   signInAndWait,
@@ -72,7 +73,7 @@ test("a temporary password forces a change before any other page, then ends olde
   await page.getByRole("button", { name: "ذخیره رمز عبور جدید" }).click();
   // The new session works at once.
   await expect(page).toHaveURL(HOME);
-  await expect(page.getByRole("button", { name: "خروج" })).toBeVisible();
+  await expect(accountMenuButton(page)).toBeVisible();
 
   // The other device's session was issued before the change: signed out.
   await other.page.goto("/my-shifts");
