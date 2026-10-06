@@ -50,6 +50,8 @@ Enforced in `schedule/visibility.ts` and `schedule/publication.ts`.
 
 ### D12 · Supervisor visibility
 
+> Narrowed by D108: Supervisors may preview/apply staffing rule sets (aggregates only) in any status.
+
 A Supervisor may view the department schedule read-only from `FINALIZED` on. Approve and
 return are available only in `SUBMITTED`; `FINALIZED` does not mean submitted.
 Enforced in `authz/policies.ts` (`schedule.viewDepartment`) and `schedule/state-machine.ts`
@@ -348,6 +350,8 @@ Enforced in `features/calendar/month-grid.ts`, `features/calendar/jalali.ts`
 
 ### D40 · Day health is semantic
 
+> Superseded by D103 (category counts, READY, NOT STARTED); D41 (holiday) is unchanged.
+
 `DayHealth` is `UNPLANNED` (no assignment that day), `NEEDS_ATTENTION` (at least one finding of an
 applicable rule attributed to the day) or `VALID` (assignments and no finding), in that precedence.
 
@@ -398,6 +402,8 @@ period; all blocking.
 Enforced in `domain/rules/diagnostic.ts` and `features/schedule-review/presentation.ts`.
 
 ### D44 · Staffing capacity boundary (numbers not defined)
+
+> Superseded by D102 and D105–D107: bounds are stored, versioned and pinned; both bounds block.
 
 No minimum or maximum staffing number exists or is assumed. The boundary is explicit:
 `StaffingBounds` / `StaffingRequirement` per coverage period, a `StaffingRequirementsSource` port
@@ -527,6 +533,8 @@ change to the domain, application or infrastructure layers; every business rule 
 is unchanged.
 
 ### D51 · VALID wording (amends D40's words, not its meaning)
+
+> Superseded by D103.
 
 «بدون ایراد» reads as "flawless", a quality of the day, which leans towards "correct". VALID is
 now worded as the result of a check: «بدون مغایرت» in compact places (cell accessible name,
@@ -718,6 +726,8 @@ notification types already carry it. The lifecycle is the Phase 1 state machine,
 domain change is a stable reason code for the open-window guard (`PREFERENCE_WINDOW_OPEN`).
 
 ### D58 · Lifecycle commands, validation and concurrency
+
+> Wording of refusals amended by D104; the gate itself is unchanged.
 
 - Five commands: `finalizeSchedule` (PLANNING → FINALIZED), `submitSchedule` (FINALIZED or RETURNED
   → SUBMITTED), `withdrawSubmission` (SUBMITTED → FINALIZED, D10), `approveSchedule` and
@@ -1012,6 +1022,8 @@ temporary passwords and personnel numbers are added by D87–D97 (they amend D5,
 where stated).
 
 ### D78 · Hospital Admin is system-level authority (supersedes D5)
+
+> Extended by D108: Hospital Admins manage staffing rule sets and may preview/apply them with aggregate schedule data only.
 
 The original D5 “No Admin role” assumption is superseded explicitly. Hospital Admin is the
 `users.is_hospital_admin` flag, default false, loaded into the trusted Actor from PostgreSQL on
@@ -1493,6 +1505,8 @@ Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preferen
 
 ## D100 — Explicit OFF scheduling (approved; supersedes conflicting D40/D44/D48/D98/D99 details)
 
+> Staffing details (default minimum of one, maxima as warnings) superseded by D102/D105; OFF semantics unchanged.
+
 - A missing assignment row is UNDECIDED («تعیین‌نشده»), never OFF. An assignment
   with code OFF is an explicit rest decision («استراحت»). `ShiftCode` remains
   M/E/N/ME; `AssignmentCode` includes OFF. The existing nurse/day unique key and
@@ -1575,3 +1589,193 @@ who opens or closes collection (D30, D65), authorization, concurrency (D38) or n
 
 Enforced in `application/preferences/queries.ts` (`getMyPreferencesPage`),
 `features/preferences/` and `features/shifts/`.
+
+## Versioned staffing/coverage rules and finalize validation decisions
+
+Approved by the product owner after the Step 1 audit (answers to the eight audit questions). Paths
+are relative to `src/`. These records supersede the staffing details of D44, D99 and D100, the day
+health of D40/D51, the blocker wording of D58/D64, and narrow D12/D78 only for the dedicated rule-set
+operations named in D108. Every other rule (night rest D7/D20, OFF D100, immutability D17, revision
+scope D14, department isolation D26) is reused unchanged.
+
+### D102 · Three validation categories
+
+Validation of a working copy exposes exactly three categories. All of them block FINALIZE and
+SUBMIT; none blocks saving a Draft (planning edits, D48, stay unvalidated).
+
+| Category                       | Unit counted                  | Meaning                                                                                                                                                              |
+| ------------------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UNDECIDED** «تعیین‌نشده»     | nurse-day                     | A rostered nurse has no explicit decision (M, E, N, ME or OFF) on a period day. Also reported as the number of distinct days affected.                               |
+| **COVERAGE** «پوشش»            | coverage bucket (day × M/E/N) | Effective coverage is outside the pinned bounds: **SHORTAGE** «کمبود نیرو» (below min) or **OVERSTAFFING** «مازاد نیرو» (above max), each with its amount in nurses. |
+| **RULE_VIOLATION** «نقض قانون» | finding                       | A hard scheduling rule: night rest (D7), duplicate assignment (D15), assignment outside the period.                                                                  |
+
+- UNDECIDED is never called a conflict, violation or «مغایرت». No screen aggregates the three
+  categories into one "blocking conflicts" number.
+- Effective coverage stays D42: ME adds one to M and one to E (it is not a fourth bucket); OFF adds
+  nothing to coverage or working time but is an explicit, completed decision (D100).
+- Coverage problems are counted per bucket, not per missing nurse: Night needing 3 with 1 nurse is
+  one coverage problem with a shortage of 2.
+- **Both bounds are hard rules (amends D44/D100).** Below the minimum and above the maximum are
+  `error` severity. Post-finalization changes (applied requests, adjustments, direct swaps) keep
+  the D69 "new or worse" assessment: a change may not introduce a coverage problem or worsen one
+  attributable to its days; an already invalid schedule can still be repaired progressively.
+
+Enforced in `domain/rules/staffing.ts`, `domain/rules/validation-summary.ts` and
+`domain/rules/assess-change.ts`.
+
+### D103 · Day status and READY (amends D40/D51)
+
+- A day carries its counts per category simultaneously (undecided nurse-days, shortages,
+  overstaffing, rule violations); no category hides another.
+- **READY** «آماده» only when undecided = 0, coverage problems = 0 and blocking rule violations = 0.
+  READY now legitimately means "this day is ready for finalization" (D40's caution about the word
+  is withdrawn because completeness and staffing are validated).
+- Primary visual severity: RULE_VIOLATION > COVERAGE > UNDECIDED > READY.
+- **NOT STARTED** «شروع‌نشده»: a day with zero explicit decisions shows NOT STARTED as its primary
+  state, so a new month is not a wall of coverage failures. This is presentation only: the day's
+  coverage (0 against the pinned requirement) stays visible in its detail, and its undecided and
+  coverage counts still block FINALIZE.
+- Validation is always whole-period, with the neighbouring schedules' boundary days (D7, D20), so a
+  Night on one day correctly changes the next day's status.
+
+Enforced in `domain/rules/validation-summary.ts` and `features/schedule-review/presentation.ts`.
+
+### D104 · Monthly summary and finalize UX (amends D58/D64 wording)
+
+- The schedule page summarizes the categories separately, e.g. «برنامه هنوز آماده نهایی‌سازی نیست.
+  ۴۸۶ تصمیم تعیین‌نشده در ۲۲ روز · ۲۴ مشکل پوشش (۲۰ کمبود نیرو، ۴ مازاد نیرو) · ۷ نقض قانون · ۸ روز
+  از ۳۰ روز آماده». When clean: «برنامه آماده نهایی‌سازی است» with all days ready, no undecided
+  decisions, coverage valid and no blocking rule violations.
+- Each category (and SHORTAGE / OVERSTAFFING) is a calendar filter (`?filter=`) that marks the days
+  it affects; filters never write.
+- A refused FINALIZE / SUBMIT explains the categories that block it, never "N blocking conflicts".
+- FINALIZE's semantics are unchanged and strict: any finding of any category refuses it.
+
+Enforced in `application/schedules/workflow.ts`, `features/schedule-workflow/` and
+`features/schedule-review/`.
+
+### D105 · Versioned rule sets: scope, content and lifecycle
+
+- **Scopes.** One rule-set lineage for the **Hospital Default** (a singleton: the deployment is one
+  hospital and has no hospitals table) and at most one per department (**Department Override**).
+- **Content.** A version is a complete, independent snapshot: NORMAL day bounds for M, E and N (min
+  required, max optional), optional HOLIDAY day bounds per bucket, and specific-date exceptions per
+  bucket. A department version may be created by copying the Hospital Default, but has no live
+  inheritance afterwards: later Hospital Default versions never change it.
+- **Lifecycle (stored).** `DRAFT → PUBLISHED → RETIRED`. A DRAFT is editable (one open draft per
+  lineage) and may be discarded; PUBLISHED and RETIRED are immutable and never deleted. Any change
+  is a new version (copied from any earlier version of the lineage, or from the Hospital Default
+  for a department).
+- **Effective date.** Publishing sets one `effective_from` (Tehran day): today ("effective
+  immediately") or a future day. Never in the past.
+- **Effective state (derived, never written by a timer).** A PUBLISHED version is SCHEDULED
+  (`effective_from` > today), EFFECTIVE (the latest `effective_from` ≤ today of its lineage) or
+  SUPERSEDED (an older one whose successor is effective). Superseded versions stay PUBLISHED: they
+  remain the effective rules for earlier dates and keep their pinned schedules.
+- **Unambiguous selection.** For a lineage and date D the selected version is the PUBLISHED version
+  with the latest `effective_from` ≤ D; no two PUBLISHED versions of a lineage share an
+  `effective_from` (database unique index).
+- **Conflicting publication.** Publishing with `effective_from` F conflicts with every PUBLISHED
+  version of the same lineage effective on or after F. Publication then stops and explains the
+  conflict (versions, dates, pinned schedules); only an explicit confirmation naming exactly those
+  versions retires them (`RETIRED`, reason REPLACED, `replaced_by` the new version), audited.
+- **Retire.** RETIRED versions are never selected for new schedules but stay valid pins and
+  history. Hospital Default versions are retired only while still SCHEDULED or by replacement, so
+  the Hospital Default always covers every date from the legacy baseline on; a Department Override
+  version may be withdrawn at any time (its department falls back to the Hospital Default).
+- **Legacy baseline.** Migration `0011` creates Hospital Default v1 = today's Production behavior
+  (M/E/N min 1, no max, effective from 1900-01-01, origin MIGRATION) and pins every existing schedule
+  and approved version to it. No other rule set is created by a migration; the hard-coded
+  `min ?? 1` is removed.
+
+Enforced in `domain/staffing-rules/`, `application/staffing-rules/` and migration `0011`.
+
+### D106 · Resolution and schedule pinning
+
+- **Pinning at creation.** A new schedule pins exactly one version for its whole period:
+  the Department Override effective on `period_start`, else the Hospital Default effective on
+  `period_start`. A version becoming effective mid-period never affects it.
+- **Pins never move implicitly.** Publishing, retiring or replacing versions never changes an
+  existing schedule's pin; only an explicit Apply (D107) does.
+- **Resolution inside the pinned version, per day and bucket:** specific-date exception > HOLIDAY
+  bounds (when the day is an official holiday and the version defines them) > NORMAL bounds. With
+  the scope selection above this realizes Date Exception > Day Type > Department Override >
+  Hospital Default.
+- **Holidays** come only from the `HolidayCalendar` port (D41), which has no data yet; no holiday is
+  invented and HOLIDAY bounds stay inactive until a source is connected.
+- Live coverage while editing, the month review, FINALIZE, SUBMIT and post-finalization changes all
+  use the pinned version only, never "the latest rules".
+- APPROVE records the pinned version on the immutable `schedule_versions` row; discarding a
+  revision restores both the working copy and the pin of the latest approved version.
+
+Enforced in `domain/staffing-rules/selection.ts`, `domain/staffing-rules/resolve.ts`,
+`application/schedules/create-schedule.ts` and `application/schedules/working-copy-validation.ts`.
+
+### D107 · Apply a rule-set version to a schedule (Preview → Apply → Audit)
+
+- **Two steps, never automatic.** PREVIEW validates the current working copy under the current pin
+  and under the target and writes nothing: current and target version, coverage problems before and
+  after (shortages / overstaffing with dates, buckets and amounts), days that would stop or start
+  being READY, and `assignments changed: 0`. APPLY requires explicit confirmation, the schedule
+  revision and the pin the preview was based on (CONFLICT if either changed), re-computes the
+  impact inside its transaction, changes only the pin, bumps the schedule revision and is audited
+  with the before/after impact. Assignments are never modified.
+- **Targets.** Any PUBLISHED or RETIRED version of an applicable lineage (Hospital Default or the
+  schedule's own department), other than the current pin — older versions included (controlled
+  rollback). DRAFT versions can never be applied.
+- **Status.** Allowed in DRAFT, PLANNING, FINALIZED, RETURNED and REVISING. Refused in SUBMITTED
+  (withdraw first, D10) and in APPROVED (start a revision first, D109).
+- Applying stricter rules to a FINALIZED schedule keeps it FINALIZED; SUBMIT then stays blocked
+  until the coverage problems are fixed.
+
+Enforced in `domain/staffing-rules/apply.ts` and `application/staffing-rules/apply.ts`.
+
+### D108 · Authorization for rule sets (narrow, dedicated actions)
+
+| Action                                                                      | Hospital Admin | Supervisor (of the department) | Head Nurse (of the department) |
+| --------------------------------------------------------------------------- | -------------- | ------------------------------ | ------------------------------ |
+| `staffingRules.manage` (drafts, date exceptions, publish, retire)           | ✅             | ❌                             | ❌                             |
+| `staffingRules.applyToSchedule` (preview and apply, any status D107 allows) | ✅             | ✅                             | ❌                             |
+| `staffingRules.view` (versions and read-only history for the department)    | ✅             | ✅                             | ✅                             |
+
+- Preview/Apply exposes only aggregate schedule information (dates, buckets, counts, amounts; no
+  nurse identities). It does not widen `schedule.viewDepartment` (D12) for Supervisors, and grants
+  Hospital Admins no nurse-level schedule access (D78 stands otherwise).
+- A Head Nurse never edits, publishes or applies rule sets; they read the pinned version and the
+  history of their own department's schedules and rules. Another department's rule set or
+  schedule is a 404 (D26).
+
+Enforced in `domain/authz/policies.ts`.
+
+### D109 · Explicit revision for an approved schedule's rules
+
+- An APPROVED schedule is immutable and its pin cannot change in place. The path is: Head Nurse
+  **starts a revision explicitly** (`schedule.startRevision`, reason required; APPROVED → REVISING,
+  optionally with initial revision dates) → Supervisor or Hospital Admin previews and applies
+  another version → the Head Nurse repairs → validate → submit → approve again.
+- Apply never starts a revision as a side effect.
+- When Apply introduces or worsens coverage problems on days outside the revision scope, those days
+  are added to the scope (audited like any scope extension, D14 stays per day), so the Head Nurse
+  can repair them.
+- The previous approved version keeps its own pinned version; discarding the revision restores the
+  pin (D106).
+
+Enforced in `application/schedules/schedule-changes.ts` (`startRevision`) and
+`application/staffing-rules/apply.ts`.
+
+### D110 · Rule-set audit and history
+
+- Append-only `audit_events`: `staffingRuleSet.draftCreated`, `.draftUpdated`, `.draftDiscarded`,
+  `.published` (with `effectiveFrom` and replaced versions), `.retired` (reason, replacement), and
+  `schedule.ruleSetApplied` (from / to version, rollback flag, revision and added scope days,
+  before / after category counts, `assignmentsChanged: 0`). `schedule_rule_set_applications` keeps
+  every application with its impact.
+- History is read-only. Hospital Admin and Supervisors see the relevant history in full; a Head
+  Nurse sees the history of the Hospital Default, their department's override and their
+  department's schedules only.
+- NICU pilot: the 3–6 rule is a **NICU Department Override** (M, E and N min 3, max 6), created and
+  published by a Hospital Admin through the rule-set workflow and applied to the current NICU
+  schedule through Preview → Apply. It is never created by a migration, and no other department
+  inherits it.
+
+Enforced in `application/staffing-rules/` and `features/staffing-rules/`.
