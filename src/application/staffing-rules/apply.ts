@@ -114,11 +114,12 @@ async function evaluate(
   holidays: HolidayCalendar,
   today: IsoDate,
 ) {
-  const [loaded, current, openRevision] = await Promise.all([
-    loadWorkingCopy(db, schedule, holidays),
-    loadRuleSet(db, schedule.staffingRuleSetVersionId),
-    schedule.currentVersionId ? findOpenRevision(db, schedule.id) : null,
-  ]);
+  // Sequential: APPLY runs this on its transaction client.
+  const loaded = await loadWorkingCopy(db, schedule, holidays);
+  const current = await loadRuleSet(db, schedule.staffingRuleSetVersionId);
+  const openRevision = schedule.currentVersionId
+    ? await findOpenRevision(db, schedule.id)
+    : null;
   const impact = compareValidation({
     period: schedule.period,
     assignments: loaded.assignments,

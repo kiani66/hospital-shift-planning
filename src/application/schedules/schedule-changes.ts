@@ -217,16 +217,15 @@ export async function evaluateScheduleChange(
   );
   const dates = uniqueSortedDates(changes.map((c) => c.date));
   const { period } = schedule;
-  const [adjacent, ruleSet, holidays] = await Promise.all([
-    listAdjacentAssignments(db, {
-      departmentId: schedule.departmentId,
-      excludeScheduleId: schedule.id,
-      nurseIds: roster.map((r) => r.userId),
-      dates: [addDays(period.start, -1), addDays(period.end, 1)],
-    }),
-    loadRuleSet(db, schedule.staffingRuleSetVersionId),
-    holidayDates(options.holidays, period),
-  ]);
+  // Sequential: `db` is the command's transaction client when writing.
+  const adjacent = await listAdjacentAssignments(db, {
+    departmentId: schedule.departmentId,
+    excludeScheduleId: schedule.id,
+    nurseIds: roster.map((r) => r.userId),
+    dates: [addDays(period.start, -1), addDays(period.end, 1)],
+  });
+  const ruleSet = await loadRuleSet(db, schedule.staffingRuleSetVersionId);
+  const holidays = await holidayDates(options.holidays, period);
   const requirements = requirementsUnder(ruleSet, dates, holidays);
   const validate = (cells: typeof assignments) =>
     validateSchedule({
@@ -511,11 +510,14 @@ export const discardRevision = defineCommand({
     if (!revision)
       throw new InvalidStateError(schedule.status, "DISCARD_REVISION");
 
-    const [working, approved, approvedVersion] = await Promise.all([
+    const [working, approved] = await Promise.all([
       listAssignments(uow.tx, schedule.id),
       listVersionAssignments(uow.tx, schedule.currentVersionId!),
-      findVersionById(uow.tx, schedule.currentVersionId!),
     ]);
+    const approvedVersion = await findVersionById(
+      uow.tx,
+      schedule.currentVersionId!,
+    );
     // The approved version keeps the rule set it was approved under; a rule
     // set applied during the revision is discarded with it (D106, D109).
     const restoredRuleSet =

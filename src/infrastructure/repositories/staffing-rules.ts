@@ -153,20 +153,19 @@ export async function loadRuleSetContents(
 ): Promise<Map<string, RuleSetContent>> {
   const ids = [...new Set(versionIds)];
   if (ids.length === 0) return new Map();
-  const [requirements, exceptions] = await Promise.all([
-    db
-      .select()
-      .from(staffingRuleSetRequirements)
-      .where(inArray(staffingRuleSetRequirements.versionId, ids)),
-    db
-      .select()
-      .from(staffingRuleSetDateExceptions)
-      .where(inArray(staffingRuleSetDateExceptions.versionId, ids))
-      .orderBy(
-        asc(staffingRuleSetDateExceptions.date),
-        asc(staffingRuleSetDateExceptions.coveragePeriod),
-      ),
-  ]);
+  // Sequential: `db` may be a transaction client (no concurrent queries).
+  const requirements = await db
+    .select()
+    .from(staffingRuleSetRequirements)
+    .where(inArray(staffingRuleSetRequirements.versionId, ids));
+  const exceptions = await db
+    .select()
+    .from(staffingRuleSetDateExceptions)
+    .where(inArray(staffingRuleSetDateExceptions.versionId, ids))
+    .orderBy(
+      asc(staffingRuleSetDateExceptions.date),
+      asc(staffingRuleSetDateExceptions.coveragePeriod),
+    );
   const contents = new Map<
     string,
     {
@@ -446,24 +445,23 @@ export async function countRuleSetPins(
     ids.map((id) => [id, { schedules: 0, approvedVersions: 0 }]),
   );
   if (ids.length === 0) return counts;
-  const [pins, approved] = await Promise.all([
-    db
-      .select({
-        id: schedules.staffingRuleSetVersionId,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(schedules)
-      .where(inArray(schedules.staffingRuleSetVersionId, ids))
-      .groupBy(schedules.staffingRuleSetVersionId),
-    db
-      .select({
-        id: scheduleVersions.staffingRuleSetVersionId,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(scheduleVersions)
-      .where(inArray(scheduleVersions.staffingRuleSetVersionId, ids))
-      .groupBy(scheduleVersions.staffingRuleSetVersionId),
-  ]);
+  // Sequential: `db` may be a transaction client (no concurrent queries).
+  const pins = await db
+    .select({
+      id: schedules.staffingRuleSetVersionId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schedules)
+    .where(inArray(schedules.staffingRuleSetVersionId, ids))
+    .groupBy(schedules.staffingRuleSetVersionId);
+  const approved = await db
+    .select({
+      id: scheduleVersions.staffingRuleSetVersionId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(scheduleVersions)
+    .where(inArray(scheduleVersions.staffingRuleSetVersionId, ids))
+    .groupBy(scheduleVersions.staffingRuleSetVersionId);
   for (const p of pins) counts.get(p.id)!.schedules = p.n;
   for (const a of approved) counts.get(a.id)!.approvedVersions = a.n;
   return counts;

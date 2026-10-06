@@ -107,9 +107,8 @@ export async function validateWorkingCopy(
   schedule: ValidatedSchedule,
   holidays: HolidayCalendar = NO_HOLIDAY_DATA,
 ): Promise<WorkingCopyValidation> {
-  const [loaded, ruleSet] = await Promise.all([
-    loadWorkingCopy(db, schedule, holidays),
-    loadRuleSet(db, schedule.staffingRuleSetVersionId),
-  ]);
+  // Sequential: FINALIZE and SUBMIT call this on their transaction client.
+  const loaded = await loadWorkingCopy(db, schedule, holidays);
+  const ruleSet = await loadRuleSet(db, schedule.staffingRuleSetVersionId);
   return { ...loaded, ruleSet, ...validateUnder(schedule, loaded, ruleSet) };
 }

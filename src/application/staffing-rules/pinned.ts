@@ -18,17 +18,17 @@ export interface LoadedRuleSet {
 }
 
 /**
- * Loads one rule-set version and its content (three small queries, run in
- * parallel). Used for a schedule's pin (D106) and for an Apply target.
+ * Loads one rule-set version and its content (three small queries, run one
+ * after another: `db` may be a command's transaction client, which must not
+ * run queries concurrently). Used for a schedule's pin (D106) and for an
+ * Apply target.
  */
 export async function loadRuleSet(
   db: DbExecutor,
   versionId: string,
 ): Promise<LoadedRuleSet> {
-  const [version, content] = await Promise.all([
-    findRuleSetVersion(db, versionId),
-    loadRuleSetContent(db, versionId),
-  ]);
+  const version = await findRuleSetVersion(db, versionId);
+  const content = await loadRuleSetContent(db, versionId);
   // The pin is a foreign key, so a missing version is a broken invariant.
   if (!version) throw new Error(`Rule set version ${versionId} not found`);
   return { version, content };

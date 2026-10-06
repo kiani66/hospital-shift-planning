@@ -1760,7 +1760,7 @@ Enforced in `domain/authz/policies.ts`.
 - The previous approved version keeps its own pinned version; discarding the revision restores the
   pin (D106).
 
-Enforced in `application/schedules/schedule-changes.ts` (`startRevision`) and
+Enforced in `application/schedules/start-revision.ts` (`startScheduleRevision`) and
 `application/staffing-rules/apply.ts`.
 
 ### D110 · Rule-set audit and history
