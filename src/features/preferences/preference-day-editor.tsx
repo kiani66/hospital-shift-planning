@@ -132,9 +132,13 @@ export function PreferenceDayEditor({
   // its accessible name), so «ترجیح من: …» keeps its room on a 360px phone.
   const reporting = phase === "saving" || phase === "saved";
 
+  // Laid out against the day row's own width (a container query), not the
+  // viewport's: the sidebar and summary decide how wide a row really is.
+  // A wide row reads «ترجیح من» then the five choices on one line; a narrow
+  // one wraps the choices under it, inside the same full-width row.
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="flex min-h-9 items-center gap-x-2">
+    <div className="flex min-w-0 flex-col gap-1.5 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:gap-x-3">
+      <div className="flex min-h-9 min-w-0 items-center gap-x-2 @2xl:flex-1">
         <p
           className={cn(
             "flex min-w-0 flex-1 items-center gap-1 text-sm",
@@ -188,7 +192,7 @@ export function PreferenceDayEditor({
         aria-label={`ترجیح شیفت ${dayLabel}`}
         aria-busy={phase === "saving" || undefined}
         onKeyDown={onKeyDown}
-        className="grid grid-cols-5 gap-1"
+        className="grid grid-cols-5 gap-1 @2xl:w-80 @2xl:shrink-0"
       >
         {PREFERENCE_OPTIONS.map((option, i) => {
           const selected = option.value === shown;
@@ -242,7 +246,7 @@ export function PreferenceDayEditor({
       {failure && (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-destructive"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-destructive @2xl:basis-full"
         >
           <CircleAlert aria-hidden="true" className="size-3.5 shrink-0" />
           <span className="font-semibold">{failedName} ذخیره نشد</span>

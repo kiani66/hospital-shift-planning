@@ -67,12 +67,12 @@ export function PreferenceMonthEditor({
 
   const counts = countPreferences(Object.values(stored));
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
       <PreferenceSummary
         counts={counts}
-        className="lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1"
+        className="xl:sticky xl:top-20 xl:col-start-2 xl:row-start-1"
       />
-      <div className="flex min-w-0 flex-col gap-2 lg:col-start-1 lg:row-start-1">
+      <div className="flex min-w-0 flex-col gap-2 xl:col-start-1 xl:row-start-1">
         {groups.map((group) => (
           <DayGroupSection
             key={group.key}
@@ -151,9 +151,8 @@ function DayGroupSection({
         </button>
       </h3>
       <div id={panelId} hidden={!open} className="px-1.5 pb-1.5">
-        <ol className="grid gap-1.5 sm:max-lg:grid-cols-2 2xl:grid-cols-2">
-          {children}
-        </ol>
+        {/* One day per row at every width: a day never shares its row. */}
+        <ol className="flex flex-col gap-1.5">{children}</ol>
       </div>
     </section>
   );
@@ -187,7 +186,7 @@ function DayCard({
       )}
     >
       <DateBlock view={view} />
-      <div className="min-w-0 flex-1">
+      <div className="@container min-w-0 flex-1">
         {day.lock === null ? (
           <PreferenceDayEditor
             scheduleId={scheduleId}
