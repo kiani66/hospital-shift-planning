@@ -9,10 +9,17 @@ import { listSchedulesForDepartment } from "../../infrastructure/repositories/sc
 import {
   countApprovedVersionPins,
   listApplicableRuleSetVersions,
+  listRuleSetApplications,
 } from "../../infrastructure/repositories/staffing-rules";
 import { listDisplayNames } from "../../infrastructure/repositories/users";
 import { NotFoundError } from "../errors";
 import type { AppContext } from "../use-case";
+import {
+  listRuleSetHistory,
+  toApplicationHistory,
+  type ApplicationHistoryEntry,
+  type RuleSetHistoryEntry,
+} from "./history";
 import { peopleOf, toVersionViews, type RuleSetVersionView } from "./queries";
 
 /** One schedule of the department and the rule-set version it is pinned to. */
@@ -39,6 +46,19 @@ export interface DepartmentCoverageRules {
   readonly schedules: readonly DepartmentScheduleRules[];
   /** The actor may preview / apply another version (Supervisor, Hospital Admin; D108). */
   readonly canApply: boolean;
+  /**
+   * Lifecycle history of the department's override and the Hospital Default,
+   * newest first (D110). Drafts are listed for Supervisors and Hospital
+   * Admins; a Head Nurse reads the published history.
+   */
+  readonly history: readonly RuleSetHistoryEntry[];
+  /** Every Apply to this department's schedules, newest first. */
+  readonly applications: readonly ApplicationHistoryEntry[];
+  /** Every version named by the history (incl. ones no longer listed above). */
+  readonly versionNames: ReadonlyMap<
+    string,
+    { readonly versionNo: number; readonly departmentId: string | null }
+  >;
   readonly names: ReadonlyMap<string, string>;
 }
 
@@ -93,6 +113,25 @@ export async function getDepartmentCoverageRules(
     });
     return selected.ok ? selected.value.id : null;
   };
+  const canApply = decide(ctx.actor, "staffingRules.applyToSchedule", {
+    departmentId: department.id,
+  }).allowed;
+  const [history, applicationRecords] = await Promise.all([
+    listRuleSetHistory(ctx.db, {
+      versionIds: stored.map((v) => v.id),
+      includeDrafts: canApply,
+    }),
+    listRuleSetApplications(
+      ctx.db,
+      schedules.map((s) => s.id),
+    ),
+  ]);
+  const applications = toApplicationHistory(applicationRecords);
+  const actors = [
+    ...peopleOf(versions),
+    ...history.map((h) => h.actorId),
+    ...applications.map((a) => a.actorId),
+  ];
   return {
     departmentId: department.id,
     today,
@@ -112,9 +151,15 @@ export async function getDepartmentCoverageRules(
         };
       })
       .reverse(),
-    canApply: decide(ctx.actor, "staffingRules.applyToSchedule", {
-      departmentId: department.id,
-    }).allowed,
-    names: await listDisplayNames(ctx.db, peopleOf(versions)),
+    canApply,
+    history,
+    applications,
+    versionNames: new Map(
+      stored.map((v) => [
+        v.id,
+        { versionNo: v.versionNo, departmentId: v.departmentId },
+      ]),
+    ),
+    names: await listDisplayNames(ctx.db, [...new Set(actors)]),
   };
 }

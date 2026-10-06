@@ -16,6 +16,7 @@ import {
   PublishDialog,
 } from "./admin-controls";
 import { contentFormValue, scopeLabel, versionLabel } from "./presentation";
+import { RuleSetHistory } from "./history-view";
 import { RuleSetVersionCard } from "./version-card";
 
 function VersionActions({
@@ -177,6 +178,17 @@ export function RuleSetAdminView({
           names={administration.names}
         />
       ))}
+      <RuleSetHistory
+        title="تاریخچه همه نسخه‌ها"
+        entries={administration.history}
+        names={administration.names}
+        departmentName={(id) =>
+          id === null
+            ? null
+            : (administration.scopes.find((s) => s.departmentId === id)
+                ?.departmentName ?? "بخش")
+        }
+      />
     </div>
   );
 }

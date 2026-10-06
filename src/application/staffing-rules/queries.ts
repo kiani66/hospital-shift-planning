@@ -22,6 +22,7 @@ import {
 } from "../../infrastructure/repositories/staffing-rules";
 import { listDisplayNames } from "../../infrastructure/repositories/users";
 import { NotFoundError } from "../errors";
+import { listRuleSetHistory, type RuleSetHistoryEntry } from "./history";
 import type { AppContext } from "../use-case";
 
 /** A version as the rule-set screens show it. */
@@ -70,6 +71,8 @@ export interface RuleSetScopeView {
 
 export interface RuleSetAdministration {
   readonly today: IsoDate;
+  /** The full rule-set log, newest first, discarded drafts included (D110). */
+  readonly history: readonly RuleSetHistoryEntry[];
   /** The Hospital Default first, then every active department by name. */
   readonly scopes: readonly RuleSetScopeView[];
   /** Names of the people who created, published or retired a version. */
@@ -140,7 +143,10 @@ export async function getRuleSetAdministration(
     listAllRuleSetVersions(ctx.db),
     listDepartments(ctx.db),
   ]);
-  const versions = await toVersionViews(ctx, stored, today);
+  const [versions, history] = await Promise.all([
+    toVersionViews(ctx, stored, today),
+    listRuleSetHistory(ctx.db, { includeDrafts: true }),
+  ]);
   const scope = (departmentId: string | null) => {
     const own = versions
       .filter((v) => v.departmentId === departmentId)
@@ -156,6 +162,7 @@ export async function getRuleSetAdministration(
     .sort((a, b) => a.name.localeCompare(b.name, "fa"));
   return {
     today,
+    history,
     scopes: [
       {
         departmentId: null,
@@ -170,7 +177,9 @@ export async function getRuleSetAdministration(
         ...scope(d.id),
       })),
     ],
-    names: await listDisplayNames(ctx.db, peopleOf(versions)),
+    names: await listDisplayNames(ctx.db, [
+      ...new Set([...peopleOf(versions), ...history.map((h) => h.actorId)]),
+    ]),
   };
 }
 

@@ -1,4 +1,8 @@
 import type { ActionError } from "@/application/result";
+import type {
+  ApplicationHistoryEntry,
+  RuleSetHistoryEntry,
+} from "@/application/staffing-rules/history";
 import type { IsoDate } from "@/domain/shared/dates";
 import { COVERAGE_PERIODS, type BaseShift } from "@/domain/shifts/shift-type";
 import type {
@@ -242,4 +246,52 @@ export function applyErrorMessage(error: ActionError): string {
     default:
       return "خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.";
   }
+}
+
+/** One rule-set lifecycle event as a sentence (D110). */
+export function historyEntryText(
+  entry: RuleSetHistoryEntry,
+  scopeName: string,
+): string {
+  const version = `${versionLabel(entry.versionNo)} ${scopeName}`;
+  switch (entry.kind) {
+    case "DRAFT_CREATED":
+      return `پیش‌نویس ${version} ساخته شد.`;
+    case "DRAFT_UPDATED":
+      return `پیش‌نویس ${version} ویرایش شد.`;
+    case "DRAFT_DISCARDED":
+      return `پیش‌نویس ${version} حذف شد.`;
+    case "PUBLISHED":
+      return `${version} منتشر شد${entry.effectiveFrom ? `؛ اجرا از ${formatJalaliDate(entry.effectiveFrom)}` : ""}.`;
+    case "RETIRED":
+      return entry.retiredReason === "REPLACED"
+        ? `${version} با انتشار ${entry.replacedByVersionNo ? versionLabel(entry.replacedByVersionNo) : "نسخه دیگر"} جایگزین و بازنشسته شد.`
+        : `${version} کنار گذاشته شد${entry.note ? ` (${entry.note})` : ""}.`;
+  }
+}
+
+/** One Apply as a sentence: who changed which schedule from what to what, and the effect. */
+export function applicationEntryText(
+  entry: ApplicationHistoryEntry,
+  input: {
+    readonly scheduleLabel: string;
+    readonly from: string;
+    readonly to: string;
+  },
+): string {
+  const parts = [
+    `قوانین «${input.scheduleLabel}» از ${input.from} به ${input.to} تغییر کرد${entry.rollback ? " (بازگشت به نسخه پیشین)" : ""}.`,
+  ];
+  if (entry.before && entry.after)
+    parts.push(
+      `مشکلات پوشش: ${faNumber(entry.before.coverageProblems)} ← ${faNumber(entry.after.coverageProblems)}؛ روزهای آماده: ${faNumber(entry.before.readyDays)} ← ${faNumber(entry.after.readyDays)}.`,
+    );
+  parts.push("شیفت‌های تغییرکرده: ۰.");
+  if (entry.revisionId)
+    parts.push(
+      entry.addedRevisionDates.length > 0
+        ? `در بازنگری؛ ${faNumber(entry.addedRevisionDates.length)} روز به دامنه بازنگری افزوده شد.`
+        : "در بازنگری.",
+    );
+  return parts.join(" ");
 }

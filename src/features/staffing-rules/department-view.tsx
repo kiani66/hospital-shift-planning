@@ -15,6 +15,7 @@ import { SCHEDULE_STATUS_LABELS } from "@/features/schedule/labels";
 import { cn } from "@/lib/utils";
 
 import { ApplyConfirmForm } from "./apply-confirm";
+import { RuleSetHistory } from "./history-view";
 import {
   BUCKET_NAMES,
   applyRefusalText,
@@ -247,11 +248,11 @@ export function DepartmentCoverageRulesView({
   selectedScheduleId: string | null;
   preview: React.ReactNode;
 }) {
-  const byId = new Map(data.versions.map((v) => [v.id, v]));
   const name = (id: string) => {
-    const v = byId.get(id);
+    const v = data.versionNames.get(id);
     return v ? versionName(v, departmentName) : "—";
   };
+  const labels = new Map(data.schedules.map((s) => [s.scheduleId, s.label]));
   return (
     <div className="flex flex-col gap-8">
       <Callout role="note" tone="info" icon={Info}>
@@ -370,6 +371,16 @@ export function DepartmentCoverageRulesView({
           />
         ))}
       </section>
+
+      <RuleSetHistory
+        title="تاریخچه قوانین و اعمال‌ها"
+        entries={data.history}
+        applications={data.applications}
+        names={data.names}
+        departmentName={(id) => (id === null ? null : departmentName)}
+        scheduleLabel={(id) => labels.get(id) ?? "—"}
+        versionName={name}
+      />
     </div>
   );
 }

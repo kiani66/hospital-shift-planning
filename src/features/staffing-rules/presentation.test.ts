@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { isoDate } from "@/domain/shared/dates";
 
 import {
+  applicationEntryText,
+  historyEntryText,
   applyErrorMessage,
   applyRefusalText,
   boundsText,
@@ -183,5 +185,100 @@ describe("Apply wording (D107, D109)", () => {
     [{ code: "INTERNAL" }, "غیرمنتظره"],
   ] as const)("words a refused Apply %o", (error, words) => {
     expect(applyErrorMessage({ message: "x", ...error })).toContain(words);
+  });
+});
+
+describe("history wording (D110)", () => {
+  const entry = {
+    at: new Date(),
+    actorId: "a",
+    versionId: "v",
+    versionNo: 2,
+    departmentId: null,
+    effectiveFrom: null,
+    retiredReason: null,
+    replacedByVersionNo: null,
+    note: null,
+  };
+  it.each([
+    [{ kind: "DRAFT_CREATED" }, "پیش‌نویس نسخه ۲ پیش‌فرض بیمارستان ساخته شد."],
+    [{ kind: "DRAFT_UPDATED" }, "پیش‌نویس نسخه ۲ پیش‌فرض بیمارستان ویرایش شد."],
+    [{ kind: "DRAFT_DISCARDED" }, "پیش‌نویس نسخه ۲ پیش‌فرض بیمارستان حذف شد."],
+    [
+      { kind: "PUBLISHED", effectiveFrom: isoDate("2026-10-23") },
+      "نسخه ۲ پیش‌فرض بیمارستان منتشر شد؛ اجرا از ۱ آبان ۱۴۰۵.",
+    ],
+    [{ kind: "PUBLISHED" }, "نسخه ۲ پیش‌فرض بیمارستان منتشر شد."],
+    [
+      { kind: "RETIRED", retiredReason: "REPLACED", replacedByVersionNo: 3 },
+      "نسخه ۲ پیش‌فرض بیمارستان با انتشار نسخه ۳ جایگزین و بازنشسته شد.",
+    ],
+    [
+      { kind: "RETIRED", retiredReason: "REPLACED" },
+      "نسخه ۲ پیش‌فرض بیمارستان با انتشار نسخه دیگر جایگزین و بازنشسته شد.",
+    ],
+    [
+      { kind: "RETIRED", retiredReason: "WITHDRAWN", note: "پایان آزمایش" },
+      "نسخه ۲ پیش‌فرض بیمارستان کنار گذاشته شد (پایان آزمایش).",
+    ],
+    [
+      { kind: "RETIRED", retiredReason: "WITHDRAWN" },
+      "نسخه ۲ پیش‌فرض بیمارستان کنار گذاشته شد.",
+    ],
+  ] as const)("%o", (overrides, text) => {
+    expect(
+      historyEntryText({ ...entry, ...overrides }, "پیش‌فرض بیمارستان"),
+    ).toBe(text);
+  });
+
+  it("words an Apply with its impact, the zero shift changes and the revision", () => {
+    const counts = (coverageProblems: number, readyDays: number) => ({
+      undecided: 0,
+      undecidedDays: 0,
+      coverageProblems,
+      shortages: coverageProblems,
+      overstaffing: 0,
+      shortBy: 0,
+      excessBy: 0,
+      ruleViolations: 0,
+      readyDays,
+      totalDays: 30,
+    });
+    const base = {
+      id: "x",
+      at: new Date(),
+      actorId: "a",
+      scheduleId: "s",
+      fromVersionId: "f",
+      toVersionId: "t",
+      rollback: false,
+      revisionId: null,
+      before: counts(2, 28),
+      after: counts(7, 23),
+      addedRevisionDates: [],
+    };
+    const names = { scheduleLabel: "آبان ۱۴۰۵", from: "نسخه ۳", to: "نسخه ۴" };
+    expect(applicationEntryText(base, names)).toBe(
+      "قوانین «آبان ۱۴۰۵» از نسخه ۳ به نسخه ۴ تغییر کرد. مشکلات پوشش: ۲ ← ۷؛ روزهای آماده: ۲۸ ← ۲۳. شیفت‌های تغییرکرده: ۰.",
+    );
+    expect(
+      applicationEntryText(
+        {
+          ...base,
+          rollback: true,
+          revisionId: "r",
+          addedRevisionDates: [isoDate("2026-11-01")],
+        },
+        names,
+      ),
+    ).toContain("(بازگشت به نسخه پیشین)");
+    expect(
+      applicationEntryText(
+        { ...base, revisionId: "r", before: null, after: null },
+        names,
+      ),
+    ).toBe(
+      "قوانین «آبان ۱۴۰۵» از نسخه ۳ به نسخه ۴ تغییر کرد. شیفت‌های تغییرکرده: ۰. در بازنگری.",
+    );
   });
 });
