@@ -208,3 +208,38 @@ export function ruleSetErrorMessage(error: ActionError): string {
       return "خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.";
   }
 }
+
+/** Why Apply is not possible for a schedule now (D107, D109). */
+export function applyRefusalText(reason: string): string {
+  switch (reason) {
+    case "APPLY_RULE_SET_WHILE_SUBMITTED":
+      return "این برنامه برای تأیید ارسال شده و قفل است. اعمال قوانین پس از تصمیم سوپروایزر یا پس گرفتن ارسال ممکن است.";
+    case "APPLY_RULE_SET_REQUIRES_REVISION":
+      return "برنامه تأییدشده مستقیماً تغییر نمی‌کند. ابتدا سرپرستار باید «شروع بازنگری» را بزند؛ سپس می‌توانید قوانین دیگری را اعمال کنید.";
+    case "RULE_SET_ALREADY_PINNED":
+      return "این برنامه هم‌اکنون به همین نسخه متصل است.";
+    default:
+      return "اعمال این نسخه برای این برنامه ممکن نیست.";
+  }
+}
+
+/** Persian message for a refused Apply. */
+export function applyErrorMessage(error: ActionError): string {
+  switch (error.code) {
+    case "CONFLICT":
+      return error.reason === "RULE_SET_PIN_CHANGED"
+        ? "قوانین این برنامه پس از پیش‌نمایش تغییر کرده است. پیش‌نمایش تازه را بررسی کنید."
+        : "برنامه پس از پیش‌نمایش تغییر کرده است. پیش‌نمایش تازه را بررسی کنید و دوباره تأیید کنید.";
+    case "INVALID_STATE":
+    case "VALIDATION":
+      return error.reason
+        ? applyRefusalText(error.reason)
+        : "تأیید صریح اعمال لازم است.";
+    case "FORBIDDEN":
+      return "فقط سوپروایزر این بخش یا مدیر بیمارستان می‌تواند قوانین برنامه را تغییر دهد.";
+    case "NOT_FOUND":
+      return "برنامه یا نسخه موردنظر پیدا نشد.";
+    default:
+      return "خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.";
+  }
+}

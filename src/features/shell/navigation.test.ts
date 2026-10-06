@@ -89,6 +89,7 @@ describe("buildNavigation", () => {
       "/departments/icu/schedule",
       "/departments/icu/requests",
       "/departments/icu/history",
+      "/departments/icu/coverage-rules",
       "/departments/icu/people",
     ]);
   });
@@ -105,6 +106,9 @@ describe("buildNavigation", () => {
       "/departments/er/people",
       "/review",
       "/notifications",
+      // Supervised departments' rule sets (D108).
+      "/departments/icu/coverage-rules",
+      "/departments/er/coverage-rules",
     ]);
   });
 
@@ -112,6 +116,7 @@ describe("buildNavigation", () => {
     const ctx: Ctx = { ...nobody, isHospitalAdmin: true };
     expect(buildNavigation(ctx).primary[0]?.href).toBe("/admin/personnel");
     expect(allItems(ctx).map((i) => i.href)).toContain("/admin/personnel");
+    expect(allItems(ctx).map((i) => i.href)).toContain("/admin/staffing-rules");
     expect(allItems(ctx).some((i) => i.href.startsWith("/departments/"))).toBe(
       false,
     );

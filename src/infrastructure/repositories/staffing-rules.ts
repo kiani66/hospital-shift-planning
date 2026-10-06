@@ -9,6 +9,7 @@ import type {
 } from "../../domain/staffing-rules/model";
 import type { DbExecutor, Transaction } from "../db/database";
 import {
+  scheduleRuleSetApplications,
   schedules,
   scheduleVersions,
   staffingRuleSetDateExceptions,
@@ -466,4 +467,60 @@ export async function countRuleSetPins(
   for (const p of pins) counts.get(p.id)!.schedules = p.n;
   for (const a of approved) counts.get(a.id)!.approvedVersions = a.n;
   return counts;
+}
+
+// --- Apply history (append-only) -------------------------------------------
+
+export interface RuleSetApplicationRecord {
+  readonly id: string;
+  readonly scheduleId: string;
+  readonly fromVersionId: string;
+  readonly toVersionId: string;
+  readonly revisionId: string | null;
+  readonly rollback: boolean;
+  readonly appliedBy: string;
+  readonly appliedAt: Date;
+  readonly impact: Record<string, unknown>;
+}
+
+/** Records one explicit Apply (D107, D110). Never updated or deleted. */
+export async function insertRuleSetApplication(
+  db: DbExecutor,
+  input: Omit<RuleSetApplicationRecord, "id">,
+): Promise<string> {
+  const [row] = await db
+    .insert(scheduleRuleSetApplications)
+    .values(input)
+    .returning({ id: scheduleRuleSetApplications.id });
+  return row!.id;
+}
+
+/** The Apply history of the given schedules, newest first (one query). */
+export async function listRuleSetApplications(
+  db: DbExecutor,
+  scheduleIds: readonly string[],
+): Promise<RuleSetApplicationRecord[]> {
+  if (scheduleIds.length === 0) return [];
+  return db
+    .select()
+    .from(scheduleRuleSetApplications)
+    .where(inArray(scheduleRuleSetApplications.scheduleId, [...scheduleIds]))
+    .orderBy(sql`${scheduleRuleSetApplications.appliedAt} desc`);
+}
+
+/** Approved versions per rule-set version among the given schedules (one query). */
+export async function countApprovedVersionPins(
+  db: DbExecutor,
+  scheduleIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (scheduleIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: scheduleVersions.staffingRuleSetVersionId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(scheduleVersions)
+    .where(inArray(scheduleVersions.scheduleId, [...scheduleIds]))
+    .groupBy(scheduleVersions.staffingRuleSetVersionId);
+  return new Map(rows.map((r) => [r.id, r.n]));
 }

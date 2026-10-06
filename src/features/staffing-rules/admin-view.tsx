@@ -3,6 +3,9 @@ import type {
   RuleSetScopeView,
   RuleSetVersionView,
 } from "@/application/staffing-rules/queries";
+import type { Route } from "next";
+import Link from "next/link";
+
 import { Callout } from "@/components/ui/callout";
 import { Info } from "lucide-react";
 
@@ -106,6 +109,16 @@ function ScopeSection({
         <h2 id={id} className="text-lg font-semibold">
           {title}
         </h2>
+        {scope.departmentCode && (
+          <Link
+            href={
+              `/departments/${scope.departmentCode}/coverage-rules` as Route
+            }
+            className="text-sm text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            برنامه‌های بخش و اعمال نسخه
+          </Link>
+        )}
         {!scope.draftVersionId && (
           <CreateDraftButton
             departmentId={scope.departmentId}

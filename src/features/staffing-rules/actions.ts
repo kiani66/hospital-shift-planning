@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
@@ -10,6 +11,7 @@ import {
   retireRuleSetVersion,
   updateRuleSetDraft,
 } from "@/application/staffing-rules/commands";
+import { applyRuleSetToSchedule } from "@/application/staffing-rules/apply";
 import {
   previewRuleSetPublication,
   type PublishPreview,
@@ -19,7 +21,11 @@ import { requireRequestContext } from "@/features/auth/guards";
 import { parseJalaliInput } from "@/features/calendar/jalali-input";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
-import { parseContentForm, ruleSetErrorMessage } from "./presentation";
+import {
+  applyErrorMessage,
+  parseContentForm,
+  ruleSetErrorMessage,
+} from "./presentation";
 
 /**
  * Thin adapters for Hospital Admin rule-set management: parse the form,
@@ -177,5 +183,35 @@ export async function retireAction(
       note: text(form, "note") || null,
     }),
     "نسخه کنار گذاشته شد. برنامه‌های متصل به آن تغییری نمی‌کنند.",
+  );
+}
+
+const applyForm = z.object({
+  scheduleId: z.uuid(),
+  expectedRevision: z.coerce.number().int().nonnegative(),
+  fromVersionId: z.uuid(),
+  toVersionId: z.uuid(),
+  /** Only used to return to the page; never trusted for authorization. */
+  departmentCode: z.string().regex(/^[a-z0-9-]{1,64}$/),
+});
+
+/**
+ * Applies the previewed version (D107): only with the explicit confirmation
+ * box ticked; the command re-checks the revision and pin it was shown.
+ */
+export async function applyRuleSetAction(
+  _previous: RuleSetFormState,
+  form: FormData,
+): Promise<RuleSetFormState> {
+  const parsed = applyForm.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return failure("اطلاعات فرم معتبر نیست.");
+  if (form.get("confirm") !== "on")
+    return failure("برای اعمال، تأیید پیش‌نمایش را علامت بزنید.");
+  const { departmentCode, ...input } = parsed.data;
+  const ctx = await requireRequestContext();
+  const result = await applyRuleSetToSchedule(ctx, { ...input, confirm: true });
+  if (!result.ok) return failure(applyErrorMessage(result.error));
+  redirect(
+    `/departments/${departmentCode}/coverage-rules?applied=${input.scheduleId}`,
   );
 }

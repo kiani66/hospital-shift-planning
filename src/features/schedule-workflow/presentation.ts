@@ -17,7 +17,13 @@ import {
  */
 
 export type LifecycleCommand =
-  "finalize" | "submit" | "withdraw" | "approve" | "return" | "discard";
+  | "finalize"
+  | "submit"
+  | "withdraw"
+  | "approve"
+  | "return"
+  | "discard"
+  | "revise";
 
 /** The action as the end of "…بتوان آن را ___" ("نهایی کرد"). */
 const ACT: Record<LifecycleCommand, string> = {
@@ -27,6 +33,7 @@ const ACT: Record<LifecycleCommand, string> = {
   approve: "تأیید کرد",
   return: "برگشت داد",
   discard: "کنار گذاشت",
+  revise: "بازنگری کرد",
 };
 
 export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
@@ -37,6 +44,8 @@ export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
   return: "برنامه با توضیح شما برای اصلاح به سرپرستار برگشت داده شد.",
   discard:
     "بازنگری کنار گذاشته شد؛ برنامه به آخرین نسخه تأییدشده برگشت و همان نسخه اجرایی است.",
+  revise:
+    "بازنگری آغاز شد. نسخه تأییدشده تا تأیید بازنگری اجرایی می‌ماند؛ اکنون سوپروایزر یا مدیر بیمارستان می‌تواند قوانین پوشش دیگری را اعمال کند.",
 };
 
 /** "۴ آبان" (the month's day and name; the year is the page's). */
@@ -158,6 +167,8 @@ export function workflowErrorMessage(
         return "این برنامه را خودتان ارسال کرده‌اید؛ تأیید یا برگشت آن با سوپروایزر دیگری است.";
       return GENERIC.FORBIDDEN;
     case "VALIDATION":
+      if (command === "revise")
+        return "دلیل بازنگری را بنویسید (حداکثر ۵۰۰ نویسه).";
       if (command === "return" && error.fieldErrors?.comment)
         return "توضیح برگشت را بنویسید (حداکثر ۱۰۰۰ نویسه)؛ سرپرستار بر اساس آن برنامه را اصلاح می‌کند.";
       return GENERIC.VALIDATION;

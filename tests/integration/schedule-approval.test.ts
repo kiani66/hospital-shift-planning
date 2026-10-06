@@ -1167,6 +1167,7 @@ describe("Supervisor review queries", () => {
       approve: null,
       return: null,
       discardRevision: null,
+      startRevision: null,
     });
 
     unwrapOk(await run(submitSchedule, actors.icuHead));
@@ -1206,6 +1207,7 @@ describe("Supervisor review queries", () => {
       approve: null,
       return: null,
       discardRevision: null,
+      startRevision: null,
     });
   });
 });

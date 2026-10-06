@@ -11,6 +11,7 @@ import {
   withdrawSubmission,
 } from "@/application/schedules/lifecycle";
 import { discardRevision } from "@/application/schedules/schedule-changes";
+import { startScheduleRevision } from "@/application/schedules/start-revision";
 import type { ScheduleFormState } from "@/features/schedule/actions";
 import { requireRequestContext } from "@/features/auth/guards";
 
@@ -39,6 +40,7 @@ const COMMANDS = {
   approve: approveSchedule,
   return: returnSchedule,
   discard: discardRevision,
+  revise: startScheduleRevision,
 } as const;
 
 async function run(
@@ -62,6 +64,10 @@ async function run(
     ...form.data,
     ...(command === "return" && {
       comment: typeof comment === "string" ? comment : "",
+    }),
+    // The revision's reason is the dialog's required text (D109).
+    ...(command === "revise" && {
+      reason: typeof comment === "string" ? comment : "",
     }),
   });
   // Success and a state that changed underneath both re-render the page with
@@ -121,4 +127,11 @@ export async function discardRevisionAction(
   formData: FormData,
 ): Promise<ScheduleFormState> {
   return run("discard", formData);
+}
+
+export async function startRevisionAction(
+  _previous: ScheduleFormState,
+  formData: FormData,
+): Promise<ScheduleFormState> {
+  return run("revise", formData);
 }

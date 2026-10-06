@@ -103,7 +103,8 @@ describe("describeWorkflow: what each actor is offered", () => {
     ["FINALIZED", ["submit"]],
     ["SUBMITTED", ["withdraw"]],
     ["RETURNED", ["submit"]],
-    ["APPROVED", []],
+    // An approved schedule is changed only through an explicit revision (D109).
+    ["APPROVED", ["startRevision"]],
   ] as const)("Head Nurse in %s: %j", (status, expected) => {
     const submissions = status === "SUBMITTED" ? [submission()] : [];
     expect(offered(describeFor(head, status, { submissions }))).toEqual(
@@ -129,6 +130,7 @@ describe("describeWorkflow: what each actor is offered", () => {
       approve: { blockers: [] },
       return: { blockers: [] },
       discardRevision: null,
+      startRevision: null,
     });
     expect(w.ownSubmission).toBe(false);
   });
@@ -136,7 +138,7 @@ describe("describeWorkflow: what each actor is offered", () => {
   it.each([
     ["REVISING", ["submit", "discardRevision"]],
     ["RETURNED", ["submit", "discardRevision"]],
-    ["APPROVED", []],
+    ["APPROVED", ["startRevision"]],
   ] as const)(
     "Head Nurse in %s after an approval (a revision): %j",
     (status, expected) => {
@@ -220,6 +222,20 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
     const w = describeFor(head, "PLANNING", { violations: [warning] });
     expect(w.actions.finalize).toEqual({ blockers: [] });
     expect(w.validation).toMatchObject({ ruleViolations: 0, ready: true });
+  });
+});
+
+describe("describeWorkflow: explicit revision (D109)", () => {
+  it("offers START_REVISION to the Head Nurse of an APPROVED schedule only", () => {
+    expect(
+      describeFor(head, "APPROVED", { approvedVersion: true }).actions
+        .startRevision,
+    ).toEqual({ blockers: [] });
+    expect(
+      describeFor(supervisor, "APPROVED", { approvedVersion: true }).actions
+        .startRevision,
+    ).toBeNull();
+    expect(describeFor(head, "PLANNING").actions.startRevision).toBeNull();
   });
 });
 

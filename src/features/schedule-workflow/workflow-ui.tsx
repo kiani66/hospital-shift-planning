@@ -30,6 +30,7 @@ import {
   submitScheduleAction,
   withdrawSubmissionAction,
   discardRevisionAction,
+  startRevisionAction,
 } from "./actions";
 import {
   blockerLabel,
@@ -68,7 +69,8 @@ export function HeadNurseLifecycleAction({
   schedule: ScheduleRef;
   workflow: ScheduleWorkflow;
 }) {
-  const { finalize, submit, withdraw, discardRevision } = workflow.actions;
+  const { finalize, submit, withdraw, discardRevision, startRevision } =
+    workflow.actions;
   const common = {
     scheduleId: schedule.scheduleId,
     revision: schedule.revision,
@@ -96,6 +98,25 @@ export function HeadNurseLifecycleAction({
         confirmLabel="بله، نهایی شود"
         disabled={blocked(finalize)}
         describedBy={blocked(finalize) ? WORKFLOW_BLOCKERS_ID : undefined}
+      />
+    );
+  // An approved schedule changes only through an explicit revision (D109).
+  if (startRevision)
+    return (
+      <ConfirmScheduleAction
+        {...common}
+        action={startRevisionAction}
+        icon="discard"
+        secondary
+        triggerLabel="شروع بازنگری"
+        title={`شروع بازنگری برنامه ${label}؟`}
+        description="نسخه تأییدشده تغییر نمی‌کند و تا تأیید بازنگری اجرایی می‌ماند. در بازنگری می‌توانید روزهای مشخصی را اصلاح کنید و سوپروایزر یا مدیر بیمارستان می‌تواند نسخه دیگری از قوانین پوشش را اعمال کند؛ سپس برنامه دوباره برای تأیید ارسال می‌شود."
+        confirmLabel="بله، بازنگری آغاز شود"
+        comment={{
+          label: "دلیل بازنگری",
+          hint: "برای نمونه: اعمال قوانین پوشش جدید بخش.",
+          maxLength: 500,
+        }}
       />
     );
   // A revision of an approved schedule can also be abandoned (Phase 9).

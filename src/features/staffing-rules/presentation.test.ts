@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { isoDate } from "@/domain/shared/dates";
 
 import {
+  applyErrorMessage,
+  applyRefusalText,
   boundsText,
   dayTypeSummary,
   effectiveFromText,
@@ -155,5 +157,31 @@ describe("ruleSetErrorMessage", () => {
     [{ code: "INTERNAL" }, "غیرمنتظره"],
   ] as const)("%o", (error, words) => {
     expect(ruleSetErrorMessage({ message: "x", ...error })).toContain(words);
+  });
+});
+
+describe("Apply wording (D107, D109)", () => {
+  it.each([
+    ["APPLY_RULE_SET_WHILE_SUBMITTED", "پس گرفتن ارسال"],
+    ["APPLY_RULE_SET_REQUIRES_REVISION", "شروع بازنگری"],
+    ["RULE_SET_ALREADY_PINNED", "همین نسخه"],
+    ["SOMETHING_ELSE", "ممکن نیست"],
+  ])("explains %s", (reason, words) => {
+    expect(applyRefusalText(reason)).toContain(words);
+  });
+
+  it.each([
+    [{ code: "CONFLICT", reason: "RULE_SET_PIN_CHANGED" }, "قوانین این برنامه"],
+    [{ code: "CONFLICT" }, "پیش‌نمایش تازه"],
+    [
+      { code: "INVALID_STATE", reason: "APPLY_RULE_SET_REQUIRES_REVISION" },
+      "شروع بازنگری",
+    ],
+    [{ code: "VALIDATION" }, "تأیید صریح"],
+    [{ code: "FORBIDDEN" }, "سوپروایزر این بخش یا مدیر بیمارستان"],
+    [{ code: "NOT_FOUND" }, "پیدا نشد"],
+    [{ code: "INTERNAL" }, "غیرمنتظره"],
+  ] as const)("words a refused Apply %o", (error, words) => {
+    expect(applyErrorMessage({ message: "x", ...error })).toContain(words);
   });
 });

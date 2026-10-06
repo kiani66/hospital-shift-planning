@@ -104,6 +104,11 @@ export interface ScheduleWorkflow {
      * revision): the working copy goes back to the latest approved version.
      */
     readonly discardRevision: WorkflowAction | null;
+    /**
+     * Explicitly start a revision of an APPROVED schedule (D109): the path
+     * to change its shifts or, through Apply, its rule set.
+     */
+    readonly startRevision: WorkflowAction | null;
   };
   /**
    * The actor is a Supervisor of the department but submitted the pending
@@ -243,6 +248,11 @@ export function describeWorkflow(
           type: "DISCARD_REVISION",
           hasApprovedVersion: (schedule.currentVersionId ?? null) !== null,
         }).ok
+          ? NO_BLOCKERS
+          : null,
+      startRevision:
+        has("START_REVISION") &&
+        decide(actor, "schedule.startRevision", { departmentId }).allowed
           ? NO_BLOCKERS
           : null,
     },

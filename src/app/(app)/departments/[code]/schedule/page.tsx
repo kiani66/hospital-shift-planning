@@ -296,6 +296,9 @@ export default async function DepartmentSchedulePage({
           month={review.month}
           filter={activeFilter}
           filterHref={filterHref}
+          ruleSetHref={
+            `/departments/${department.code}/coverage-rules` as Route
+          }
         />
         {noAssignments && (
           <Callout role="note" tone="info" icon={Info}>
