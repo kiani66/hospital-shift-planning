@@ -3,6 +3,7 @@ import { z } from "zod";
 import { decide } from "../../domain/authz/policies";
 import {
   compareValidation,
+  type CoverageProblem,
   type ValidationImpact,
 } from "../../domain/rules/validation-summary";
 import type { ScheduleStatus } from "../../domain/schedule/status";
@@ -10,7 +11,11 @@ import type { Decision } from "../../domain/shared/decision";
 import { compareIsoDates, type IsoDate } from "../../domain/shared/dates";
 import type { DatePeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
-import { planApplyRuleSet } from "../../domain/staffing-rules/apply";
+import {
+  planApplyRuleSet,
+  unrepairablePastDates,
+  type ApplyRepairContext,
+} from "../../domain/staffing-rules/apply";
 import type { RuleSetContent } from "../../domain/staffing-rules/model";
 import type { DbExecutor } from "../../infrastructure/db/database";
 import {
@@ -75,6 +80,15 @@ export interface RuleSetApplicationPreview {
   readonly impact: ValidationImpact;
   /** Days the Apply adds to the open revision's scope (new or worse coverage problems). */
   readonly revisionDatesToAdd: readonly IsoDate[];
+  /**
+   * Past days on which the target would introduce or worsen a blocking
+   * finding that the current lifecycle no longer lets the Head Nurse repair
+   * (D109); non-empty means Apply is refused
+   * (`APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES`).
+   */
+  readonly unrepairablePastDates: readonly IsoDate[];
+  /** The new or worse coverage problems on those days (category, bucket, amount). */
+  readonly unrepairableProblems: readonly CoverageProblem[];
   /** Always 0: Apply never changes an assignment. */
   readonly assignmentsChanged: 0;
 }
@@ -127,13 +141,19 @@ async function evaluate(
     after: validateUnder(schedule, loaded, target).violations,
   });
   const scope = new Set(openRevision?.dates ?? []);
-  // Past days cannot be changed any more (D72); only repairable days are added.
+  // Past days are never added to the scope (D72, D109): an Apply that needs
+  // them repaired is refused instead (`repair`, checked by planApplyRuleSet).
   const revisionDatesToAdd = openRevision
     ? impact.datesToRepair.filter(
         (d) => !scope.has(d) && compareIsoDates(d, today) >= 0,
       )
     : [];
-  return { current, impact, openRevision, revisionDatesToAdd };
+  const repair: ApplyRepairContext = {
+    datesToRepair: impact.datesToRepair,
+    revisionDates: openRevision ? scope : null,
+    today,
+  };
+  return { current, impact, openRevision, revisionDatesToAdd, repair };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -162,7 +182,7 @@ export async function previewRuleSetApplication(
     throw new NotFoundError("Schedule");
   const target = await loadTarget(ctx.db, schedule, input.targetVersionId);
   const now = ctx.clock?.() ?? new Date();
-  const { current, impact, revisionDatesToAdd } = await evaluate(
+  const { current, impact, revisionDatesToAdd, repair } = await evaluate(
     ctx.db,
     schedule,
     target,
@@ -174,7 +194,9 @@ export async function previewRuleSetApplication(
     departmentId: schedule.departmentId,
     current: current.version,
     target: target.version,
+    repair,
   });
+  const unrepairable = new Set(unrepairablePastDates(schedule.status, repair));
   return {
     scheduleId: schedule.id,
     label: schedule.label,
@@ -195,6 +217,10 @@ export async function previewRuleSetApplication(
     rollback: plan.ok ? plan.value.rollback : false,
     impact,
     revisionDatesToAdd,
+    unrepairablePastDates: [...unrepairable],
+    unrepairableProblems: impact.introduced.filter((p) =>
+      unrepairable.has(p.date),
+    ),
     assignmentsChanged: 0,
   };
 }
@@ -212,7 +238,9 @@ export interface RuleSetApplicationOutput {
  * the impact under the row lock, changes only the pin (assignments are
  * untouched), bumps the schedule revision, adds the days that now need
  * repair to an open revision's scope (D109), records the application with
- * its impact and audits it. Refused in SUBMITTED and APPROVED.
+ * its impact and audits it. Refused in SUBMITTED and APPROVED, and when the
+ * target would leave blocking findings on past days the Head Nurse can no
+ * longer repair (D109).
  */
 export const applyRuleSetToSchedule = defineCommand({
   name: "staffingRules.applyToSchedule",
@@ -237,14 +265,16 @@ export const applyRuleSetToSchedule = defineCommand({
       );
     const target = await loadTarget(uow.tx, schedule, input.toVersionId);
     const today = todayFor(uow.now);
-    const { current, impact, openRevision, revisionDatesToAdd } =
+    const { current, impact, openRevision, revisionDatesToAdd, repair } =
       await evaluate(uow.tx, schedule, target, uow.holidays, today);
+    // Re-checked under the row lock with today's date: never only in Preview.
     const plan = unwrap(
       planApplyRuleSet({
         status: schedule.status,
         departmentId: schedule.departmentId,
         current: current.version,
         target: target.version,
+        repair,
       }),
     );
 

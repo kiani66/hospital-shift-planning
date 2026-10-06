@@ -6,6 +6,7 @@ import { setAssignments } from "../../src/application/schedules/edit-assignments
 import {
   approveSchedule,
   finalizeSchedule,
+  returnSchedule,
   submitSchedule,
 } from "../../src/application/schedules/lifecycle";
 import {
@@ -546,5 +547,167 @@ describe("department coverage rules page data (D108)", () => {
     await expect(
       getDepartmentCoverageRules(head, { departmentId: DEMO_ER.id }),
     ).rejects.toMatchObject({ name: "NotFoundError" });
+  });
+});
+
+describe("past days the lifecycle can no longer repair (D109)", () => {
+  // `first` (2026-12-22) has passed; `second` is today. Under `strict` the
+  // two Nights on `first` are overstaffing (a new blocking finding).
+  const later = new Date("2026-12-23T08:00:00Z");
+  const at = (c: AppContext, clock = later): AppContext => ({
+    ...c,
+    clock: () => clock,
+  });
+  const refusal = {
+    allowed: false,
+    reason: "APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES",
+  };
+  const pastOverstaffing = {
+    date: first,
+    period: "N",
+    kind: "OVERSTAFFING",
+    amount: 1,
+  };
+
+  /** Preview refuses, without writing; Apply refuses inside its transaction. */
+  async function expectRefused() {
+    const before = await tableCounts();
+    const pin = (await schedule()).staffingRuleSetVersionId;
+    const scope = (await findOpenRevision(db, id))?.dates ?? null;
+    const previewed = await preview(at(supervisor), strict);
+    expect(previewed.allowed).toEqual(refusal);
+    expect(previewed.unrepairablePastDates).toEqual([first]);
+    expect(previewed.unrepairableProblems).toEqual([
+      expect.objectContaining(pastOverstaffing),
+    ]);
+    expect(previewed.revisionDatesToAdd).toEqual([]);
+    expect(await tableCounts()).toEqual(before);
+
+    expect(failure(await apply(at(supervisor), strict))).toMatchObject({
+      code: "INVALID_STATE",
+      reason: "APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES",
+    });
+    expect(failure(await apply(at(admin), strict))).toMatchObject({
+      reason: "APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES",
+    });
+    expect(await tableCounts()).toEqual(before);
+    expect((await schedule()).staffingRuleSetVersionId).toBe(pin);
+    expect((await findOpenRevision(db, id))?.dates ?? null).toEqual(scope);
+  }
+
+  it("FINALIZED: a new blocking finding on a past day refuses Preview and Apply", async () => {
+    await step(finalizeSchedule);
+    await expectRefused();
+  });
+
+  it("REVISING: a past day outside the revision scope refuses Preview and Apply", async () => {
+    await step(finalizeSchedule);
+    await step(submitSchedule);
+    await step(approveSchedule, supervisor);
+    ok(
+      await startScheduleRevision(at(head), {
+        scheduleId: id,
+        expectedRevision: (await schedule()).revision,
+        reason: "قوانین پوشش جدید بخش",
+        dates: [second],
+      }),
+    );
+    expect((await schedule()).status).toBe("REVISING");
+    await expectRefused();
+  });
+
+  it("a returned revision (still revision-scoped) refuses Preview and Apply", async () => {
+    await step(finalizeSchedule);
+    await step(submitSchedule);
+    await step(approveSchedule, supervisor);
+    ok(
+      await startScheduleRevision(at(head), {
+        scheduleId: id,
+        expectedRevision: (await schedule()).revision,
+        reason: "قوانین پوشش جدید بخش",
+      }),
+    );
+    await step(submitSchedule, at(head));
+    ok(
+      await returnSchedule(at(supervisor), {
+        scheduleId: id,
+        expectedRevision: (await schedule()).revision,
+        comment: "دوباره بررسی شود",
+      }),
+    );
+    expect((await schedule()).status).toBe("RETURNED");
+    expect(await findOpenRevision(db, id)).not.toBeNull();
+    await expectRefused();
+  });
+
+  it("allows Apply when the new findings fall on today or later only", async () => {
+    await step(finalizeSchedule);
+    const onFirst = new Date("2026-12-22T08:00:00Z");
+    const previewed = await preview(at(supervisor, onFirst), strict);
+    expect(previewed.allowed).toEqual({ allowed: true });
+    expect(previewed.unrepairablePastDates).toEqual([]);
+    expect(previewed.unrepairableProblems).toEqual([]);
+    ok(await apply(at(supervisor, onFirst), strict));
+    expect((await schedule()).staffingRuleSetVersionId).toBe(strict);
+  });
+
+  it("keeps DRAFT/PLANNING and a first-cycle RETURNED applicable (the planner edits the whole period)", async () => {
+    expect((await schedule()).status).toBe("PLANNING");
+    expect((await preview(at(supervisor), strict)).allowed).toEqual({
+      allowed: true,
+    });
+
+    await step(finalizeSchedule);
+    await step(submitSchedule);
+    ok(
+      await returnSchedule(supervisor, {
+        scheduleId: id,
+        expectedRevision: (await schedule()).revision,
+        comment: "دوباره بررسی شود",
+      }),
+    );
+    expect((await schedule()).status).toBe("RETURNED");
+    expect(await findOpenRevision(db, id)).toBeNull();
+    ok(await apply(at(supervisor), strict));
+    expect((await schedule()).staffingRuleSetVersionId).toBe(strict);
+  });
+
+  it("still allows a valid rollback to an earlier version after the day has passed", async () => {
+    // v2 of the same lineage is stricter still (Evenings need 5).
+    const stricter = await publishTestRuleSet(db, {
+      departmentId: DEMO_ICU.id,
+      createdBy: U.erHead.id,
+      effectiveFrom: "2027-02-01",
+      content: {
+        normal: {
+          M: { min: 1, max: null },
+          E: { min: 5, max: null },
+          N: { min: 1, max: 1 },
+        },
+        holiday: {},
+        exceptions: [],
+      },
+    });
+    await step(finalizeSchedule);
+    ok(await apply(supervisor, stricter));
+
+    // Back to v1 introduces nothing new or worse, on any day.
+    const previewed = await preview(at(supervisor), strict);
+    expect(previewed).toMatchObject({
+      allowed: { allowed: true },
+      rollback: true,
+      unrepairablePastDates: [],
+    });
+    ok(await apply(at(supervisor), strict));
+    const [, rollback] = await db
+      .select()
+      .from(scheduleRuleSetApplications)
+      .where(eq(scheduleRuleSetApplications.scheduleId, id))
+      .orderBy(scheduleRuleSetApplications.appliedAt);
+    expect(rollback).toMatchObject({
+      fromVersionId: stricter,
+      toVersionId: strict,
+      rollback: true,
+    });
   });
 });

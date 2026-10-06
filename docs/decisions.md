@@ -1724,7 +1724,9 @@ Enforced in `domain/staffing-rules/selection.ts`, `domain/staffing-rules/resolve
   schedule's own department), other than the current pin — older versions included (controlled
   rollback). DRAFT versions can never be applied.
 - **Status.** Allowed in DRAFT, PLANNING, FINALIZED, RETURNED and REVISING. Refused in SUBMITTED
-  (withdraw first, D10) and in APPROVED (start a revision first, D109).
+  (withdraw first, D10) and in APPROVED (start a revision first, D109). Also refused when the
+  target would leave blocking findings on past days the lifecycle no longer lets the Head Nurse
+  repair (D109).
 - Applying stricter rules to a FINALIZED schedule keeps it FINALIZED; SUBMIT then stays blocked
   until the coverage problems are fixed.
 
@@ -1756,7 +1758,24 @@ Enforced in `domain/authz/policies.ts`.
 - Apply never starts a revision as a side effect.
 - When Apply introduces or worsens coverage problems on days outside the revision scope, those days
   are added to the scope (audited like any scope extension, D14 stays per day), so the Head Nurse
-  can repair them.
+  can repair them. Only today and later days are added: past days are never added to a revision
+  scope.
+- **Unrepairable past days refuse the Apply.** Applying a different version is refused
+  (`APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES`) when the target would introduce or worsen a blocking
+  finding (with the same assignments, only coverage findings can change) on a past day that the
+  current lifecycle does not let the Head Nurse repair:
+  - FINALIZED: any past day (an Apply never relies on historical edits);
+  - REVISING, and RETURNED with an open revision: any past day outside the revision scope;
+  - DRAFT, PLANNING and a first-cycle RETURNED keep their behaviour: the planner edits the whole
+    period (D48, unchanged).
+
+  Today counts as repairable. PREVIEW reports the refusal with the affected past days and their
+  coverage problems (shortage / overstaffing, bucket, amount); APPLY re-checks the same rule
+  inside its transaction, after the row lock, with the current date. Past-day findings stay
+  blocking, FINALIZE / SUBMIT validation is unchanged, and no past day becomes editable for the
+  sake of an Apply. Such a version reaches the department through new schedules (pinned by period
+  start, D106).
+
 - The previous approved version keeps its own pinned version; discarding the revision restores the
   pin (D106).
 

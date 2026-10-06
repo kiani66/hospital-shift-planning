@@ -166,6 +166,7 @@ describe("Apply wording (D107, D109)", () => {
   it.each([
     ["APPLY_RULE_SET_WHILE_SUBMITTED", "پس گرفتن ارسال"],
     ["APPLY_RULE_SET_REQUIRES_REVISION", "شروع بازنگری"],
+    ["APPLY_RULE_SET_UNREPAIRABLE_PAST_DATES", "روزهای گذشته"],
     ["RULE_SET_ALREADY_PINNED", "همین نسخه"],
     ["SOMETHING_ELSE", "ممکن نیست"],
   ])("explains %s", (reason, words) => {

@@ -220,8 +220,27 @@ export function ApplyPreview({
           targetLabel={target}
         />
       ) : (
-        <Callout role="note" tone="attention" icon={Info}>
-          {applyRefusalText(preview.allowed.reason)}
+        <Callout as="div" role="note" tone="attention" icon={Info}>
+          <p>{applyRefusalText(preview.allowed.reason)}</p>
+          {preview.unrepairableProblems.length > 0 && (
+            <div data-unrepairable-dates className="mt-2">
+              <p className="font-medium">
+                روزهای گذشته غیرقابل اصلاح (
+                {faNumber(preview.unrepairablePastDates.length)} روز):
+              </p>
+              <ul className="mt-1 list-disc ps-5">
+                {preview.unrepairableProblems.map((p) => (
+                  <li key={`${p.date}${p.period}`}>
+                    {formatJalaliDate(p.date, { weekday: true })} ·{" "}
+                    {BUCKET_NAMES[p.period]}:{" "}
+                    {p.kind === "SHORTAGE"
+                      ? `کمبود نیرو ${faNumber(p.amount)} نفر`
+                      : `مازاد نیرو ${faNumber(p.amount)} نفر`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Callout>
       )}
     </section>

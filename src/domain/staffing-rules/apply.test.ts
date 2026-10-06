@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { version } from "../../../tests/support/staffing-rules";
-import { SCHEDULE_STATUSES } from "../schedule/status";
+import { SCHEDULE_STATUSES, type ScheduleStatus } from "../schedule/status";
+import { isoDate, type IsoDate } from "../shared/dates";
 import {
   APPLY_RULE_SET_INVALID_TARGET,
   APPLY_RULE_SET_REFUSALS,
   planApplyRuleSet,
+  unrepairablePastDates,
+  type ApplyRepairContext,
 } from "./apply";
 
 const hospital1 = version("h1", { versionNo: 1 });
@@ -18,11 +21,22 @@ const nicuRetired = version("n0", {
 });
 const icu1 = version("i1", { departmentId: "icu" });
 
+const today = isoDate("2026-10-10");
+const yesterday = isoDate("2026-10-09");
+const tomorrow = isoDate("2026-10-11");
+const nothingToRepair: ApplyRepairContext = {
+  datesToRepair: [],
+  revisionDates: null,
+  today,
+};
+
 const plan = (
   current = nicu2,
   target = nicu1,
   status: (typeof SCHEDULE_STATUSES)[number] = "PLANNING",
-) => planApplyRuleSet({ status, departmentId: "nicu", current, target });
+  repair: ApplyRepairContext = nothingToRepair,
+) =>
+  planApplyRuleSet({ status, departmentId: "nicu", current, target, repair });
 
 describe("planApplyRuleSet", () => {
   it.each(["DRAFT", "PLANNING", "FINALIZED", "RETURNED", "REVISING"] as const)(
@@ -82,6 +96,71 @@ describe("planApplyRuleSet", () => {
     expect(plan(nicu2, target)).toMatchObject({
       ok: false,
       error: { reason, field: "targetVersionId" },
+    });
+  });
+});
+
+describe("unrepairable past days (D109)", () => {
+  const repair = (
+    datesToRepair: IsoDate[],
+    revisionDates: IsoDate[] | null = null,
+  ): ApplyRepairContext => ({
+    datesToRepair,
+    revisionDates: revisionDates && new Set(revisionDates),
+    today,
+  });
+
+  it("FINALIZED: every past day is unrepairable; today and later are not", () => {
+    expect(
+      unrepairablePastDates("FINALIZED", repair([yesterday, today, tomorrow])),
+    ).toEqual([yesterday]);
+    expect(
+      plan(hospital1, nicu2, "FINALIZED", repair([yesterday])),
+    ).toMatchObject({
+      ok: false,
+      error: { attempted: APPLY_RULE_SET_REFUSALS.UNREPAIRABLE_PAST_DATES },
+    });
+    expect(plan(hospital1, nicu2, "FINALIZED", repair([today])).ok).toBe(true);
+  });
+
+  it.each([
+    ["REVISING", "REVISING"],
+    ["a returned revision", "RETURNED"],
+  ] as const)(
+    "%s: past days outside the revision scope are unrepairable",
+    (_, status: ScheduleStatus) => {
+      const outside = repair([yesterday, tomorrow], []);
+      expect(unrepairablePastDates(status, outside)).toEqual([yesterday]);
+      expect(plan(hospital1, nicu2, status, outside)).toMatchObject({
+        ok: false,
+        error: { attempted: APPLY_RULE_SET_REFUSALS.UNREPAIRABLE_PAST_DATES },
+      });
+      // A past day already in scope stays editable (D14, unchanged).
+      const inScope = repair([yesterday, tomorrow], [yesterday]);
+      expect(unrepairablePastDates(status, inScope)).toEqual([]);
+      expect(plan(hospital1, nicu2, status, inScope).ok).toBe(true);
+    },
+  );
+
+  it.each([
+    ["DRAFT", null],
+    ["PLANNING", null],
+    ["RETURNED", null], // first cycle: no revision, the planner edits the whole period
+  ] as const)(
+    "%s keeps the planner's behaviour: nothing is unrepairable",
+    (status, revisionDates) => {
+      const pastOnly = repair([yesterday], revisionDates);
+      expect(unrepairablePastDates(status, pastOnly)).toEqual([]);
+      expect(plan(hospital1, nicu2, status, pastOnly).ok).toBe(true);
+    },
+  );
+
+  it("status refusals come first", () => {
+    expect(
+      plan(hospital1, nicu2, "APPROVED", repair([yesterday])),
+    ).toMatchObject({
+      ok: false,
+      error: { attempted: APPLY_RULE_SET_REFUSALS.APPROVED },
     });
   });
 });

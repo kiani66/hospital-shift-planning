@@ -178,6 +178,9 @@ runs automatically except migration 0011 in `vercel-build`.
      breaks are added to the revision scope.
    - The Head Nurse fixes the coverage problems, finalizes/resubmits as usual; the Supervisor
      re-approves. The previous approved version keeps its own pinned rules.
+   - If the preview reports past days it can no longer repair (a FINALIZED schedule or a revision
+     whose period has started, D109), Apply is refused: the override then reaches NICU through
+     the next period's schedule, which pins it at creation.
 6. **Rollback (if needed):** same page, select the version to return to (the Hospital Default v1,
    or an earlier published/retired NICU version, which is recorded as a rollback, D107), preview,
    confirm, apply; the same revision rule applies to an `APPROVED` schedule. Drafts are never
