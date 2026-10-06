@@ -306,14 +306,14 @@ describe("finalizeSchedule", () => {
       departmentId: DEMO_ICU.id,
       scheduleId: S,
     });
-    expect(review.workflow.blockingFindings).toEqual({
-      count: 1,
+    expect(review.workflow.validation).toMatchObject({
       undecided: 0,
-      staffing: 0,
-      dates: ["2026-11-21"],
+      coverageProblems: 0,
+      ruleViolations: 1,
+      dates: { undecided: [], coverage: [], ruleViolations: ["2026-11-21"] },
     });
     expect(review.workflow.actions.finalize).toEqual({
-      blockers: ["BLOCKING_FINDINGS"],
+      blockers: ["VALIDATION"],
     });
     expect(await run(finalizeSchedule, actors.icuHead)).toMatchObject({
       ok: false,
@@ -519,7 +519,7 @@ describe("submitSchedule", () => {
       scheduleId: S,
     });
     expect(workflow.actions.submit?.blockers).toEqual([
-      "BLOCKING_FINDINGS",
+      "VALIDATION",
       "PREFERENCE_WINDOW_OPEN",
     ]);
   });

@@ -29,9 +29,25 @@ const nurse = (userId: string) => ({
   preference: null,
 });
 
-const day = (coverage: ReviewCoverage[]): DayReview => ({
+type CoverageInput = Omit<ReviewCoverage, "gap" | "source"> &
+  Partial<Pick<ReviewCoverage, "source">>;
+
+const day = (input: CoverageInput[]): DayReview => ({
   date: isoDate("2026-10-24"),
-  health: "VALID",
+  validation: {
+    date: isoDate("2026-10-24"),
+    decisions: 3,
+    undecided: 0,
+    shortages: 0,
+    overstaffing: 0,
+    ruleViolations: 0,
+    state: "READY",
+    ready: true,
+    shifts: { M: 1, E: 2, N: 0, ME: 0 },
+    coverage: { M: 1, E: 2, N: 0 },
+    buckets: [],
+    holiday: null,
+  },
   holiday: null,
   shifts: [
     { code: "M", nurses: [nurse("a")] },
@@ -39,7 +55,16 @@ const day = (coverage: ReviewCoverage[]): DayReview => ({
     { code: "N", nurses: [] },
     { code: "ME", nurses: [] },
   ],
-  coverage,
+  coverage: input.map((c) => ({
+    ...c,
+    source: c.source ?? "NORMAL",
+    gap:
+      c.status === "BELOW_MINIMUM"
+        ? c.bounds!.min! - c.covered
+        : c.status === "ABOVE_MAXIMUM"
+          ? c.covered - c.bounds!.max!
+          : 0,
+  })),
   findings: [],
   relatedFindings: [],
   off: [],
@@ -65,7 +90,7 @@ describe("CoverageSummary", () => {
     expect(html).not.toMatch(/health-valid|status-success/);
   });
 
-  it("shows current staffing, minimum, maximum and shortage / excess where configured", () => {
+  it("shows current staffing, the pinned minimum / maximum and shortage / excess", () => {
     const html = render(
       createElement(CoverageSummary, {
         day: day([
@@ -121,8 +146,68 @@ describe("CoverageSummary", () => {
         ]),
       }),
     );
-    expect(text(html).match(/در محدوده تعریف‌شده/g)).toHaveLength(3);
+    expect(text(html).match(/در محدوده قوانین/g)).toHaveLength(3);
     expect(html).not.toMatch(/health-valid|status-success|lucide-check/);
+  });
+});
+
+describe("CoverageSummary: pilot 3–6 and the source of the bounds (D106)", () => {
+  it.each([
+    [2, "BELOW_MINIMUM", "کمبود ۱ نفر"],
+    [3, "WITHIN_BOUNDS", "در محدوده قوانین"],
+    [6, "WITHIN_BOUNDS", "در محدوده قوانین"],
+    [7, "ABOVE_MAXIMUM", "مازاد ۱ نفر"],
+  ] as const)("%i nurses: %s", (covered, status, words) => {
+    const t = text(
+      render(
+        createElement(CoverageSummary, {
+          day: day(
+            (["M", "E", "N"] as const).map((period) => ({
+              period,
+              covered,
+              bounds: { min: 3, max: 6 },
+              status,
+            })),
+          ),
+        }),
+      ),
+    );
+    expect(t.match(new RegExp(words, "g"))).toHaveLength(3);
+    expect(t).toContain("حداقل ۳ · حداکثر ۶");
+  });
+
+  it("says when a holiday rule or a date exception supplied the bounds", () => {
+    const t = text(
+      render(
+        createElement(CoverageSummary, {
+          day: day([
+            {
+              period: "M",
+              covered: 3,
+              bounds: { min: 3 },
+              status: "WITHIN_BOUNDS",
+              source: "EXCEPTION",
+            },
+            {
+              period: "E",
+              covered: 3,
+              bounds: { min: 3 },
+              status: "WITHIN_BOUNDS",
+              source: "HOLIDAY",
+            },
+            {
+              period: "N",
+              covered: 3,
+              bounds: { min: 3 },
+              status: "WITHIN_BOUNDS",
+            },
+          ]),
+        }),
+      ),
+    );
+    expect(t).toContain("استثنای این تاریخ");
+    expect(t).toContain("قانون روز تعطیل");
+    expect(t).toContain("بدون حداکثر");
   });
 });
 

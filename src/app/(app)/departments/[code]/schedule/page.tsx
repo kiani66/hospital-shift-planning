@@ -51,6 +51,10 @@ import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
 import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
 import { EmptyMonth } from "@/features/schedule-review/empty-month";
 import {
+  isDayFilter,
+  type DayFilter,
+} from "@/features/schedule-review/presentation";
+import {
   MonthCalendar,
   MonthSummary,
 } from "@/features/schedule-review/month-calendar";
@@ -88,6 +92,10 @@ function dayEditor(
         flagged: flagged.has(n.userId),
       }))}
       rangeEnds={rangeEnds}
+      coverage={day.coverage.map((c) => ({
+        period: c.period,
+        bounds: c.bounds,
+      }))}
       previousDayHref={links.previous?.href ?? null}
       nextDayHref={links.next?.href ?? null}
     />
@@ -120,7 +128,9 @@ export default async function DepartmentSchedulePage({
 }: PageProps<"/departments/[code]/schedule">) {
   const department = await requireDepartmentPage(params, "department.manage");
   const ctx = await requireRequestContext();
-  const { schedule, day, month } = await searchParams;
+  const { schedule, day, month, filter } = await searchParams;
+  // `?filter=undecided|coverage|…` marks the days of one category (D104).
+  const activeFilter = isDayFilter(filter) ? filter : null;
   // "Today" is Tehran's calendar day, not the server's (UTC) one.
   const today = todayIn(APP_TIMEZONE);
   const orNotFound = (error: unknown): never => {
@@ -211,9 +221,13 @@ export default async function DepartmentSchedulePage({
     day: typeof day === "string" ? day : undefined,
   }).catch(orNotFound);
 
-  // Day links and closing keep the URL form the page was opened with.
-  const here = (date?: string) =>
+  // Day links and closing keep the URL form (and the filter) the page was opened with.
+  const withFilter = (href: Route, f: DayFilter | null) =>
+    (f ? `${href}&filter=${f}` : href) as Route;
+  const base = (date?: string) =>
     requestedMonth ? monthHref(current, date) : scheduleHref(selected.id, date);
+  const here = (date?: string) => withFilter(base(date), activeFilter);
+  const filterHref = (f: DayFilter | null) => withFilter(base(), f);
   // Previous / next day of the open day, within the period (chronological).
   const dayLink = (date: IsoDate): DayLink | null =>
     isInPeriod(review.month.period, date)
@@ -241,7 +255,7 @@ export default async function DepartmentSchedulePage({
     ) : undefined;
 
   const noAssignments =
-    review.month.totals.UNPLANNED === review.month.days.length;
+    review.month.totals.NOT_STARTED === review.month.days.length;
 
   // Explicit roster additions while the schedule is DRAFT / PLANNING.
   const rosterCandidates = await getRosterCandidates(ctx, {
@@ -278,11 +292,14 @@ export default async function DepartmentSchedulePage({
       />
       <div className="flex flex-col gap-3">
         <HeadNurseWorkflowNotice workflow={review.workflow} dayHref={here} />
-        <MonthSummary month={review.month} dayHref={here} />
+        <MonthSummary
+          month={review.month}
+          filter={activeFilter}
+          filterHref={filterHref}
+        />
         {noAssignments && (
           <Callout role="note" tone="info" icon={Info}>
-            هنوز شیفتی در این برنامه ثبت نشده است؛ همه روزها
-            برنامه‌ریزی‌نشده‌اند.
+            هنوز تصمیمی در این برنامه ثبت نشده است؛ همه روزها شروع‌نشده‌اند.
             {review.month.editable &&
               " برای چیدن شیفت‌ها، روزی را در تقویم انتخاب کنید."}
           </Callout>
@@ -292,6 +309,7 @@ export default async function DepartmentSchedulePage({
           today={today}
           dayHref={here}
           selected={review.day?.date ?? null}
+          filter={activeFilter}
         />
       </div>
       <div className="mt-6">

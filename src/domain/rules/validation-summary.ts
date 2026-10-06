@@ -4,7 +4,12 @@ import type { Assignment } from "../shifts/assignment";
 import { COVERAGE_PERIODS, type BaseShift } from "../shifts/shift-type";
 import { violationDay } from "./diagnostic";
 import type { StaffingBounds } from "./staffing";
-import { violationKey, violationMagnitude, type Violation } from "./violation";
+import {
+  isBlocking,
+  violationKey,
+  violationMagnitude,
+  type Violation,
+} from "./violation";
 
 /**
  * The three validation categories (D102), kept apart everywhere: an
@@ -172,7 +177,8 @@ export function summarizeValidation(input: {
   let unattributed = 0;
   let shortBy = 0;
   let excessBy = 0;
-  for (const v of input.violations) {
+  // Only blocking findings decide readiness (non-blocking ones never block, D102).
+  for (const v of input.violations.filter(isBlocking)) {
     const date = violationDay(v, period);
     if (date === null) {
       unattributed += 1;

@@ -150,15 +150,14 @@ describe("explicit scheduling decisions", () => {
       ]),
     );
     expect(
-      summarizeScheduleDays({
-        period,
-        assignments,
-        diagnostics: violations.map((v) => toDiagnostic(v, period)),
-      }).days[0],
+      summarizeScheduleDays({ period, assignments, violations }).days[0],
     ).toMatchObject({
-      health: "NEEDS_ATTENTION",
+      // All OFF: every decision made, so not NOT_STARTED, but three shortages.
+      state: "COVERAGE",
+      decisions: 4,
+      undecided: 0,
       coverage: { M: 0, E: 0, N: 0 },
-      findings: { blocking: 3, other: 0 },
+      shortages: 3,
     });
   });
   it("complete and sufficiently staffed days pass, including ME for M/E", () => {

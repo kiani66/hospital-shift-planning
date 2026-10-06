@@ -31,7 +31,11 @@ import {
   withdrawSubmissionAction,
   discardRevisionAction,
 } from "./actions";
-import { blockerLabel, shortJalaliDay } from "./presentation";
+import {
+  blockerLabel,
+  shortJalaliDay,
+  validationBlockerLines,
+} from "./presentation";
 
 /**
  * The approval workflow on the schedule pages (Phase 8). Every button here
@@ -203,7 +207,7 @@ function Blockers({
   action: "finalize" | "submit";
 }) {
   const state = workflow.actions[action]!;
-  const dates = workflow.blockingFindings.dates;
+  const v = workflow.validation;
   return (
     <Callout
       as="div"
@@ -214,35 +218,85 @@ function Blockers({
     >
       <p className="font-semibold">
         {action === "finalize"
-          ? "نهایی‌سازی فعلاً ممکن نیست:"
-          : "ارسال برای تأیید فعلاً ممکن نیست:"}
+          ? "نهایی‌سازی فعلاً ممکن نیست، چون:"
+          : "ارسال برای تأیید فعلاً ممکن نیست، چون:"}
       </p>
       <ul className="mt-1 list-disc ps-5">
-        {state.blockers.map((b) => (
-          <li key={b}>{blockerLabel(b, workflow.blockingFindings)}</li>
-        ))}
-      </ul>
-      {state.blockers.includes("BLOCKING_FINDINGS") && dates.length > 0 && (
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>روزهای نیازمند اصلاح:</span>
-          {dates.slice(0, 8).map((date) => (
-            <Link
-              key={date}
-              href={dayHref(date)}
-              scroll={false}
-              className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              {shortJalaliDay(date)}
-            </Link>
+        {state.blockers.includes("VALIDATION") &&
+          VALIDATION_ROWS.map(({ key, label, dates }) => {
+            const line = label(v);
+            if (!line) return null;
+            const days = dates(v);
+            return (
+              <li key={key} data-blocker={key}>
+                {line}
+                {days.length > 0 && (
+                  <span className="ms-1 inline-flex flex-wrap items-center gap-x-1.5">
+                    —
+                    {days.slice(0, 6).map((date) => (
+                      <Link
+                        key={date}
+                        href={dayHref(date)}
+                        scroll={false}
+                        className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+                      >
+                        {shortJalaliDay(date)}
+                      </Link>
+                    ))}
+                    {days.length > 6 && (
+                      <span>و {faNumber(days.length - 6)} روز دیگر</span>
+                    )}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        {state.blockers
+          .filter((b) => b !== "VALIDATION")
+          .map((b) => (
+            <li key={b}>{blockerLabel(b, v)}</li>
           ))}
-          {dates.length > 8 && (
-            <span>و {faNumber(dates.length - 8)} روز دیگر</span>
-          )}
+      </ul>
+      {state.blockers.includes("VALIDATION") && (
+        <p className="mt-2 text-xs">
+          {faNumber(v.readyDays)} روز از {faNumber(v.totalDays)} روز آماده است.
+          ذخیره برنامه ناقص همچنان ممکن است؛ این موارد فقط مانع نهایی‌سازی و
+          ارسال‌اند.
         </p>
       )}
     </Callout>
   );
 }
+
+/** One row per open category, each with the days it affects (D104). */
+const VALIDATION_ROWS: readonly {
+  key: string;
+  label: (v: ScheduleWorkflow["validation"]) => string | null;
+  dates: (v: ScheduleWorkflow["validation"]) => readonly IsoDate[];
+}[] = [
+  {
+    key: "undecided",
+    label: (v) =>
+      v.undecided > 0
+        ? `${faNumber(v.undecided)} تصمیم تعیین‌نشده در ${faNumber(v.undecidedDays)} روز`
+        : null,
+    dates: (v) => v.dates.undecided,
+  },
+  {
+    key: "coverage",
+    label: (v) =>
+      v.coverageProblems > 0
+        ? validationBlockerLines({ ...v, undecided: 0, ruleViolations: 0 })[0]!
+        : null,
+    dates: (v) => v.dates.coverage,
+  },
+  {
+    key: "ruleViolations",
+    label: (v) =>
+      v.ruleViolations > 0 ? `${faNumber(v.ruleViolations)} نقض قانون` : null,
+    dates: (v) => v.dates.ruleViolations,
+  },
+];
 
 /** The Supervisor's comment on a returned submission, as the Head Nurse reads it. */
 function ReturnComment({ submission }: { submission: WorkflowSubmission }) {
@@ -364,7 +418,7 @@ export function SupervisorWorkflowNotice({
 }: {
   workflow: ScheduleWorkflow;
 }) {
-  const { pending, lastDecision, blockingFindings } = workflow;
+  const { pending, lastDecision, validation } = workflow;
   return (
     <div className="flex flex-col gap-3 empty:hidden">
       {workflow.status === "SUBMITTED" && pending && (
@@ -381,10 +435,11 @@ export function SupervisorWorkflowNotice({
             : "برنامه را بررسی کنید و آن را تأیید یا با توضیح برای اصلاح برگشت دهید. شیفت‌ها در این صفحه فقط قابل مشاهده‌اند."}
         </Callout>
       )}
-      {workflow.status === "SUBMITTED" && blockingFindings.count > 0 && (
+      {workflow.status === "SUBMITTED" && !validation.ready && (
         <Callout role="note" tone="attention" icon={OctagonAlert}>
-          {faNumber(blockingFindings.count)} مغایرت مسدودکننده در این برنامه
-          دیده می‌شود (روزهای نیازمند بررسی در تقویم مشخص‌اند).
+          این برنامه طبق قوانین فعلی‌اش کامل و معتبر نیست:{" "}
+          {validationBlockerLines(validation).join("؛ ")} (روزها در تقویم
+          مشخص‌اند).
         </Callout>
       )}
       {workflow.status === "FINALIZED" && (

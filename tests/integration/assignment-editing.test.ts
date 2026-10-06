@@ -251,7 +251,10 @@ describe("validation after edits (night rest, D7)", () => {
     expect(result.ok).toBe(true);
 
     const after = await reviewDay("2026-10-26");
-    expect(after.health).toBe("NEEDS_ATTENTION");
+    expect(after.validation).toMatchObject({
+      state: "RULE_VIOLATION",
+      ruleViolations: 1,
+    });
     expect(after.findings.filter((f) => f.code === "NIGHT_REST")).toHaveLength(
       1,
     );
@@ -264,14 +267,17 @@ describe("validation after edits (night rest, D7)", () => {
     });
     // The night's day shows it as related, so editing either day explains it.
     const night = await reviewDay("2026-10-25");
-    expect(night.health).toBe("NEEDS_ATTENTION");
+    expect(night.validation.ready).toBe(false);
     expect(night.relatedFindings.map((f) => f.code)).toEqual(["NIGHT_REST"]);
 
     // Fixing the day after (clearing it) removes the finding on both days.
     await apply({ nurseId: U.icuNurse4.id, date: "2026-10-26", shift: null });
     const fixed = await reviewDay("2026-10-26");
     expect(fixed.findings.filter((f) => f.code === "NIGHT_REST")).toEqual([]);
-    expect(fixed.health).toBe("UNPLANNED");
+    expect(fixed.validation).toMatchObject({
+      state: "NOT_STARTED",
+      ruleViolations: 0,
+    });
     expect((await reviewDay("2026-10-25")).relatedFindings).toEqual([]);
   });
 
@@ -287,7 +293,7 @@ describe("validation after edits (night rest, D7)", () => {
     ).toEqual([]);
     // Changing the 25th to a Night makes the 26th need attention…
     await apply({ nurseId: U.icuNurse4.id, date: "2026-10-25", shift: "N" });
-    expect((await reviewDay("2026-10-26")).health).toBe("NEEDS_ATTENTION");
+    expect((await reviewDay("2026-10-26")).validation.ruleViolations).toBe(1);
     // …and changing it back fixes it, without touching the 26th.
     await apply({ nurseId: U.icuNurse4.id, date: "2026-10-25", shift: "ME" });
     expect(

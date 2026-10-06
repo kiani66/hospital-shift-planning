@@ -184,9 +184,11 @@ describe("Explicit OFF end to end in the application", () => {
       scheduleId: id,
       day: first,
     });
-    expect(review.workflow.blockingFindings).toMatchObject({
+    expect(review.workflow.validation).toMatchObject({
       undecided: 1,
-      staffing: 0,
+      undecidedDays: 1,
+      coverageProblems: 0,
+      ruleViolations: 0,
     });
     expect((await findScheduleById(db, id))!.status).toBe("PLANNING");
   });
@@ -218,8 +220,8 @@ describe("Explicit OFF end to end in the application", () => {
           scheduleId: id,
           day: first,
         })
-      ).day!.health,
-    ).toBe("NEEDS_ATTENTION");
+      ).day!.validation,
+    ).toMatchObject({ state: "COVERAGE", undecided: 0, shortages: 3 });
   });
   it("the pinned minimum is enforced by the command, not only the UI", async () => {
     await complete();

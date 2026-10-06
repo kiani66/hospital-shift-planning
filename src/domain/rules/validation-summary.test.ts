@@ -203,6 +203,20 @@ describe("summarizeValidation", () => {
     });
   });
 
+  it("ignores non-blocking findings", () => {
+    const warning = {
+      rule: "NIGHT_REST",
+      severity: "warning",
+      nurseId: "sara",
+      nightDate: d("2026-11-01"),
+      date: d("2026-11-02"),
+      shift: "M",
+    } as unknown as Violation;
+    expect(
+      summarize([a("sara", "2026-11-02", "M")], { extra: [warning] }).days[1],
+    ).toMatchObject({ ruleViolations: 0, ready: true });
+  });
+
   it("lists every state", () => {
     expect(DAY_STATES).toHaveLength(5);
   });
