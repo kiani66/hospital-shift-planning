@@ -77,7 +77,7 @@ export interface EditorNurse {
   readonly role: MembershipRole;
   readonly shift: AssignmentCode | null;
   readonly preference: PreferenceValue | null;
-  /** Involved in a finding on this day (or one involving it). */
+  /** Involved in a rule violation on this day (or one involving it). */
   readonly flagged: boolean;
 }
 
@@ -750,7 +750,7 @@ function NurseRow({
       className={cn(
         "scroll-mt-40 border-s-3 px-3 py-2 transition-colors target:bg-brand-soft",
         nurse.flagged
-          ? "border-s-health-attention bg-health-attention/8 focus-within:bg-health-attention/14"
+          ? "border-s-destructive bg-destructive/5 focus-within:bg-destructive/10"
           : "border-s-transparent focus-within:border-s-primary focus-within:bg-brand-soft/60 hover:bg-muted/50",
       )}
     >
@@ -769,9 +769,9 @@ function NurseRow({
               </Badge>
             )}
             {nurse.flagged && (
-              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-health-attention-foreground">
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-destructive">
                 <CircleAlert aria-hidden="true" className="size-3.5" />
-                نیاز به بررسی
+                نقض قانون
               </span>
             )}
             {pending && (
@@ -892,12 +892,13 @@ function LiveCoverage({
   covered: Readonly<Record<BaseShift, number>>;
 }) {
   return (
+    // A polite live region (not role=status: the save message is the status).
     <div
-      role="status"
       aria-live="polite"
-      aria-label="پوشش نفرات این روز"
+      data-live-coverage-strip
       className="grid grid-cols-3 gap-2"
     >
+      <span className="sr-only">پوشش نفرات این روز:</span>
       {coverage.map(({ period, bounds }) => {
         const b = bucketCoverage(covered[period], bounds ?? undefined);
         return (

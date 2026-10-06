@@ -63,18 +63,19 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
       {preview.blocked ? (
         <Callout tone="attention" icon={Ban} as="div" role="status">
           <p className="font-semibold">
-            این تغییر قابل اعمال نیست: قانون مسدودکننده نقض می‌شود.
+            این تغییر قابل اعمال نیست: نقض قانون یا مشکل پوشش تازه یا بدتری پدید
+            می‌آورد.
           </p>
           <div className="mt-2">
             <FindingList
-              title="مغایرت‌های مسدودکننده"
+              title="موارد مسدودکننده (نقض قانون یا مشکل پوشش)"
               findings={preview.blocking}
             />
           </div>
         </Callout>
       ) : (
         <Callout tone="success" icon={CircleCheck} role="status">
-          مغایرت مسدودکننده‌ای در قوانین پیاده‌سازی‌شده پیدا نشد.
+          این تغییر نقض قانون یا مشکل پوشش تازه‌ای پدید نمی‌آورد.
         </Callout>
       )}
       {preview.warnings.length > 0 && (
@@ -88,7 +89,7 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
       {preview.persisting.length > 0 && (
         <Callout tone="muted" icon={Info} as="div">
           <FindingList
-            title="مغایرت‌های موجود که بدتر نمی‌شوند"
+            title="موارد موجود که بدتر نمی‌شوند"
             findings={preview.persisting}
           />
         </Callout>

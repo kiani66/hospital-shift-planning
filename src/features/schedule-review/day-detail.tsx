@@ -558,9 +558,15 @@ function ShiftSection({
   );
 }
 
-/** Everyone a finding of this day (or one involving it) is about. */
+/** Everyone a rule violation of this day (or one involving it) is about. */
 export const flaggedNurses = (day: DayReview): ReadonlySet<string> =>
-  new Set([...day.findings, ...day.relatedFindings].flatMap((f) => f.nurseIds));
+  new Set(
+    [...day.findings, ...day.relatedFindings]
+      // Only rule violations flag a nurse: an undecided nurse-day is not a
+      // conflict (D102) and already reads «تعیین‌نشده» in the row.
+      .filter((f) => validationCategory(f.violation) === "RULE_VIOLATION")
+      .flatMap((f) => f.nurseIds),
+  );
 
 /**
  * Layer 2: one day. A side column (first on phones) says what the day's

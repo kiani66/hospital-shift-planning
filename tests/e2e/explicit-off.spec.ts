@@ -72,7 +72,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   await saved(page);
   await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toContainText(
-    "۲ نوبت با کمبود نیرو",
+    "۲ مشکل پوشش (۲ کمبود نیرو)",
   );
   await expect(page.locator("#workflow-blockers")).not.toContainText(
     "تصمیم تعیین‌نشده",

@@ -86,7 +86,7 @@ test.describe("Head Nurse request queue", () => {
       dialog.getByRole("region", { name: "وضعیت فعلی" }),
     ).toContainText("هنوز نسخه تأییدشده‌ای نیست");
     await expect(dialog).toContainText(
-      "مغایرت مسدودکننده‌ای در قوانین پیاده‌سازی‌شده پیدا نشد",
+      "این تغییر نقض قانون یا مشکل پوشش تازه‌ای پدید نمی‌آورد",
     );
     await expect(dialog).toContainText(
       "در برنامه کاری (هنوز تأیید نشده) اعمال می‌شود",

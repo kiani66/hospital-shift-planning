@@ -148,6 +148,43 @@ except migration 0009 in `vercel-build`.
 7. **Backfill check:** `pnpm db:personnel-inventory` against Production. When it reports zero and
    you authorize it, promote the strict stage (docs/database.md, "Personnel number stages").
 
+## Versioned staffing rules: release and NICU 3–6 pilot runbook
+
+Decisions D102–D110. Requires explicit authorization for the Production release; nothing below
+runs automatically except migration 0011 in `vercel-build`.
+
+1. **Release** through the normal process. Migration `0011_staffing_rule_sets` is additive
+   (docs/database.md, "Staffing rule sets"): it creates the rule-set tables and only the legacy
+   Hospital Default v1 (M/E/N min 1, no max), and pins every existing schedule and approved
+   version to it. Coverage results are unchanged until a Hospital Admin publishes and applies
+   another version. It does **not** create or publish any NICU rule.
+2. **Verify after release:** `/admin/staffing-rules` shows «پیش‌فرض بیمارستان · نسخه ۱»,
+   effective, and the NICU schedule page shows the same pinned rules with unchanged day results.
+3. **Create the NICU override (Hospital Admin):** on `/admin/staffing-rules`, in the NICU card,
+   «تعریف قوانین ویژه این بخش» (a complete copy of the Hospital Default, D106). Edit the draft:
+   NORMAL M/E/N min 3, max 6 (add HOLIDAY rows or date exceptions only if decided), a note, then
+   «ذخیره پیش‌نویس». No other department is affected.
+4. **Publish:** «انتشار نسخه» with the effective date (the current NICU period start or today,
+   never in the past); «بررسی تداخل» must report no conflict. Publishing does not change any
+   existing schedule (D108); only NICU schedules created afterwards for periods starting on or
+   after that date pin it.
+5. **Apply to the current NICU schedule (Supervisor of NICU or Hospital Admin):**
+   - If the schedule is `APPROVED`, the NICU Head Nurse first uses «شروع بازنگری» with a reason
+     (D109). `SUBMITTED` must be withdrawn or decided first.
+   - On `/departments/nicu/coverage-rules`, select the NICU v1 override under «اعمال نسخه دیگر»,
+     «پیش‌نمایش», read the impact (shortages/overstaffing per period, days to repair), tick the
+     confirmation and «اعمال نسخه بر این برنامه». Shifts are unchanged; coverage is re-evaluated
+     and the change is audited (`schedule.ruleSetApplied`). In a revision, the dates the new rule
+     breaks are added to the revision scope.
+   - The Head Nurse fixes the coverage problems, finalizes/resubmits as usual; the Supervisor
+     re-approves. The previous approved version keeps its own pinned rules.
+6. **Rollback (if needed):** same page, select the version to return to (the Hospital Default v1,
+   or an earlier published/retired NICU version, which is recorded as a rollback, D107), preview,
+   confirm, apply; the same revision rule applies to an `APPROVED` schedule. Drafts are never
+   applicable.
+7. **Contract step (later, separate authorization):** drop the pin column defaults once no older
+   deployment runs (docs/database.md).
+
 ## Before real hospital use
 
 - Move Neon to a paid plan for longer point-in-time restore and no cold starts.
