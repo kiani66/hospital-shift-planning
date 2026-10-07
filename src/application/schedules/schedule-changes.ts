@@ -3,12 +3,11 @@ import { z } from "zod";
 import { decide } from "../../domain/authz/policies";
 import { checkReason } from "../../domain/change-requests/reason";
 import {
-  assessChange,
   staffingImpact,
   type ChangeAssessment,
   type DayStaffingImpact,
 } from "../../domain/rules/assess-change";
-import { validateSchedule } from "../../domain/rules/validate-schedule";
+import { assessEdits } from "../../domain/schedule/assess-edits";
 import {
   assignmentKey,
   planAssignmentEdits,
@@ -18,7 +17,6 @@ import {
   type AssignmentEdit,
 } from "../../domain/schedule/assignment-editing";
 import {
-  applyAssignmentEdits,
   planChangeTarget,
   planRevisionDiscard,
   type ScheduleChangeMode,
@@ -97,7 +95,7 @@ import {
  * 3. validation of the destination before and after the change, with the
  *    neighbouring schedules' boundary days and the staffing bounds of the
  *    schedule's pinned rule-set version (D106): a new or worse hard finding
- *    on the changed cells blocks it (`assessChange`), shortages and
+ *    on the changed cells blocks it (`assessEdits`), shortages and
  *    overstaffing included (D102); warnings do not;
  * 4. on write: the revision step, the cells (audited one by one like the
  *    editor's), the `schedule_changes` record, and the schedule revision bump.
@@ -211,10 +209,6 @@ export async function evaluateScheduleChange(
       "changes",
     );
 
-  const after = applyAssignmentEdits(
-    assignments,
-    changes.map((c) => ({ nurseId: c.nurseId, date: c.date, shift: c.after })),
-  );
   const dates = uniqueSortedDates(changes.map((c) => c.date));
   const { period } = schedule;
   // Sequential: `db` is the command's transaction client when writing.
@@ -227,21 +221,22 @@ export async function evaluateScheduleChange(
   const ruleSet = await loadRuleSet(db, schedule.staffingRuleSetVersionId);
   const holidays = await holidayDates(options.holidays, period);
   const requirements = requirementsUnder(ruleSet, dates, holidays);
-  const validate = (cells: typeof assignments) =>
-    validateSchedule({
-      period,
-      assignments: cells,
-      adjacentAssignments: adjacent,
-      staffingRequirements: requirements,
-    });
+  // The shared pure assessment (D111): the same rules a candidate preview runs.
+  const { after, assessment } = assessEdits({
+    period,
+    assignments,
+    edits: changes.map((c) => ({
+      nurseId: c.nurseId,
+      date: c.date,
+      shift: c.after,
+    })),
+    adjacentAssignments: adjacent,
+    staffingRequirements: requirements,
+  });
   return {
     target,
     changes,
-    assessment: assessChange({
-      before: validate(assignments),
-      after: validate(after),
-      changedCells: changes,
-    }),
+    assessment,
     staffing: staffingImpact({
       before: assignments,
       after,
