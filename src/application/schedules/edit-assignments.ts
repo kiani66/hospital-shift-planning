@@ -18,9 +18,13 @@ import {
 } from "../../infrastructure/repositories/assignments";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import { listRoster } from "../../infrastructure/repositories/roster";
+import type { ScheduleRecord } from "../../infrastructure/repositories/schedules";
 import { ConflictError } from "../errors";
-import { defineCommand } from "../use-case";
-import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
+import { defineCommand, type UnitOfWork } from "../use-case";
+import {
+  loadScheduleForAssignmentUpdate,
+  saveSchedule,
+} from "./load-for-update";
 
 const isoDateInput = z
   .string()
@@ -89,7 +93,10 @@ export const setAssignments = defineCommand({
   name: "assignment.set",
   input: setAssignmentsInput,
   async handler(uow, input): Promise<SetAssignmentsOutput> {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("assignment.edit", { departmentId: schedule.departmentId });
 
     const nurseIds = [...new Set(input.changes.map((c) => c.nurseId))];
@@ -130,35 +137,50 @@ export const setAssignments = defineCommand({
     // Checked after authorizing, so an outsider learns nothing from CONFLICT.
     if (schedule.revision !== input.expectedRevision) throw new ConflictError();
 
-    for (const change of changes) {
-      const cell = {
-        scheduleId: schedule.id,
-        userId: change.nurseId,
-        date: change.date,
-      };
-      if (change.after === null) await clearAssignment(uow.tx, cell);
-      else
-        await setAssignment(uow.tx, {
-          ...cell,
-          shift: change.after,
-          updatedBy: uow.actor.userId,
-        });
-      await uow.audit({
-        action: assignmentAuditAction(change),
-        entityType: "assignment",
-        entityId: `${change.nurseId}:${change.date}`,
-        departmentId: schedule.departmentId,
-        scheduleId: schedule.id,
-        data: {
-          date: change.date,
-          nurseId: change.nurseId,
-          before: change.before,
-          after: change.after,
-          ...(changes.length > 1 && { batchSize: changes.length }),
-        },
-      });
-    }
+    await writeAssignmentChanges(uow, schedule, changes);
     const saved = await saveSchedule(uow, schedule, {});
     return { revision: saved.revision, changes };
   },
 });
+
+/**
+ * Writes planned changes to the working copy of a locked schedule, each cell
+ * in place (one decision per nurse and day, D15: an OFF decision is replaced,
+ * never kept beside a shift) and audited on its own (D48). Shared by the
+ * planning editor and the candidate command (D111), so both persist and
+ * audit an assignment the same way. The caller authorizes, checks and saves.
+ */
+export async function writeAssignmentChanges(
+  uow: UnitOfWork,
+  schedule: ScheduleRecord,
+  changes: readonly AssignmentChange[],
+): Promise<void> {
+  for (const change of changes) {
+    const cell = {
+      scheduleId: schedule.id,
+      userId: change.nurseId,
+      date: change.date,
+    };
+    if (change.after === null) await clearAssignment(uow.tx, cell);
+    else
+      await setAssignment(uow.tx, {
+        ...cell,
+        shift: change.after,
+        updatedBy: uow.actor.userId,
+      });
+    await uow.audit({
+      action: assignmentAuditAction(change),
+      entityType: "assignment",
+      entityId: `${change.nurseId}:${change.date}`,
+      departmentId: schedule.departmentId,
+      scheduleId: schedule.id,
+      data: {
+        date: change.date,
+        nurseId: change.nurseId,
+        before: change.before,
+        after: change.after,
+        ...(changes.length > 1 && { batchSize: changes.length }),
+      },
+    });
+  }
+}

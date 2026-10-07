@@ -202,6 +202,85 @@ export async function listSchedulingRoster(
     .orderBy(asc(users.displayName));
 }
 
+export interface RosterMemberOnDate {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly personnelNumber: string | null;
+}
+
+/**
+ * Roster entries of the schedule that are schedulable on `onDate`: an active
+ * account and a membership of the schedule's own department in effect on
+ * that day (D19, inclusive bounds). One query, ordered by user id,
+ * optionally restricted to some users. The roster itself is never changed;
+ * members not on it are never included.
+ */
+export async function listRosterMembersOn(
+  db: DbExecutor,
+  input: {
+    scheduleId: string;
+    onDate: IsoDate;
+    userIds?: readonly string[];
+  },
+): Promise<RosterMemberOnDate[]> {
+  const m = departmentMemberships;
+  return db
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
+    })
+    .from(scheduleRoster)
+    .innerJoin(schedules, eq(schedules.id, scheduleRoster.scheduleId))
+    .innerJoin(users, eq(users.id, scheduleRoster.userId))
+    .where(
+      and(
+        eq(scheduleRoster.scheduleId, input.scheduleId),
+        input.userIds ? inArray(users.id, [...input.userIds]) : undefined,
+        eq(users.isActive, true),
+        sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)})`,
+      ),
+    )
+    .orderBy(asc(users.id));
+}
+
+/**
+ * Selected Candidate eligibility, protected until commit. The account is
+ * already share-locked and the roster is protected by its schedule lock.
+ * SHARE on the actual qualifying membership rows conflicts with the UPDATE
+ * used by administrative end/transfer commands (NO KEY UPDATE). At READ
+ * COMMITTED a waited-for update is rechecked against the dated predicate.
+ */
+export async function lockRosterMemberOn(
+  tx: Transaction,
+  input: { scheduleId: string; userId: string; onDate: IsoDate },
+): Promise<boolean> {
+  const m = departmentMemberships;
+  const rows = await tx
+    .select({ id: m.id })
+    .from(scheduleRoster)
+    .innerJoin(schedules, eq(schedules.id, scheduleRoster.scheduleId))
+    .innerJoin(users, eq(users.id, scheduleRoster.userId))
+    .innerJoin(
+      m,
+      and(
+        eq(m.userId, users.id),
+        eq(m.departmentId, schedules.departmentId),
+        activeOn(m, input.onDate),
+      ),
+    )
+    .where(
+      and(
+        eq(scheduleRoster.scheduleId, input.scheduleId),
+        eq(users.id, input.userId),
+        eq(users.isActive, true),
+      ),
+    )
+    .orderBy(asc(m.id))
+    .for("share", { of: m });
+  return rows.length > 0;
+}
+
 export interface RosterCandidateRow {
   readonly userId: string;
   readonly displayName: string;

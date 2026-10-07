@@ -15,6 +15,7 @@ import {
 } from "@/features/calendar/jalali";
 import { ScheduleHeader } from "@/features/schedule/schedule-header";
 import { DayBadges, DayDetail } from "@/features/schedule-review/day-detail";
+import { ShortageCandidates } from "@/features/coverage-candidates/shortage-candidates";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
 import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
 import {
@@ -114,7 +115,19 @@ export default async function SupervisorReviewPage({
           navigation={<DayNav {...dayLinks} />}
         >
           {/* No editor: the Supervisor never changes assignments. */}
-          <DayDetail day={review.day} />
+          <DayDetail
+            candidates={
+              <ShortageCandidates
+                key={`${scheduleId}-${review.day.date}`}
+                scheduleId={scheduleId}
+                date={review.day.date}
+                coverage={review.day.coverage}
+                period={review.month.period}
+                revision={review.month.revision}
+              />
+            }
+            day={review.day}
+          />
         </DayDetailDialog>
       )}
     </>

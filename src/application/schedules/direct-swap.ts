@@ -8,7 +8,7 @@ import { listAssignmentsFor } from "../../infrastructure/repositories/assignment
 import { findChangeReason } from "../../infrastructure/repositories/change-reasons";
 import { ConflictError } from "../errors";
 import { defineCommand } from "../use-case";
-import { loadScheduleForUpdate } from "./load-for-update";
+import { loadScheduleForAssignmentUpdate } from "./load-for-update";
 import {
   writeScheduleChange,
   type ScheduleChangeResult,
@@ -32,7 +32,10 @@ export const directSwap = defineCommand({
   name: "schedule.directSwap",
   input: directSwapInput,
   async handler(uow, input): Promise<ScheduleChangeResult> {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("schedule.adjust", { departmentId: schedule.departmentId });
     if (schedule.revision !== input.expectedRevision) throw new ConflictError();
     if (input.firstNurseId === input.secondNurseId)

@@ -47,6 +47,7 @@ import {
   DayDetail,
   flaggedNurses,
 } from "@/features/schedule-review/day-detail";
+import { ShortageCandidates } from "@/features/coverage-candidates/shortage-candidates";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
 import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
 import { EmptyMonth } from "@/features/schedule-review/empty-month";
@@ -339,6 +340,16 @@ export default async function DepartmentSchedulePage({
           navigation={<DayNav {...dayLinks} />}
         >
           <DayDetail
+            candidates={
+              <ShortageCandidates
+                key={`${selected.id}-${review.day.date}`}
+                scheduleId={selected.id}
+                date={review.day.date}
+                coverage={review.day.coverage}
+                period={review.month.period}
+                revision={review.month.revision}
+              />
+            }
             day={review.day}
             adjustment={adjustment}
             directSwap={
