@@ -20,10 +20,25 @@ const rulesUrl = (d: RulesDepartment) =>
 const summary = (page: Page) =>
   page.locator("main").locator("section[data-validation]");
 
+/**
+ * Signs the current user out and the next one in on a fresh page of the same
+ * (now signed-out) context. Sign-out and sign-in are client-side navigations
+ * of one document, so nav-link prefetches cut short by the sign-out could stay
+ * "in flight" for that document forever and `networkidle` would never come.
+ */
+async function switchUser(page: Page, email: string): Promise<Page> {
+  await signOut(page);
+  const next = await page.context().newPage();
+  await page.close();
+  await signInAndWait(next, email);
+  return next;
+}
+
 test("Admin publishes a department override; Supervisor previews and applies it; Head Nurse reads it", async ({
-  page,
+  page: first,
 }) => {
-  test.skip(!isDesktop(page), "multi-role desktop journey");
+  test.skip(!isDesktop(first), "multi-role desktop journey");
+  let page = first;
   // Four sign-ins and the admin page (which lists every department) under a
   // parallel suite: only the whole-test budget grows, assertions keep theirs.
   test.setTimeout(240_000);
@@ -62,19 +77,17 @@ test("Admin publishes a department override; Supervisor previews and applies it;
   await expect(scope.locator('article[data-state="EFFECTIVE"]')).toContainText(
     "صبح ۳ تا ۶ نفر",
   );
-  await signOut(page);
 
   // 2. Head Nurse: publishing did not move the existing schedule's pin.
-  await signInAndWait(page, department.headEmail);
+  page = await switchUser(page, department.headEmail);
   await page.goto(scheduleUrl(department));
   await expect(summary(page)).toContainText("پیش‌فرض بیمارستان · نسخه ۱");
   // Read-only rules page: no Apply controls.
   await page.goto(rulesUrl(department));
   await expect(page.getByRole("button", { name: "پیش‌نمایش" })).toHaveCount(0);
-  await signOut(page);
 
   // 3. Supervisor: preview (nothing changes), then explicit confirmation.
-  await signInAndWait(page, department.supervisorEmail);
+  page = await switchUser(page, department.supervisorEmail);
   await page.goto(rulesUrl(department));
   const row = page.locator(`li[data-schedule-rules="${department.abanId}"]`);
   await row.getByRole("button", { name: "پیش‌نمایش" }).click();
@@ -97,10 +110,9 @@ test("Admin publishes a department override; Supervisor previews and applies it;
   await expect(page.locator("[data-history-entry]").first()).toContainText(
     "شیفت‌های تغییرکرده: ۰",
   );
-  await signOut(page);
 
   // 4. Head Nurse: the schedule is now validated with the override.
-  await signInAndWait(page, department.headEmail);
+  page = await switchUser(page, department.headEmail);
   await page.goto(scheduleUrl(department));
   await expect(summary(page)).toContainText("قوانین ویژه بخش · نسخه ۱");
   await expect(summary(page)).toContainText("کمبود نیرو");
