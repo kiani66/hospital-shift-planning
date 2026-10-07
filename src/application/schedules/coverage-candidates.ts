@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { decide } from "../../domain/authz/policies";
 import {
+  candidateDayStatus,
   evaluateCandidates,
   isCandidateShift,
   type CandidateDayStatus,
@@ -12,39 +13,52 @@ import { toDiagnostic } from "../../domain/rules/diagnostic";
 import {
   bucketCoverage,
   type StaffingBounds,
+  type StaffingRequirement,
   type StaffingStatus,
 } from "../../domain/rules/staffing";
+import { assessEdits } from "../../domain/schedule/assess-edits";
 import {
+  ASSIGNMENT_EDIT_REFUSALS,
   canEditAssignment,
+  type AssignmentChange,
   type AssignmentEditDenial,
 } from "../../domain/schedule/assignment-editing";
 import { addDays, isIsoDate, type IsoDate } from "../../domain/shared/dates";
-import { ValidationError } from "../../domain/shared/errors";
+import {
+  InvalidStateError,
+  RuleViolationError,
+  ValidationError,
+} from "../../domain/shared/errors";
 import { isInPeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
+import type { Assignment } from "../../domain/shifts/assignment";
 import { countByShift, coverageOf } from "../../domain/shifts/coverage";
+import { COVERAGE_PERIODS } from "../../domain/shifts/shift-type";
 import {
   listAdjacentAssignments,
   listAssignments,
 } from "../../infrastructure/repositories/assignments";
+import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import { listRosterMembersOn } from "../../infrastructure/repositories/roster";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
 import { NO_HOLIDAY_DATA } from "../calendar/holidays";
-import { NotFoundError } from "../errors";
+import { ConflictError, NotFoundError } from "../errors";
 import {
   holidayDates,
   loadRuleSet,
   requirementsUnder,
 } from "../staffing-rules/pinned";
-import type { AppContext } from "../use-case";
+import { defineCommand, type AppContext } from "../use-case";
+import { writeAssignmentChanges } from "./edit-assignments";
+import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
 import type { ReviewFinding } from "./review";
 
 /**
- * Candidate Recommendation V1 (D111), read side: who could fill a coverage
- * shortage of one day. Writes nothing (no revision, no assignment, no
- * schedule revision bump); assigning is a separate command.
+ * Candidate Recommendation V1 (D111): who could fill a coverage shortage of
+ * one day (`getCoverageCandidates`, read only), and assigning one of them
+ * (`assignCoverageCandidate`, a stricter command than the planning editor).
  */
 
 /** The target coverage period of the day against the pinned bounds (D106). */
@@ -108,6 +122,30 @@ export type CoverageCandidates =
       readonly notAllowed: readonly NotAllowedCandidateView[];
     });
 
+/**
+ * The target period's coverage on `date` from the working copy and the
+ * pinned bounds: the existing staffing comparison (`bucketCoverage`), ME
+ * counting toward M and E (D42). The one gate of the feature, read and write.
+ */
+function targetCoverage(
+  assignments: readonly Assignment[],
+  requirements: ReadonlyMap<IsoDate, StaffingRequirement>,
+  date: IsoDate,
+  shift: CandidateShift,
+): CandidateCoverage {
+  const bounds = requirements.get(date)?.[shift];
+  const covered = coverageOf(
+    countByShift(
+      assignments.filter((a) => a.date === date).map((a) => a.shift),
+    ),
+  )[shift];
+  return {
+    period: shift,
+    ...bucketCoverage(covered, bounds),
+    bounds: bounds ?? null,
+  };
+}
+
 export interface CoverageCandidatesInput {
   readonly scheduleId: string;
   readonly date: string;
@@ -168,17 +206,7 @@ export async function getCoverageCandidates(
   ]);
   // The day's bounds only, as a change of that day is validated (D106).
   const requirements = requirementsUnder(ruleSet, [date], holidays);
-  const bounds = requirements.get(date)?.[shift];
-  const covered = coverageOf(
-    countByShift(
-      assignments.filter((a) => a.date === date).map((a) => a.shift),
-    ),
-  )[shift];
-  const coverage: CandidateCoverage = {
-    period: shift,
-    ...bucketCoverage(covered, bounds),
-    bounds: bounds ?? null,
-  };
+  const coverage = targetCoverage(assignments, requirements, date, shift);
   const base = {
     scheduleId: schedule.id,
     revision: schedule.revision,
@@ -268,3 +296,153 @@ export async function getCoverageCandidates(
     })),
   };
 }
+
+/**
+ * `ConflictError.reason` when a candidate assignment's own preconditions no
+ * longer hold: the recommendation is out of date and must be re-read. These
+ * are preconditions of this use case, not scheduling rules (D111).
+ */
+export const CANDIDATE_ASSIGNMENT_REFUSALS = {
+  /** Not on the roster, inactive, or no membership of the department that day. */
+  NOT_A_CANDIDATE: "NOT_A_CANDIDATE",
+  /** Already works that day (M, E, N or ME): V1 never replaces a working shift. */
+  ALREADY_WORKING: "CANDIDATE_ALREADY_WORKING",
+  /** The target period is not below its minimum (any more). */
+  NO_SHORTAGE: "NO_SHORTAGE",
+} as const;
+
+export const assignCoverageCandidateInput = z.object({
+  scheduleId: z.uuid(),
+  /** The `revision` the candidate list was read at (D49). */
+  expectedRevision: z.number().int().nonnegative(),
+  date: z
+    .string()
+    .refine(isIsoDate, "Expected a YYYY-MM-DD date")
+    .transform((value) => value as IsoDate),
+  /** The short coverage period's own code; never ME or OFF. */
+  shift: z.enum(COVERAGE_PERIODS),
+  nurseId: z.uuid(),
+});
+
+export interface AssignCoverageCandidateOutput {
+  readonly scheduleId: string;
+  /** The schedule revision after the assignment; re-read the list with it. */
+  readonly revision: number;
+  /** The written cell: before is null (undecided) or OFF (replaced). */
+  readonly change: AssignmentChange;
+}
+
+const refuse = (reason: string) =>
+  new ConflictError(
+    "The recommendation is out of date; reload the candidates",
+    reason,
+  );
+
+/**
+ * Assigns a recommended nurse to a coverage shortage (D111). Stricter than
+ * the planning editor, whose behaviour is unchanged: in one transaction,
+ *
+ * 1. lock the schedule row and authorize `assignment.edit` for its own
+ *    department (Head Nurse only; a Supervisor previews but never assigns);
+ * 2. the cell must be editable now (`canEditAssignment`: status, period,
+ *    revision scope; nothing starts or extends a revision or withdraws);
+ * 3. the caller's revision must be current (a stale list is CONFLICT);
+ * 4. the nurse must still be in the universe: active account (share-locked
+ *    as every new scheduling write, D80), on the roster and a member of the
+ *    department on the date;
+ * 5. their day must still be undecided or OFF (OFF is replaced in place);
+ * 6. the target period must still be BELOW_MINIMUM under the pinned rules;
+ * 7. the shared hard-rule assessment (`assessEdits`, with the nurse's
+ *    neighbouring-schedule boundary days) must not block it
+ *    (RULE_VIOLATION with the findings);
+ * 8. write and audit the cell exactly as the editor does and bump the
+ *    revision.
+ *
+ * Any refusal rolls everything back: nothing is written, audited or bumped.
+ * Preferences and ranking are advice and are not checked again.
+ */
+export const assignCoverageCandidate = defineCommand({
+  name: "coverageCandidate.assign",
+  input: assignCoverageCandidateInput,
+  async handler(uow, input): Promise<AssignCoverageCandidateOutput> {
+    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    uow.authorize("assignment.edit", { departmentId: schedule.departmentId });
+    const { period } = schedule;
+    const { date, shift, nurseId } = input;
+
+    // Sequential: one transaction client never runs queries concurrently.
+    const revision =
+      schedule.status === "REVISING" || schedule.status === "RETURNED"
+        ? await findOpenRevision(uow.tx, schedule.id)
+        : null;
+    const editable = canEditAssignment({
+      status: schedule.status,
+      period,
+      date,
+      revisionDates: revision ? new Set(revision.dates) : null,
+    });
+    if (!editable.allowed) {
+      if (editable.reason === "DATE_OUTSIDE_PERIOD")
+        throw new ValidationError(
+          "The date is outside the schedule period",
+          "date",
+        );
+      throw new InvalidStateError(
+        schedule.status,
+        ASSIGNMENT_EDIT_REFUSALS[editable.reason],
+      );
+    }
+    // Checked after authorizing, so an outsider learns nothing from CONFLICT.
+    if (schedule.revision !== input.expectedRevision) throw new ConflictError();
+
+    if (!(await lockActiveSchedulingUsers(uow.tx, [nurseId])))
+      throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
+    const [member] = await listRosterMembersOn(uow.tx, {
+      scheduleId: schedule.id,
+      onDate: date,
+      userIds: [nurseId],
+    });
+    if (!member) throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
+
+    const assignments = await listAssignments(uow.tx, schedule.id);
+    const before =
+      assignments.find((a) => a.nurseId === nurseId && a.date === date)
+        ?.shift ?? null;
+    if (candidateDayStatus(before) === null)
+      throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.ALREADY_WORKING);
+
+    const ruleSet = await loadRuleSet(
+      uow.tx,
+      schedule.staffingRuleSetVersionId,
+    );
+    const holidays = await holidayDates(uow.holidays, period);
+    const requirements = requirementsUnder(ruleSet, [date], holidays);
+    if (
+      targetCoverage(assignments, requirements, date, shift).status !==
+      "BELOW_MINIMUM"
+    )
+      throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NO_SHORTAGE);
+
+    // The nurse's own boundary days: the only ones a change of their cell
+    // can be judged by (D7, D20), shifts in this schedule or not.
+    const adjacent = await listAdjacentAssignments(uow.tx, {
+      departmentId: schedule.departmentId,
+      excludeScheduleId: schedule.id,
+      nurseIds: [nurseId],
+      dates: [addDays(period.start, -1), addDays(period.end, 1)],
+    });
+    const { assessment } = assessEdits({
+      period,
+      assignments,
+      edits: [{ nurseId, date, shift }],
+      adjacentAssignments: adjacent,
+      staffingRequirements: requirements,
+    });
+    if (assessment.blocked) throw new RuleViolationError(assessment.blocking);
+
+    const change: AssignmentChange = { nurseId, date, before, after: shift };
+    await writeAssignmentChanges(uow, schedule, [change]);
+    const saved = await saveSchedule(uow, schedule, {});
+    return { scheduleId: schedule.id, revision: saved.revision, change };
+  },
+});

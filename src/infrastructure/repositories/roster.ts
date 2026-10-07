@@ -211,12 +211,17 @@ export interface RosterMemberOnDate {
 /**
  * Roster entries of the schedule that are schedulable on `onDate`: an active
  * account and a membership of the schedule's own department in effect on
- * that day (D19, inclusive bounds). One query, ordered by user id. The
- * roster itself is never changed; members not on it are never included.
+ * that day (D19, inclusive bounds). One query, ordered by user id,
+ * optionally restricted to some users. The roster itself is never changed;
+ * members not on it are never included.
  */
 export async function listRosterMembersOn(
   db: DbExecutor,
-  input: { scheduleId: string; onDate: IsoDate },
+  input: {
+    scheduleId: string;
+    onDate: IsoDate;
+    userIds?: readonly string[];
+  },
 ): Promise<RosterMemberOnDate[]> {
   const m = departmentMemberships;
   return db
@@ -231,6 +236,7 @@ export async function listRosterMembersOn(
     .where(
       and(
         eq(scheduleRoster.scheduleId, input.scheduleId),
+        input.userIds ? inArray(users.id, [...input.userIds]) : undefined,
         eq(users.isActive, true),
         sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)})`,
       ),
