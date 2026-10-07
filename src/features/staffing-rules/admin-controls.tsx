@@ -222,6 +222,12 @@ export function DraftEditor({
   note: string | null;
 }) {
   const [state, action, pending] = useActionState(updateDraftAction, IDLE);
+  // Which buckets have their own holiday rule. The checkboxes use
+  // `defaultChecked` (kept equal to this state on every render), not `checked`:
+  // React resets a `<form action>` after the action finishes, and a controlled
+  // checkbox would then fall back to its first-render attribute (React does not
+  // re-apply `checked`), showing a different state than this one and than the
+  // stored rule, and submitting it on the next save.
   const [holiday, setHoliday] = useState<Record<BaseShift, boolean>>({
     M: !!value.holiday.M,
     E: !!value.holiday.E,
@@ -276,7 +282,7 @@ export function DraftEditor({
                 <input
                   type="checkbox"
                   name={`holiday.${p}.enabled`}
-                  checked={holiday[p]}
+                  defaultChecked={holiday[p]}
                   onChange={(e) =>
                     setHoliday((h) => ({ ...h, [p]: e.target.checked }))
                   }
