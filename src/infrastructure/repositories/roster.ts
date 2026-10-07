@@ -202,6 +202,42 @@ export async function listSchedulingRoster(
     .orderBy(asc(users.displayName));
 }
 
+export interface RosterMemberOnDate {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly personnelNumber: string | null;
+}
+
+/**
+ * Roster entries of the schedule that are schedulable on `onDate`: an active
+ * account and a membership of the schedule's own department in effect on
+ * that day (D19, inclusive bounds). One query, ordered by user id. The
+ * roster itself is never changed; members not on it are never included.
+ */
+export async function listRosterMembersOn(
+  db: DbExecutor,
+  input: { scheduleId: string; onDate: IsoDate },
+): Promise<RosterMemberOnDate[]> {
+  const m = departmentMemberships;
+  return db
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
+    })
+    .from(scheduleRoster)
+    .innerJoin(schedules, eq(schedules.id, scheduleRoster.scheduleId))
+    .innerJoin(users, eq(users.id, scheduleRoster.userId))
+    .where(
+      and(
+        eq(scheduleRoster.scheduleId, input.scheduleId),
+        eq(users.isActive, true),
+        sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)})`,
+      ),
+    )
+    .orderBy(asc(users.id));
+}
+
 export interface RosterCandidateRow {
   readonly userId: string;
   readonly displayName: string;
