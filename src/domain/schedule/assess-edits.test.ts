@@ -228,8 +228,9 @@ describe("assessEdits", () => {
     });
 
     it("misses the boundary violation without the context, as validation does", () => {
-      const { adjacentAssignments: _, ...withoutContext } =
+      const withContext =
         SCENARIOS["boundary Night from the previous schedule"]!;
+      const withoutContext = { ...withContext, adjacentAssignments: undefined };
       expect(assessEdits(withoutContext).assessment.blocked).toBe(false);
     });
 
