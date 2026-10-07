@@ -19,7 +19,8 @@ import {
 } from "../shifts/shift-type";
 import { summarizeShifts } from "../shifts/working-time";
 import { findNightRestViolations } from "./night-rest";
-import { requiredStaffing } from "./staffing";
+import { resolveRequirements } from "../staffing-rules/resolve";
+import type { StaffingRequirement } from "./staffing";
 import { validateSchedule } from "./validate-schedule";
 import { toDiagnostic } from "./diagnostic";
 import { hasBlockingViolations } from "./violation";
@@ -32,12 +33,33 @@ const a = (
   day = date,
 ): Assignment => ({ nurseId, date: day, shift });
 const rosterNurseIds = ["a", "b", "c", "d"];
-const validate = (assignments: Assignment[], configured = new Map()) =>
+/** The legacy baseline rule set (M/E/N min 1, no max), as migration 0011 stores it. */
+const legacyBaseline = {
+  normal: {
+    M: { min: 1, max: null },
+    E: { min: 1, max: null },
+    N: { min: 1, max: null },
+  },
+  holiday: {},
+  exceptions: [],
+};
+const validate = (
+  assignments: Assignment[],
+  configured = new Map<typeof date, StaffingRequirement>(),
+) =>
   validateSchedule({
     period,
     assignments,
     rosterNurseIds,
-    staffingRequirements: requiredStaffing([date], configured),
+    staffingRequirements: new Map([
+      [
+        date,
+        {
+          ...resolveRequirements(legacyBaseline, [date], new Set()).get(date),
+          ...configured.get(date),
+        },
+      ],
+    ]),
   });
 
 describe("explicit scheduling decisions", () => {
@@ -128,15 +150,14 @@ describe("explicit scheduling decisions", () => {
       ]),
     );
     expect(
-      summarizeScheduleDays({
-        period,
-        assignments,
-        diagnostics: violations.map((v) => toDiagnostic(v, period)),
-      }).days[0],
+      summarizeScheduleDays({ period, assignments, violations }).days[0],
     ).toMatchObject({
-      health: "NEEDS_ATTENTION",
+      // All OFF: every decision made, so not NOT_STARTED, but three shortages.
+      state: "COVERAGE",
+      decisions: 4,
+      undecided: 0,
       coverage: { M: 0, E: 0, N: 0 },
-      findings: { blocking: 3, other: 0 },
+      shortages: 3,
     });
   });
   it("complete and sufficiently staffed days pass, including ME for M/E", () => {
@@ -168,8 +189,14 @@ describe("explicit scheduling decisions", () => {
       },
     ]);
     expect(
-      requiredStaffing([date], new Map([[date, { N: { min: 0 } }]])).get(date)
-        ?.N?.min,
+      resolveRequirements(
+        {
+          ...legacyBaseline,
+          normal: { ...legacyBaseline.normal, N: { min: 0, max: null } },
+        },
+        [date],
+        new Set(),
+      ).get(date)?.N?.min,
     ).toBe(0);
   });
   it("N to explicit OFF is valid both within and across period boundaries", () => {

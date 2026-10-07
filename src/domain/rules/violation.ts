@@ -5,7 +5,7 @@ import type { StaffingBounds } from "./staffing";
 /**
  * `error` is a hard rule: it blocks FINALIZE and SUBMIT and a post-finalization
  * change that introduces it. `warning` is a soft rule: reported, never
- * blocking (e.g. staffing above its configured maximum).
+ * blocking. Every current rule is an error, staffing maxima included (D102).
  */
 export type ViolationSeverity = "error" | "warning";
 
@@ -41,9 +41,9 @@ export type Violation =
     }
   | {
       /**
-       * A coverage period of `date` staffed outside its configured bounds
-       * (D44). Only reported where a requirement is configured; about the
-       * day's period, not one nurse.
+       * A coverage period of `date` staffed outside its pinned bounds
+       * (D102, D106): a shortage or overstaffing. About the day's period,
+       * not one nurse.
        */
       readonly rule: "STAFFING";
       readonly severity: ViolationSeverity;

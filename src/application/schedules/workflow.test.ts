@@ -103,7 +103,8 @@ describe("describeWorkflow: what each actor is offered", () => {
     ["FINALIZED", ["submit"]],
     ["SUBMITTED", ["withdraw"]],
     ["RETURNED", ["submit"]],
-    ["APPROVED", []],
+    // An approved schedule is changed only through an explicit revision (D109).
+    ["APPROVED", ["startRevision"]],
   ] as const)("Head Nurse in %s: %j", (status, expected) => {
     const submissions = status === "SUBMITTED" ? [submission()] : [];
     expect(offered(describeFor(head, status, { submissions }))).toEqual(
@@ -129,6 +130,7 @@ describe("describeWorkflow: what each actor is offered", () => {
       approve: { blockers: [] },
       return: { blockers: [] },
       discardRevision: null,
+      startRevision: null,
     });
     expect(w.ownSubmission).toBe(false);
   });
@@ -136,7 +138,7 @@ describe("describeWorkflow: what each actor is offered", () => {
   it.each([
     ["REVISING", ["submit", "discardRevision"]],
     ["RETURNED", ["submit", "discardRevision"]],
-    ["APPROVED", []],
+    ["APPROVED", ["startRevision"]],
   ] as const)(
     "Head Nurse in %s after an approval (a revision): %j",
     (status, expected) => {
@@ -184,13 +186,15 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
     const w = describeFor(head, "PLANNING", {
       violations: [nightRest, outside],
     });
-    expect(w.actions.finalize).toEqual({ blockers: ["BLOCKING_FINDINGS"] });
+    expect(w.actions.finalize).toEqual({ blockers: ["VALIDATION"] });
     // The outside-period finding belongs to no day (D43) but still counts.
-    expect(w.blockingFindings).toEqual({
-      count: 2,
-      dates: ["2026-10-26"],
+    expect(w.validation).toMatchObject({
       undecided: 0,
-      staffing: 0,
+      coverageProblems: 0,
+      ruleViolations: 2,
+      unattributedRuleViolations: 1,
+      ready: false,
+      dates: { undecided: [], coverage: [], ruleViolations: ["2026-10-26"] },
     });
   });
 
@@ -204,7 +208,7 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
     expect(
       describeFor(head, "FINALIZED", { violations: [nightRest], windows: 2 })
         .actions.submit,
-    ).toEqual({ blockers: ["BLOCKING_FINDINGS", "PREFERENCE_WINDOW_OPEN"] });
+    ).toEqual({ blockers: ["VALIDATION", "PREFERENCE_WINDOW_OPEN"] });
     expect(
       describeFor(head, "RETURNED", { windows: 1 }).actions.submit,
     ).toEqual({ blockers: ["PREFERENCE_WINDOW_OPEN"] });
@@ -217,7 +221,66 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
     } as unknown as Violation;
     const w = describeFor(head, "PLANNING", { violations: [warning] });
     expect(w.actions.finalize).toEqual({ blockers: [] });
-    expect(w.blockingFindings.count).toBe(0);
+    expect(w.validation).toMatchObject({ ruleViolations: 0, ready: true });
+  });
+});
+
+describe("describeWorkflow: explicit revision (D109)", () => {
+  it("offers START_REVISION to the Head Nurse of an APPROVED schedule only", () => {
+    expect(
+      describeFor(head, "APPROVED", { approvedVersion: true }).actions
+        .startRevision,
+    ).toEqual({ blockers: [] });
+    expect(
+      describeFor(supervisor, "APPROVED", { approvedVersion: true }).actions
+        .startRevision,
+    ).toBeNull();
+    expect(describeFor(head, "PLANNING").actions.startRevision).toBeNull();
+  });
+});
+
+describe("describeWorkflow: validation categories stay apart (D102, D104)", () => {
+  it("counts undecided nurse-days, coverage problems and rule violations separately", () => {
+    const undecided: Violation = {
+      rule: "UNDECIDED",
+      severity: "error",
+      nurseId: "n2",
+      date: isoDate("2026-10-24"),
+    };
+    const shortage: Violation = {
+      rule: "STAFFING",
+      severity: "error",
+      date: isoDate("2026-10-25"),
+      period: "N",
+      covered: 1,
+      status: "BELOW_MINIMUM",
+      bounds: { min: 3, max: 6 },
+    };
+    const excess: Violation = {
+      ...shortage,
+      period: "M",
+      covered: 7,
+      status: "ABOVE_MAXIMUM",
+    };
+    const w = describeFor(head, "PLANNING", {
+      violations: [undecided, shortage, excess, nightRest],
+    });
+    expect(w.actions.finalize).toEqual({ blockers: ["VALIDATION"] });
+    expect(w.validation).toMatchObject({
+      undecided: 1,
+      undecidedDays: 1,
+      coverageProblems: 2,
+      shortages: 1,
+      overstaffing: 1,
+      shortBy: 2,
+      excessBy: 1,
+      ruleViolations: 1,
+      dates: {
+        undecided: ["2026-10-24"],
+        coverage: ["2026-10-25"],
+        ruleViolations: ["2026-10-26"],
+      },
+    });
   });
 });
 

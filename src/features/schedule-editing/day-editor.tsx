@@ -33,12 +33,20 @@ import {
   type AssignmentChange,
   type AssignmentEdit,
 } from "@/domain/schedule/assignment-editing";
+import { bucketCoverage, type StaffingBounds } from "@/domain/rules/staffing";
 import type { IsoDate } from "@/domain/shared/dates";
+import { countByShift, coverageOf } from "@/domain/shifts/coverage";
 import {
   ASSIGNMENT_CODES,
+  type BaseShift,
   type PreferenceValue,
   type AssignmentCode,
 } from "@/domain/shifts/shift-type";
+import {
+  COVERAGE_PERIOD_NAMES,
+  SHIFT_PRESENTATION,
+} from "@/features/shifts/catalog";
+import { staffingRangeLabel } from "@/features/schedule-review/presentation";
 import { faNumber } from "@/features/calendar/jalali";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import { PreferenceContext } from "@/features/schedule-review/preference-alignment";
@@ -69,7 +77,7 @@ export interface EditorNurse {
   readonly role: MembershipRole;
   readonly shift: AssignmentCode | null;
   readonly preference: PreferenceValue | null;
-  /** Involved in a finding on this day (or one involving it). */
+  /** Involved in a rule violation on this day (or one involving it). */
   readonly flagged: boolean;
 }
 
@@ -133,6 +141,7 @@ export function DayEditor({
   dayLabel,
   nurses,
   rangeEnds,
+  coverage,
   previousDayHref,
   nextDayHref,
 }: {
@@ -145,6 +154,11 @@ export function DayEditor({
   nurses: readonly EditorNurse[];
   /** The later days of the period, for range edits (label = Jalali date). */
   rangeEnds: readonly DayOption[];
+  /** The day's bounds per bucket from the schedule's PINNED rule set (D106). */
+  coverage: readonly {
+    readonly period: BaseShift;
+    readonly bounds: StaffingBounds | null;
+  }[];
   previousDayHref: Route | null;
   nextDayHref: Route | null;
 }) {
@@ -287,6 +301,9 @@ export function DayEditor({
   };
 
   const shiftOf = (userId: string) => shifts.get(userId) ?? null;
+  // Live coverage of the decisions on screen (pending ones included), against
+  // the pinned bounds; the same comparison the server validates with.
+  const live = coverageOf(countByShift(nurses.map((n) => shiftOf(n.userId))));
   const filters = { shift: filter, conflictsOnly, query };
   const visible = filterEditorNurses(nurses, shiftOf, filters, kept);
   const count = (f: ShiftFilter) =>
@@ -445,6 +462,8 @@ export function DayEditor({
           </div>
         </details>
       </div>
+
+      <LiveCoverage coverage={coverage} covered={live} />
 
       <div className="flex flex-col gap-2 md:flex-row md:items-start">
         <div className="flex flex-wrap items-center gap-1">
@@ -731,7 +750,7 @@ function NurseRow({
       className={cn(
         "scroll-mt-40 border-s-3 px-3 py-2 transition-colors target:bg-brand-soft",
         nurse.flagged
-          ? "border-s-health-attention bg-health-attention/8 focus-within:bg-health-attention/14"
+          ? "border-s-destructive bg-destructive/5 focus-within:bg-destructive/10"
           : "border-s-transparent focus-within:border-s-primary focus-within:bg-brand-soft/60 hover:bg-muted/50",
       )}
     >
@@ -750,9 +769,9 @@ function NurseRow({
               </Badge>
             )}
             {nurse.flagged && (
-              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-health-attention-foreground">
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-destructive">
                 <CircleAlert aria-hidden="true" className="size-3.5" />
-                نیاز به بررسی
+                نقض قانون
               </span>
             )}
             {pending && (
@@ -853,5 +872,89 @@ function NurseRow({
         />
       )}
     </li>
+  );
+}
+
+/**
+ * Coverage while editing (D106, Q): each bucket's count from the decisions on
+ * screen, the required range of the pinned rule set, and a shortage or
+ * overstaffing mark with its amount. It never blocks an edit: a draft may be
+ * saved incomplete; only FINALIZE requires every bucket within bounds.
+ */
+function LiveCoverage({
+  coverage,
+  covered,
+}: {
+  coverage: readonly {
+    readonly period: BaseShift;
+    readonly bounds: StaffingBounds | null;
+  }[];
+  covered: Readonly<Record<BaseShift, number>>;
+}) {
+  return (
+    // A polite live region (not role=status: the save message is the status).
+    <div
+      aria-live="polite"
+      data-live-coverage-strip
+      className="grid grid-cols-3 gap-2"
+    >
+      <span className="sr-only">پوشش نفرات این روز:</span>
+      {coverage.map(({ period, bounds }) => {
+        const b = bucketCoverage(covered[period], bounds ?? undefined);
+        return (
+          <p
+            key={period}
+            data-live-coverage={period}
+            data-staffing={b.status}
+            className={cn(
+              "flex min-w-0 flex-col rounded-lg border px-2 py-1.5 text-xs",
+              b.status === "BELOW_MINIMUM" &&
+                "border-health-attention/55 bg-health-attention/8",
+              b.status === "ABOVE_MAXIMUM" &&
+                "border-status-warning/50 bg-status-warning/8",
+            )}
+          >
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <span
+                dir="ltr"
+                className={cn(
+                  "font-bold",
+                  SHIFT_PRESENTATION[period].accentClass,
+                )}
+              >
+                {period}
+              </span>
+              {COVERAGE_PERIOD_NAMES[period]}
+            </span>
+            <span className="tabular-nums">
+              <span className="text-base font-semibold">
+                {faNumber(b.covered)}
+              </span>{" "}
+              / لازم {staffingRangeLabel(bounds)}
+            </span>
+            <span
+              className={cn(
+                "font-medium",
+                b.status === "BELOW_MINIMUM" &&
+                  "text-health-attention-foreground",
+                b.status === "ABOVE_MAXIMUM" &&
+                  "text-status-warning-foreground",
+                (b.status === "WITHIN_BOUNDS" ||
+                  b.status === "NOT_CONFIGURED") &&
+                  "text-muted-foreground",
+              )}
+            >
+              {b.status === "BELOW_MINIMUM"
+                ? `کمبود ${faNumber(b.gap)} نفر`
+                : b.status === "ABOVE_MAXIMUM"
+                  ? `مازاد ${faNumber(b.gap)} نفر`
+                  : b.status === "WITHIN_BOUNDS"
+                    ? "در محدوده"
+                    : "ارزیابی نشده"}
+            </span>
+          </p>
+        );
+      })}
+    </div>
   );
 }

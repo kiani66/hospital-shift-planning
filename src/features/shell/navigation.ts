@@ -19,6 +19,7 @@ export type NavIcon =
   | "history"
   | "review"
   | "personnel"
+  | "staffingRules"
   | "more";
 
 export interface NavItem {
@@ -54,7 +55,7 @@ type Capabilities = Pick<ShellContext, "memberships" | "supervised"> &
 
 const departmentPath = (
   code: string,
-  page: "schedule" | "requests" | "history" | "people",
+  page: "schedule" | "requests" | "history" | "people" | "coverage-rules",
 ) => `/departments/${encodeURIComponent(code)}/${page}` as Route;
 
 /**
@@ -78,6 +79,12 @@ const ITEMS = {
     href: "/admin/personnel",
     label: "کاربران بیمارستان",
     icon: "personnel",
+  },
+  staffingRules: {
+    id: "staffing-rules",
+    href: "/admin/staffing-rules",
+    label: "قوانین پوشش نفرات",
+    icon: "staffingRules",
   },
   home: { id: "home", href: "/home", label: "نمای کلی", icon: "home" },
   myShifts: {
@@ -143,6 +150,12 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       label: qualify("تاریخچه", d.name),
       icon: "history",
     } satisfies NavItem,
+    coverageRules: {
+      id: `department-coverage-rules-${d.code}`,
+      href: departmentPath(d.code, "coverage-rules"),
+      label: qualify("قوانین پوشش", d.name),
+      icon: "staffingRules",
+    } satisfies NavItem,
   }));
 
   // Personal pages are about the user's own data, so anyone who is not only
@@ -170,6 +183,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
         departmentItems[i]!.schedule,
         departmentItems[i]!.requests,
         departmentItems[i]!.history,
+        departmentItems[i]!.coverageRules,
       ],
     }),
   );
@@ -191,13 +205,24 @@ export function buildNavigation(ctx: Capabilities): Navigation {
     sections.push({
       id: "administration",
       title: "مدیریت بیمارستان",
-      items: [ITEMS.personnel],
+      items: [ITEMS.personnel, ITEMS.staffingRules],
     });
   if (supervisor)
     sections.push({
       id: "review",
       title: "نظارت",
-      items: personal ? [ITEMS.review] : [ITEMS.review, ITEMS.notifications],
+      items: [
+        ...(personal ? [ITEMS.review] : [ITEMS.review, ITEMS.notifications]),
+        // Rule sets of supervised departments (read, preview and apply, D108).
+        ...ctx.supervised
+          .filter((d) => !headOf.some((h) => h.id === d.id))
+          .map((d) => ({
+            id: `department-coverage-rules-${d.code}`,
+            href: departmentPath(d.code, "coverage-rules"),
+            label: `قوانین پوشش (${d.name})`,
+            icon: "staffingRules" as const,
+          })),
+      ],
     });
 
   // Bottom bar priorities (mobile): Head Nurse, else nurse, then supervisor.

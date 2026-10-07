@@ -5,8 +5,11 @@ import { countByShift, coverageOf } from "../shifts/coverage";
 import { COVERAGE_PERIODS, type BaseShift } from "../shifts/shift-type";
 import type { Violation } from "./violation";
 
-/** Staffing bounds per coverage period. A minimum shortfall blocks finalization and
- * newly introduced post-finalization shortages; an upper-bound excess remains advisory.
+/**
+ * Staffing bounds per coverage period, resolved from the schedule's pinned
+ * rule-set version (D105, D106). Both bounds are hard rules (D102): a
+ * shortage or an excess blocks FINALIZE / SUBMIT and a post-finalization
+ * change that introduces or worsens it.
  */
 export interface StaffingBounds {
   /** Fewest nurses the coverage period needs. */
@@ -38,9 +41,10 @@ export function staffingStatus(
 type StaffingViolation = Extract<Violation, { rule: "STAFFING" }>;
 
 /**
- * Staffing findings: an error below the minimum, a warning above the maximum.
- * Operational coverage keeps ME contributing to M and E (D42). Days and periods without a requirement are
- * not checked.
+ * Staffing findings: an error below the minimum and an error above the
+ * maximum (D102). Operational coverage keeps ME contributing to M and E and
+ * OFF to nothing (D42, D100). Days and periods without a requirement are not
+ * checked.
  */
 export function findStaffingViolations(input: {
   readonly period: DatePeriod;
@@ -61,7 +65,7 @@ export function findStaffingViolations(input: {
       if (status === "BELOW_MINIMUM" || status === "ABOVE_MAXIMUM")
         violations.push({
           rule: "STAFFING",
-          severity: status === "BELOW_MINIMUM" ? "error" : "warning",
+          severity: "error",
           date,
           period,
           covered: coverage[period],
@@ -73,23 +77,28 @@ export function findStaffingViolations(input: {
   return violations;
 }
 
-/** Configured minima override the baseline of one nurse per M/E/N period. */
-export function requiredStaffing(
-  dates: readonly IsoDate[],
-  configured: ReadonlyMap<IsoDate, StaffingRequirement>,
-): ReadonlyMap<IsoDate, StaffingRequirement> {
-  return new Map(
-    dates.map((date) => [
-      date,
-      Object.fromEntries(
-        COVERAGE_PERIODS.map((period) => [
-          period,
-          {
-            ...configured.get(date)?.[period],
-            min: configured.get(date)?.[period]?.min ?? 1,
-          },
-        ]),
-      ),
-    ]),
-  );
+/** A bucket's coverage against its bounds, with the distance to the bound it misses. */
+export interface BucketCoverage {
+  readonly covered: number;
+  readonly status: StaffingStatus;
+  /** Missing nurses (BELOW_MINIMUM) or excess nurses (ABOVE_MAXIMUM); 0 otherwise. */
+  readonly gap: number;
+}
+
+/**
+ * The same comparison as the validator, for live display while editing
+ * (D106): never a separate rule.
+ */
+export function bucketCoverage(
+  covered: number,
+  bounds: StaffingBounds | undefined,
+): BucketCoverage {
+  const status = staffingStatus(covered, bounds);
+  const gap =
+    status === "BELOW_MINIMUM"
+      ? bounds!.min! - covered
+      : status === "ABOVE_MAXIMUM"
+        ? covered - bounds!.max!
+        : 0;
+  return { covered, status, gap };
 }

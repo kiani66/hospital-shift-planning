@@ -70,7 +70,7 @@ test.describe("Head Nurse schedule editing", () => {
     // 6 Aban is unplanned: open it from the calendar.
     await page
       .getByRole("region", { name: "تقویم ماه" })
-      .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، برنامه‌ریزی‌نشده/ })
+      .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، شروع‌نشده/ })
       .click();
     const dialog = dayDialog(page);
     await expect(dialog).toHaveAccessibleName("چهارشنبه ۶ آبان ۱۴۰۵");
@@ -128,7 +128,7 @@ test.describe("Head Nurse schedule editing", () => {
     await expect(
       page
         .getByRole("region", { name: "تقویم ماه" })
-        .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، نیاز به بررسی/ }),
+        .getByRole("link", { name: /^چهارشنبه ۶ آبان ۱۴۰۵، مشکل پوشش/ }),
     ).toBeVisible();
 
     // Persisted: a reload shows the same.
@@ -166,7 +166,7 @@ test.describe("Head Nurse schedule editing", () => {
     const finding = `«${nurse1}» در چهارشنبه ۶ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (پنجشنبه ۷ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`;
     await expect(dialog).toContainText(finding);
     await expect(dialog.getByText("مانع نهایی‌سازی").first()).toBeVisible();
-    await expect(row(dialog, nurse1)).toContainText("نیاز به بررسی");
+    await expect(row(dialog, nurse1)).toContainText("نقض قانون");
     expect(await dialog.innerText()).not.toMatch(
       /NIGHT_REST|\d{4}-\d{2}-\d{2}/,
     );
@@ -187,7 +187,8 @@ test.describe("Head Nurse schedule editing", () => {
     await page.keyboard.press("Delete");
     await saved(dialog);
     await expect(dialog).not.toContainText(finding);
-    await expect(row(dialog, nurse1)).toContainText("نیاز به بررسی");
+    // Now undecided, which is not a rule violation (D102).
+    await expect(row(dialog, nurse1)).not.toContainText("نقض قانون");
 
     // Arrow keys move between nurses; L is the long shift.
     await page.keyboard.press("ArrowDown");

@@ -1,5 +1,6 @@
 import type { ActionError } from "@/application/result";
 import type { WorkflowBlocker } from "@/application/schedules/workflow";
+import type { Violation } from "@/domain/rules/violation";
 import { PREFERENCE_WINDOW_OPEN } from "@/domain/schedule/state-machine";
 import { uniqueSortedDates, type IsoDate } from "@/domain/shared/dates";
 import {
@@ -16,7 +17,13 @@ import {
  */
 
 export type LifecycleCommand =
-  "finalize" | "submit" | "withdraw" | "approve" | "return" | "discard";
+  | "finalize"
+  | "submit"
+  | "withdraw"
+  | "approve"
+  | "return"
+  | "discard"
+  | "revise";
 
 /** The action as the end of "…بتوان آن را ___" ("نهایی کرد"). */
 const ACT: Record<LifecycleCommand, string> = {
@@ -26,6 +33,7 @@ const ACT: Record<LifecycleCommand, string> = {
   approve: "تأیید کرد",
   return: "برگشت داد",
   discard: "کنار گذاشت",
+  revise: "بازنگری کرد",
 };
 
 export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
@@ -36,6 +44,8 @@ export const WORKFLOW_SUCCESS: Record<LifecycleCommand, string> = {
   return: "برنامه با توضیح شما برای اصلاح به سرپرستار برگشت داده شد.",
   discard:
     "بازنگری کنار گذاشته شد؛ برنامه به آخرین نسخه تأییدشده برگشت و همان نسخه اجرایی است.",
+  revise:
+    "بازنگری آغاز شد. نسخه تأییدشده تا تأیید بازنگری اجرایی می‌ماند؛ اکنون سوپروایزر یا مدیر بیمارستان می‌تواند قوانین پوشش دیگری را اعمال کند.",
 };
 
 /** "۴ آبان" (the month's day and name; the year is the page's). */
@@ -53,34 +63,69 @@ export function dayList(dates: readonly IsoDate[], max = 4): string {
   return `${named.slice(0, -1).join("، ")} و ${named.at(-1)}`;
 }
 
+/** The categories a validation blocker consists of (D102). */
+export interface ValidationBlockerCounts {
+  readonly undecided: number;
+  readonly undecidedDays: number;
+  readonly coverageProblems: number;
+  readonly shortages: number;
+  readonly overstaffing: number;
+  readonly ruleViolations: number;
+}
+
+/**
+ * Each open category in its own words (D104): never one lumped
+ * "blocking conflicts" number, and an undecided decision is never a conflict.
+ */
+export function validationBlockerLines(v: ValidationBlockerCounts): string[] {
+  const lines: string[] = [];
+  if (v.undecided > 0)
+    lines.push(
+      `${faNumber(v.undecided)} تصمیم تعیین‌نشده در ${faNumber(v.undecidedDays)} روز`,
+    );
+  if (v.coverageProblems > 0) {
+    const parts = [
+      ...(v.shortages > 0 ? [`${faNumber(v.shortages)} کمبود نیرو`] : []),
+      ...(v.overstaffing > 0 ? [`${faNumber(v.overstaffing)} مازاد نیرو`] : []),
+    ];
+    lines.push(
+      `${faNumber(v.coverageProblems)} مشکل پوشش (${parts.join("، ")})`,
+    );
+  }
+  if (v.ruleViolations > 0)
+    lines.push(`${faNumber(v.ruleViolations)} نقض قانون`);
+  return lines;
+}
+
 /** Why an offered action cannot be taken yet (the header's blocker list). */
 export function blockerLabel(
   blocker: WorkflowBlocker,
-  findings: {
-    readonly count: number;
-    readonly dates: readonly IsoDate[];
-    readonly undecided?: number;
-    readonly staffing?: number;
-  },
+  validation: ValidationBlockerCounts,
 ): string {
   switch (blocker) {
-    case "BLOCKING_FINDINGS": {
-      const where = findings.dates.length
-        ? ` در ${dayList(findings.dates)}`
-        : "";
-      const details = [
-        ...(findings.undecided
-          ? [`${faNumber(findings.undecided)} تصمیم تعیین‌نشده`]
-          : []),
-        ...(findings.staffing
-          ? [`${faNumber(findings.staffing)} نوبت با کمبود نیرو`]
-          : []),
-      ];
-      return `${faNumber(findings.count)} مغایرت مسدودکننده${where} باید برطرف شود.${details.length ? ` ${details.join("؛ ")}.` : ""}`;
+    case "VALIDATION": {
+      const lines = validationBlockerLines(validation);
+      return `برنامه هنوز کامل و معتبر نیست: ${lines.join("؛ ")}.`;
     }
     case "PREFERENCE_WINDOW_OPEN":
       return "ثبت ترجیحات پرستاران هنوز باز است؛ پیش از ارسال، آن را ببندید.";
   }
+}
+
+/** The categories of a refused command's violations (the payload keeps the raw list). */
+function violationCounts(
+  violations: readonly Violation[],
+): ValidationBlockerCounts {
+  const staffing = violations.filter((v) => v.rule === "STAFFING");
+  const undecided = violations.filter((v) => v.rule === "UNDECIDED");
+  return {
+    undecided: undecided.length,
+    undecidedDays: new Set(undecided.map((v) => v.date)).size,
+    coverageProblems: staffing.length,
+    shortages: staffing.filter((v) => v.status === "BELOW_MINIMUM").length,
+    overstaffing: staffing.filter((v) => v.status === "ABOVE_MAXIMUM").length,
+    ruleViolations: violations.length - staffing.length - undecided.length,
+  };
 }
 
 const GENERIC: Record<ActionError["code"], string> = {
@@ -106,13 +151,12 @@ export function workflowErrorMessage(
     case "CONFLICT":
       return "برنامه هم‌زمان تغییر کرده است (برای نمونه، شخص دیگری زودتر اقدام کرده است). وضعیت تازه نمایش داده شد؛ پیش از تکرار، آن را بررسی کنید.";
     case "RULE_VIOLATION": {
-      const dates = uniqueSortedDates(
-        (error.violations ?? []).map((v) => v.date),
-      );
-      const count = error.violations?.length ?? 0;
-      return dates.length
-        ? `${faNumber(count)} مغایرت مسدودکننده مانع این کار است؛ روزهای ${dayList(dates)} را بررسی و اصلاح کنید.`
-        : "مغایرت‌های مسدودکننده مانع این کار است؛ روزهای نیازمند بررسی را اصلاح کنید.";
+      const violations = error.violations ?? [];
+      const lines = validationBlockerLines(violationCounts(violations));
+      const dates = uniqueSortedDates(violations.map((v) => v.date));
+      if (lines.length === 0)
+        return "برنامه هنوز کامل و معتبر نیست؛ روزهای نیازمند اقدام را در تقویم اصلاح کنید.";
+      return `این کار انجام نشد، چون برنامه هنوز کامل و معتبر نیست: ${lines.join("؛ ")}.${dates.length ? ` روزهای ${dayList(dates)} را بررسی کنید.` : ""}`;
     }
     case "INVALID_STATE":
       if (error.reason === PREFERENCE_WINDOW_OPEN)
@@ -123,6 +167,8 @@ export function workflowErrorMessage(
         return "این برنامه را خودتان ارسال کرده‌اید؛ تأیید یا برگشت آن با سوپروایزر دیگری است.";
       return GENERIC.FORBIDDEN;
     case "VALIDATION":
+      if (command === "revise")
+        return "دلیل بازنگری را بنویسید (حداکثر ۵۰۰ نویسه).";
       if (command === "return" && error.fieldErrors?.comment)
         return "توضیح برگشت را بنویسید (حداکثر ۱۰۰۰ نویسه)؛ سرپرستار بر اساس آن برنامه را اصلاح می‌کند.";
       return GENERIC.VALIDATION;

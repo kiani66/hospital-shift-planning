@@ -1,7 +1,11 @@
 import type { Actor } from "../../domain/authz/actor";
 import { decide } from "../../domain/authz/policies";
-import { violationDay } from "../../domain/rules/diagnostic";
-import { isBlocking, type Violation } from "../../domain/rules/violation";
+import {
+  summarizeValidation,
+  validationCounts,
+  type ValidationCounts,
+} from "../../domain/rules/validation-summary";
+import type { Violation } from "../../domain/rules/violation";
 import {
   eventsFrom,
   PREFERENCE_WINDOW_OPEN,
@@ -10,7 +14,7 @@ import {
   type TransitionError,
 } from "../../domain/schedule/state-machine";
 import type { ScheduleStatus } from "../../domain/schedule/status";
-import { uniqueSortedDates, type IsoDate } from "../../domain/shared/dates";
+import type { IsoDate } from "../../domain/shared/dates";
 import {
   InvalidStateError,
   RuleViolationError,
@@ -34,8 +38,29 @@ import type {
  * this is guidance for the UI, never the gate.
  */
 
-/** Why an offered action cannot be taken yet. */
-export type WorkflowBlocker = "BLOCKING_FINDINGS" | "PREFERENCE_WINDOW_OPEN";
+/**
+ * Why an offered action cannot be taken yet: the working copy is not clean
+ * in at least one validation category (D102), or preference collection is
+ * still open.
+ */
+export type WorkflowBlocker = "VALIDATION" | "PREFERENCE_WINDOW_OPEN";
+
+/**
+ * The working copy's validation for the workflow (D104): each category
+ * counted on its own, never one "blocking conflicts" number, with the
+ * period days each category affects.
+ */
+export interface WorkflowValidation extends ValidationCounts {
+  /** Every category is clean. */
+  readonly ready: boolean;
+  /** Rule violations that belong to no day of the period. */
+  readonly unattributedRuleViolations: number;
+  readonly dates: {
+    readonly undecided: readonly IsoDate[];
+    readonly coverage: readonly IsoDate[];
+    readonly ruleViolations: readonly IsoDate[];
+  };
+}
 
 /** An action the actor may take in this status; no blockers = possible now. */
 export interface WorkflowAction {
@@ -64,13 +89,8 @@ export interface ScheduleWorkflow {
   readonly pending: WorkflowSubmission | null;
   /** The most recent decided submission (approved, returned or withdrawn). */
   readonly lastDecision: WorkflowSubmission | null;
-  /** Blocking findings of the working copy and the period days they belong to. */
-  readonly blockingFindings: {
-    readonly count: number;
-    readonly undecided: number;
-    readonly staffing: number;
-    readonly dates: readonly IsoDate[];
-  };
+  /** The working copy's validation per category (D102, D104). */
+  readonly validation: WorkflowValidation;
   readonly preferenceWindowOpen: boolean;
   /** Null: not offered to this actor in this status. */
   readonly actions: {
@@ -84,6 +104,11 @@ export interface ScheduleWorkflow {
      * revision): the working copy goes back to the latest approved version.
      */
     readonly discardRevision: WorkflowAction | null;
+    /**
+     * Explicitly start a revision of an APPROVED schedule (D109): the path
+     * to change its shifts or, through Apply, its rule set.
+     */
+    readonly startRevision: WorkflowAction | null;
   };
   /**
    * The actor is a Supervisor of the department but submitted the pending
@@ -98,7 +123,7 @@ function blockersOf(
   result: Result<ScheduleStatus, TransitionError>,
 ): WorkflowBlocker[] {
   if (result.ok) return [];
-  if (result.error instanceof RuleViolationError) return ["BLOCKING_FINDINGS"];
+  if (result.error instanceof RuleViolationError) return ["VALIDATION"];
   if (
     result.error instanceof InvalidStateError &&
     result.error.attempted === PREFERENCE_WINDOW_OPEN
@@ -159,18 +184,26 @@ export function describeWorkflow(
     : null;
   const mayDecide = supervisorDecision?.allowed === true;
 
-  const blocking = violations.filter(isBlocking);
+  const summary = summarizeValidation({
+    period: schedule.period,
+    assignments: [],
+    violations,
+  });
+  const daysWith = (pick: (d: (typeof summary.days)[number]) => boolean) =>
+    summary.days.filter(pick).map((d) => d.date);
   return {
     status,
     pending: pendingRecord ? toSubmission(pendingRecord) : null,
     lastDecision: lastDecided ? toSubmission(lastDecided) : null,
-    blockingFindings: {
-      count: blocking.length,
-      undecided: blocking.filter((v) => v.rule === "UNDECIDED").length,
-      staffing: blocking.filter((v) => v.rule === "STAFFING").length,
-      dates: uniqueSortedDates(
-        blocking.flatMap((v) => violationDay(v, schedule.period) ?? []),
-      ),
+    validation: {
+      ...validationCounts(summary),
+      ready: summary.ready,
+      unattributedRuleViolations: summary.unattributedRuleViolations,
+      dates: {
+        undecided: daysWith((d) => d.undecided > 0),
+        coverage: daysWith((d) => d.shortages + d.overstaffing > 0),
+        ruleViolations: daysWith((d) => d.ruleViolations > 0),
+      },
     },
     preferenceWindowOpen: activePreferenceWindows > 0,
     actions: {
@@ -215,6 +248,11 @@ export function describeWorkflow(
           type: "DISCARD_REVISION",
           hasApprovedVersion: (schedule.currentVersionId ?? null) !== null,
         }).ok
+          ? NO_BLOCKERS
+          : null,
+      startRevision:
+        has("START_REVISION") &&
+        decide(actor, "schedule.startRevision", { departmentId }).allowed
           ? NO_BLOCKERS
           : null,
     },

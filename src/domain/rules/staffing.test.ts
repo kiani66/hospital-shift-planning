@@ -4,13 +4,13 @@ import { isoDate } from "../shared/dates";
 import type { Assignment } from "../shifts/assignment";
 import type { ShiftCode } from "../shifts/shift-type";
 import {
+  bucketCoverage,
   findStaffingViolations,
   staffingStatus,
   type StaffingRequirement,
 } from "./staffing";
 import { isBlocking } from "./violation";
 
-// Bounds here are test fixtures only; no real staffing numbers are defined yet.
 describe("staffingStatus", () => {
   it.each([
     [3, undefined, "NOT_CONFIGURED"],
@@ -76,17 +76,16 @@ describe("findStaffingViolations", () => {
     expect(result.every(isBlocking)).toBe(true);
   });
 
-  it("reports a period above its maximum", () => {
-    expect(
-      findStaffingViolations({
-        period,
-        assignments: [
-          a("sara", "2026-10-25", "N"),
-          a("ali", "2026-10-25", "N"),
-        ],
-        requirements: requirements([["2026-10-25", { N: { max: 1 } }]]),
-      }),
-    ).toMatchObject([{ period: "N", covered: 2, status: "ABOVE_MAXIMUM" }]);
+  it("reports a period above its maximum as a hard rule (D102)", () => {
+    const result = findStaffingViolations({
+      period,
+      assignments: [a("sara", "2026-10-25", "N"), a("ali", "2026-10-25", "N")],
+      requirements: requirements([["2026-10-25", { N: { max: 1 } }]]),
+    });
+    expect(result).toMatchObject([
+      { period: "N", covered: 2, status: "ABOVE_MAXIMUM", severity: "error" },
+    ]);
+    expect(result.every(isBlocking)).toBe(true);
   });
 
   it("ignores requirements of days outside the period", () => {
@@ -97,5 +96,50 @@ describe("findStaffingViolations", () => {
         requirements: requirements([["2026-12-01", { M: { min: 1 } }]]),
       }),
     ).toEqual([]);
+  });
+});
+
+describe("pilot bounds 3–6 at the boundaries (D102)", () => {
+  const pilot = { min: 3, max: 6 };
+  it.each([
+    [2, "BELOW_MINIMUM", 1],
+    [3, "WITHIN_BOUNDS", 0],
+    [6, "WITHIN_BOUNDS", 0],
+    [7, "ABOVE_MAXIMUM", 1],
+  ] as const)("%i nurses is %s (gap %i)", (covered, status, gap) => {
+    expect(bucketCoverage(covered, pilot)).toEqual({ covered, status, gap });
+  });
+
+  it("counts 2 M + 1 ME as a Morning of 3: valid", () => {
+    const shifts: ShiftCode[] = ["M", "M", "ME"];
+    expect(
+      findStaffingViolations({
+        period,
+        assignments: shifts.map((s, i) => a(`n${i}`, "2026-10-25", s)),
+        requirements: requirements([["2026-10-25", { M: pilot }]]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("OFF adds no coverage", () => {
+    expect(
+      findStaffingViolations({
+        period,
+        assignments: [
+          a("a", "2026-10-25", "N"),
+          a("b", "2026-10-25", "N"),
+          { nurseId: "c", date: isoDate("2026-10-25"), shift: "OFF" },
+        ],
+        requirements: requirements([["2026-10-25", { N: pilot }]]),
+      }),
+    ).toMatchObject([{ period: "N", covered: 2, status: "BELOW_MINIMUM" }]);
+  });
+
+  it("reports no gap without bounds", () => {
+    expect(bucketCoverage(4, undefined)).toEqual({
+      covered: 4,
+      status: "NOT_CONFIGURED",
+      gap: 0,
+    });
   });
 });

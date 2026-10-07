@@ -124,13 +124,14 @@ test.describe("preference alignment summary and rows", () => {
       controls(dialog, nurse2).getByRole("button", { name: "عصر (E)" }),
     ).toHaveAccessibleDescription(/ترجیح: شب\s*مغایر ترجیح/);
 
-    // No staffing bounds are configured: said once, never green.
+    // The legacy baseline (min 1, no max) is the pin: within bounds, never green.
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
     await expect(coverage).toContainText("حداقل ۱");
     await expect(coverage.locator('[data-staffing="WITHIN"]')).toHaveCount(3);
-    await expect(coverage).toContainText("در محدوده تعریف‌شده");
-    // The day itself still validates (D40): conflicts are not findings.
-    await expect(dialog).toContainText("مغایرتی یافت نشد");
+    await expect(coverage).toContainText("در محدوده قوانین");
+    await expect(coverage).toContainText("بدون حداکثر");
+    // The day itself is still ready (D103): preference conflicts are not findings.
+    await expect(dialog).toContainText("این روز آماده نهایی‌سازی است");
     await snapshot(page, `summary-${test.info().project.name}`);
   });
 

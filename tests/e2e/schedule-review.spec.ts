@@ -63,47 +63,67 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(region.locator("tbody a")).toHaveCount(30);
     await expect(rows.first().locator("td a")).toHaveCount(1);
 
-    // Health is in the accessible name (text, not color).
+    // State and every category's count are in the accessible name (D103).
+    await expect(dayLink(page, "شنبه ۲ آبان ۱۴۰۵، آماده")).toHaveAttribute(
+      "data-state",
+      "READY",
+    );
     await expect(
-      dayLink(page, "شنبه ۲ آبان ۱۴۰۵، بدون مغایرت"),
-    ).toHaveAttribute("data-health", "VALID");
+      dayLink(
+        page,
+        "دوشنبه ۴ آبان ۱۴۰۵، نقض قانون (۱ نقض قانون، ۲ کمبود نیرو، ۳ تصمیم تعیین‌نشده)",
+      ),
+    ).toHaveAttribute("data-state", "RULE_VIOLATION");
     await expect(
-      dayLink(page, "دوشنبه ۴ آبان ۱۴۰۵، نیاز به بررسی (۶ مورد)"),
-    ).toHaveAttribute("data-health", "NEEDS_ATTENTION");
-    await expect(
-      dayLink(page, "جمعه ۱ آبان ۱۴۰۵، برنامه‌ریزی‌نشده"),
-    ).toHaveAttribute("data-health", "UNPLANNED");
+      dayLink(page, /^یکشنبه ۳ آبان ۱۴۰۵، مشکل پوشش \(۲ کمبود نیرو/),
+    ).toHaveAttribute("data-state", "COVERAGE");
+    // A day without any decision is NOT STARTED, not a red coverage failure.
+    await expect(dayLink(page, /^جمعه ۱ آبان ۱۴۰۵، شروع‌نشده/)).toHaveAttribute(
+      "data-state",
+      "NOT_STARTED",
+    );
 
-    const totals = main(page).getByRole("list", {
-      name: "خلاصه وضعیت روزهای ماه",
+    // The monthly summary keeps the three categories apart (D104).
+    const summary = main(page).getByRole("region", {
+      name: "برنامه هنوز آماده نهایی‌سازی نیست.",
     });
-    await expect(totals).toContainText("بدون مغایرت: ۱ روز");
-    await expect(totals).toContainText("نیاز به بررسی: ۲ روز");
-    await expect(totals).toContainText("برنامه‌ریزی‌نشده: ۲۷ روز");
+    await expect(summary).toContainText("۱۱۴ تصمیم تعیین‌نشده در ۲۹ روز");
+    await expect(summary).toContainText("۸۵ مشکل پوشش (۸۵ کمبود نیرو)");
+    await expect(summary).toContainText("۱ نقض قانون");
+    await expect(summary).toContainText("۱ روز از ۳۰ روز آماده");
+    await expect(summary).not.toContainText("مغایرت");
+    await expect(summary).toContainText("قوانین پوشش:");
 
-    // Quiet by default, loud on exceptions: a VALID day is not tinted or
-    // outlined; the day needing attention is (its count is in its name).
+    // Quiet by default, loud on exceptions: a READY day is not tinted or
+    // outlined; a day with a rule violation is.
     const style = (name: string) =>
       dayLink(page, new RegExp(`^${name}`)).evaluate((el) => {
         const s = getComputedStyle(el);
         return { background: s.backgroundColor, shadow: s.boxShadow };
       });
-    const valid = await style("شنبه ۲ آبان ۱۴۰۵");
-    const attention = await style("دوشنبه ۴ آبان ۱۴۰۵");
-    expect(valid.background).toBe("rgba(0, 0, 0, 0)");
-    expect(valid.shadow).toBe("none");
-    expect(attention.background).not.toBe("rgba(0, 0, 0, 0)");
-    expect(attention.shadow).not.toBe("none");
+    const ready = await style("شنبه ۲ آبان ۱۴۰۵");
+    const violation = await style("دوشنبه ۴ آبان ۱۴۰۵");
+    expect(ready.background).toBe("rgba(0, 0, 0, 0)");
+    expect(ready.shadow).toBe("none");
+    expect(violation.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(violation.shadow).not.toBe("none");
 
-    // "Which days need me": one link per attention day, to that day.
-    const attentionDays = main(page).getByRole("navigation", {
-      name: "روزهای نیازمند بررسی",
+    // A category filter marks its days; it never writes.
+    const filters = main(page).getByRole("navigation", {
+      name: "نمایش روزها بر اساس دسته",
     });
-    await expect(attentionDays.getByRole("link")).toHaveCount(2);
-    await expect(attentionDays.getByRole("link").last()).toHaveAttribute(
-      "href",
-      /day=2026-10-26$/,
+    await filters.getByRole("link", { name: /^نقض قانون/ }).click();
+    await expect(page).toHaveURL(/filter=violations/);
+    await expect(dayLink(page, /^دوشنبه ۴ آبان ۱۴۰۵/)).toHaveAttribute(
+      "data-filtered",
+      "in",
     );
+    await expect(dayLink(page, /^شنبه ۲ آبان ۱۴۰۵/)).toHaveAttribute(
+      "data-filtered",
+      "out",
+    );
+    await filters.getByRole("link", { name: "همه روزها" }).click();
+    await expect(page).not.toHaveURL(/filter=/);
 
     // The header: lifecycle status, preference window, editing mode.
     const header = main(page).getByRole("region", { name: /آبان ۱۴۰۵$/ });
@@ -135,7 +155,13 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(
       dialog.getByRole("heading", { name: "دوشنبه ۴ آبان ۱۴۰۵" }),
     ).toBeFocused();
-    await expect(dialog.getByText("نیاز به بررسی").first()).toBeVisible();
+    // Findings are grouped by category; the night-rest finding is a rule violation.
+    await expect(
+      dialog.getByRole("region", { name: /^نقض قوانین/ }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("region", { name: /^تصمیم‌های تعیین‌نشده/ }),
+    ).toBeVisible();
     await expect(dialog.getByText("مانع نهایی‌سازی").first()).toBeVisible();
     await expect(dialog).toContainText(
       `«${department.nurseNames[0]}» در یکشنبه ۳ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (دوشنبه ۴ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است`,
@@ -150,7 +176,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(flaggedRow).toHaveCount(1);
     await expect(flaggedRow).toContainText(department.nurseNames[0]!);
     const who = dialog
-      .getByRole("region", { name: /نیاز به بررسی/ })
+      .getByRole("region", { name: /^نقض قوانین/ })
       .getByRole("link", { name: department.nurseNames[0]! })
       .first();
     await expect(who).toHaveAttribute(
@@ -221,13 +247,13 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(
       dialog.getByText("حداقل و حداکثر نفرات تعریف نشده است"),
     ).toHaveCount(0);
-    // VALID is cautious: no violation found, staffing is not checked yet,
-    // and a day without findings never opens under "needs attention".
-    await expect(dialog).toContainText(
-      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.",
-    );
+    // A READY day says it is ready for finalization (D103) and opens with no
+    // category section.
+    await expect(dialog).toContainText("این روز آماده نهایی‌سازی است");
     await expect(
-      dialog.getByRole("heading", { name: /نیاز به بررسی/ }),
+      dialog.getByRole("heading", {
+        name: /نقض قوانین|مشکلات پوشش|تصمیم‌های تعیین‌نشده/,
+      }),
     ).toHaveCount(0);
 
     await page.keyboard.press("Escape");
@@ -370,12 +396,12 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     ).toHaveCount(0);
     await expect(monthHeading(page, "دی ۱۴۰۵")).toBeVisible();
     await expect(
-      region.getByRole("list", { name: "خلاصه وضعیت روزهای ماه" }),
-    ).toContainText("برنامه‌ریزی‌نشده: ۳۰ روز");
+      region.getByRole("list", { name: "خلاصه اعتبارسنجی برنامه" }),
+    ).toContainText("۰ روز از ۳۰ روز آماده");
     await expect(region.locator("tbody a")).toHaveCount(30);
     // A schedule with no assignment yet says so, and how to start.
     await expect(region.getByRole("note")).toContainText(
-      "هنوز شیفتی در این برنامه ثبت نشده است",
+      "هنوز تصمیمی در این برنامه ثبت نشده است",
     );
   });
 

@@ -2,19 +2,27 @@ import type { MembershipRole } from "../../domain/authz/actor";
 import { decide } from "../../domain/authz/policies";
 import { toDiagnostic, type Diagnostic } from "../../domain/rules/diagnostic";
 import {
-  staffingStatus,
+  bucketCoverage,
   type StaffingBounds,
   type StaffingStatus,
 } from "../../domain/rules/staffing";
+import {
+  DAY_STATES,
+  validationCounts,
+  type DayState,
+  type ValidationCounts,
+} from "../../domain/rules/validation-summary";
+import {
+  resolveDay,
+  type RequirementSource,
+} from "../../domain/staffing-rules/resolve";
 import {
   assignmentsLockedIn,
   canEditAssignment,
   type AssignmentEditDenial,
 } from "../../domain/schedule/assignment-editing";
 import {
-  DAY_HEALTH_STATES,
   summarizeScheduleDays,
-  type DayHealth,
   type ScheduleDaySummary,
 } from "../../domain/schedule/day-health";
 import type { ScheduleStatus } from "../../domain/schedule/status";
@@ -44,10 +52,6 @@ import {
 import { NotFoundError } from "../errors";
 import type { AppContext } from "../use-case";
 import {
-  NO_STAFFING_REQUIREMENTS,
-  type StaffingRequirementsSource,
-} from "./staffing-requirements";
-import {
   describeWorkflow,
   workflowPeople,
   type ScheduleWorkflow,
@@ -56,7 +60,8 @@ import { validateWorkingCopy } from "./working-copy-validation";
 
 /**
  * The read-only monthly review of one schedule (Phase 7a): the month as
- * per-day aggregates (health, coverage, finding counts; no people), and, for
+ * per-day aggregates (validation categories, coverage against the pinned
+ * rule-set version; no people), and, for
  * one selected day, who works which shift and what needs attention.
  *
  * Reads the working copy (`shift_assignments`) in every status. Nothing here
@@ -67,9 +72,37 @@ import { validateWorkingCopy } from "./working-copy-validation";
  * or per nurse.
  */
 
+/** One coverage bucket of a day against the pinned bounds (D106). */
+export interface ReviewBucket {
+  readonly period: BaseShift;
+  readonly covered: number;
+  readonly status: StaffingStatus;
+  /** Missing or excess nurses; 0 within bounds. */
+  readonly gap: number;
+}
+
 export interface ReviewDay extends ScheduleDaySummary {
-  /** Independent of `health`: a holiday can be unplanned, valid or need attention. */
+  /** Independent of `state`: a holiday can be in any validation state. */
   readonly holiday: OfficialHoliday | null;
+  /** M, E, N coverage against the pinned bounds. */
+  readonly buckets: readonly ReviewBucket[];
+}
+
+/** The rule-set version the schedule is pinned to, as the screens name it. */
+export interface PinnedRuleSetSummary {
+  readonly versionId: string;
+  readonly versionNo: number;
+  /** null: the Hospital Default; otherwise the Department Override. */
+  readonly departmentId: string | null;
+  readonly effectiveFrom: IsoDate | null;
+  /** The legacy baseline created by migration 0011. */
+  readonly legacyBaseline: boolean;
+}
+
+/** The month's validation per category (D104). */
+export interface ReviewValidation extends ValidationCounts {
+  readonly ready: boolean;
+  readonly unattributedRuleViolations: number;
 }
 
 export interface ScheduleMonthReview {
@@ -90,10 +123,12 @@ export interface ScheduleMonthReview {
    */
   readonly editable: boolean;
   readonly days: readonly ReviewDay[];
-  /** Days per health state. */
-  readonly totals: Readonly<Record<DayHealth, number>>;
-  /** Findings that belong to no day of the period (shown once for the month). */
-  readonly unattributedFindings: number;
+  /** Days per primary state (D103). */
+  readonly totals: Readonly<Record<DayState, number>>;
+  /** Counts per category and readiness for FINALIZE (D102, D104). */
+  readonly validation: ReviewValidation;
+  /** The pinned staffing rule-set version (D106). */
+  readonly ruleSet: PinnedRuleSetSummary;
 }
 
 export interface ReviewNurse {
@@ -120,6 +155,10 @@ export interface ReviewCoverage {
   readonly covered: number;
   readonly bounds: StaffingBounds | null;
   readonly status: StaffingStatus;
+  /** Missing or excess nurses; 0 within bounds. */
+  readonly gap: number;
+  /** Where the pinned version's bounds for this day came from. */
+  readonly source: RequirementSource;
 }
 
 export interface ReviewFinding extends Diagnostic {
@@ -132,7 +171,8 @@ export interface ReviewFinding extends Diagnostic {
 
 export interface DayReview {
   readonly date: IsoDate;
-  readonly health: DayHealth;
+  /** The day's counts per category and its primary state (D103). */
+  readonly validation: ReviewDay;
   readonly holiday: OfficialHoliday | null;
   /** M, E, N, ME in that order, each with its nurses (possibly none). */
   readonly shifts: readonly ReviewShift[];
@@ -164,7 +204,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ReviewSources {
   readonly holidays?: HolidayCalendar;
-  readonly staffing?: StaffingRequirementsSource;
 }
 
 /**
@@ -178,8 +217,7 @@ export async function getScheduleReview(
   sources: ReviewSources = {},
 ): Promise<ScheduleReview> {
   const { db, actor } = ctx;
-  const holidays = sources.holidays ?? NO_HOLIDAY_DATA;
-  const staffing = sources.staffing ?? ctx.staffing ?? NO_STAFFING_REQUIREMENTS;
+  const holidays = sources.holidays ?? ctx.holidays ?? NO_HOLIDAY_DATA;
 
   const schedule = UUID.test(input.scheduleId)
     ? await findScheduleById(db, input.scheduleId)
@@ -197,18 +235,26 @@ export async function getScheduleReview(
 
   const now = ctx.clock?.() ?? new Date();
   const [
-    { assignments, violations, roster, requirements },
+    {
+      assignments,
+      violations,
+      roster,
+      requirements,
+      ruleSet,
+      holidays: holidaySet,
+    },
     officialHolidays,
     windows,
     submissions,
   ] = await Promise.all([
     // The same validation FINALIZE and SUBMIT are gated by (D58).
-    validateWorkingCopy(db, schedule, staffing),
+    validateWorkingCopy(db, schedule, holidays),
     holidays.listOfficialHolidays(period),
     listPreferenceWindows(db, schedule.id),
     listSubmissions(db, schedule.id),
   ]);
   const diagnostics = violations.map((v) => toDiagnostic(v, period));
+  const pinned = ruleSet;
   const workflow = describeWorkflow(actor, {
     schedule,
     violations,
@@ -216,7 +262,7 @@ export async function getScheduleReview(
     submissions,
     names: await listDisplayNames(db, workflowPeople(submissions)),
   });
-  const summary = summarizeScheduleDays({ period, assignments, diagnostics });
+  const summary = summarizeScheduleDays({ period, assignments, violations });
 
   const holidayOn = new Map(
     officialHolidays
@@ -226,13 +272,17 @@ export async function getScheduleReview(
   const days = summary.days.map((d): ReviewDay => ({
     ...d,
     holiday: holidayOn.get(d.date) ?? null,
+    buckets: COVERAGE_PERIODS.map((p) => ({
+      period: p,
+      ...bucketCoverage(d.coverage[p], requirements.get(d.date)?.[p]),
+    })),
   }));
   const totals = Object.fromEntries(
-    DAY_HEALTH_STATES.map((state) => [
+    DAY_STATES.map((state) => [
       state,
-      days.filter((d) => d.health === state).length,
+      days.filter((d) => d.state === state).length,
     ]),
-  ) as Record<DayHealth, number>;
+  ) as Record<DayState, number>;
 
   const mayEdit = decide(actor, "assignment.edit", {
     departmentId: schedule.departmentId,
@@ -246,7 +296,18 @@ export async function getScheduleReview(
     editable: mayEdit && !assignmentsLockedIn(schedule.status),
     days,
     totals,
-    unattributedFindings: summary.unattributedFindings,
+    validation: {
+      ...validationCounts(summary.validation),
+      ready: summary.validation.ready,
+      unattributedRuleViolations: summary.validation.unattributedRuleViolations,
+    },
+    ruleSet: {
+      versionId: pinned.version.id,
+      versionNo: pinned.version.versionNo,
+      departmentId: pinned.version.departmentId,
+      effectiveFrom: pinned.version.effectiveFrom,
+      legacyBaseline: pinned.version.origin === "MIGRATION",
+    },
   };
 
   const date =
@@ -276,6 +337,7 @@ export async function getScheduleReview(
     preference: preferenceOf.get(r.userId) ?? null,
   });
   const requirement = requirements.get(date);
+  const resolved = resolveDay(pinned.content, date, holidaySet.has(date));
   const withNames = (d: Diagnostic): ReviewFinding => ({
     ...d,
     nurses: d.nurseIds.map((id) => ({
@@ -289,7 +351,7 @@ export async function getScheduleReview(
     workflow,
     day: {
       date,
-      health: summaryOfDay.health,
+      validation: summaryOfDay,
       holiday: summaryOfDay.holiday,
       shifts: SHIFT_CODES.map((code) => ({
         code,
@@ -297,9 +359,9 @@ export async function getScheduleReview(
       })),
       coverage: COVERAGE_PERIODS.map((p) => ({
         period: p,
-        covered: summaryOfDay.coverage[p],
+        ...bucketCoverage(summaryOfDay.coverage[p], requirement?.[p]),
         bounds: requirement?.[p] ?? null,
-        status: staffingStatus(summaryOfDay.coverage[p], requirement?.[p]),
+        source: resolved[p].source,
       })),
       findings: diagnostics.filter((d) => d.date === date).map(withNames),
       relatedFindings: diagnostics

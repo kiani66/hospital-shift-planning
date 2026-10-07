@@ -19,38 +19,42 @@ TypeScript schema.
 
 ## Tables
 
-| Area                | Tables                                                                                                                                                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| People and access   | `users` (system-level `is_hospital_admin`; `personnel_number`, optional `email`/`mobile`, `must_change_password`, `session_version`, migration 0009), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments` |
-| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                                                                                                                    |
-| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter), `schedule_roster` (snapshot of who belongs, with role)                                                                                                                    |
-| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                                                                                                              |
-| Working copy        | `shift_assignments`                                                                                                                                                                                                                                           |
-| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                                                                                                                                       |
-| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                                                                                                                                              |
-| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                     |
-| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                      |
-| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                        |
-| Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                       |
+| Area                | Tables                                                                                                                                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| People and access   | `users` (system-level `is_hospital_admin`; `personnel_number`, optional `email`/`mobile`, `must_change_password`, `session_version`, migration 0009), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments`                |
+| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                                                                                                                                   |
+| Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter, pinned `staffing_rule_set_version_id`), `schedule_roster` (snapshot of who belongs, with role)                                                                                            |
+| Staffing rules      | `staffing_rule_sets` (Hospital Default + one per Department Override), `staffing_rule_set_versions`, `staffing_rule_set_requirements`, `staffing_rule_set_date_exceptions`, `schedule_rule_set_applications` (migration 0011; see [Staffing rule sets](#staffing-rule-sets)) |
+| Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                                                                                                                             |
+| Working copy        | `shift_assignments`                                                                                                                                                                                                                                                          |
+| Review and approval | `schedule_submissions` (decision on the row), `schedule_versions`, `schedule_version_assignments` (immutable snapshots)                                                                                                                                                      |
+| Revisions           | `schedule_revisions`, `schedule_revision_dates` (explicit scope)                                                                                                                                                                                                             |
+| Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                                    |
+| Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                                     |
+| Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                                       |
+| Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                                      |
 
 ## Where each rule is enforced
 
-| Rule                                                                                 | Enforced by                                                                                                 |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| One assignment / one preference per nurse per day                                    | Primary keys `(schedule_id, user_id, date)`                                                                 |
-| Only rostered nurses have preferences, assignments or change requests                | Composite foreign keys to `schedule_roster` (a swap partner too)                                            |
-| One active (PENDING) change request per nurse, schedule and day                      | Partial unique index `shift_change_requests_one_active_key`                                                 |
-| A request's type, consent and closing columns are consistent with its status         | Check constraints `shift_change_requests_*_check`                                                           |
-| Applied changes and their cells are append-only, one per request                     | Application (no update/delete in `repositories/schedule-changes.ts`); unique `schedule_changes_request_key` |
-| One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                      |
-| Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                       |
-| One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                             |
-| Personnel numbers are 1–20 ASCII digits (text) and unique; mobiles are `09xxxxxxxxx` | `users_personnel_number_key`, `users_personnel_number_format_check`, `users_mobile_format_check` (0009)     |
-| Every account keeps a login identifier (e-mail or personnel number)                  | `users_login_identifier_check` (0009)                                                                       |
-| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                  |
-| History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows   |
-| Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                     |
-| State machine, authorization, night-rest, revision scope, visibility                 | Domain (`src/domain`) called from application use cases, not SQL                                            |
+| Rule                                                                                 | Enforced by                                                                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| One assignment / one preference per nurse per day                                    | Primary keys `(schedule_id, user_id, date)`                                                                   |
+| Only rostered nurses have preferences, assignments or change requests                | Composite foreign keys to `schedule_roster` (a swap partner too)                                              |
+| One active (PENDING) change request per nurse, schedule and day                      | Partial unique index `shift_change_requests_one_active_key`                                                   |
+| A request's type, consent and closing columns are consistent with its status         | Check constraints `shift_change_requests_*_check`                                                             |
+| Applied changes and their cells are append-only, one per request                     | Application (no update/delete in `repositories/schedule-changes.ts`); unique `schedule_changes_request_key`   |
+| One pending submission; one open revision; one open-ended membership per department  | Partial unique indexes                                                                                        |
+| Schedule periods of one department never overlap (D18); `period_end >= period_start` | Exclusion constraint `schedules_period_no_overlap` (migration 0003); check constraint                         |
+| One membership / supervisor assignment per user and department on any day (D19)      | Exclusion constraints `*_no_overlap` on `daterange(started_on, ended_on, '[]')`                               |
+| Personnel numbers are 1–20 ASCII digits (text) and unique; mobiles are `09xxxxxxxxx` | `users_personnel_number_key`, `users_personnel_number_format_check`, `users_mobile_format_check` (0009)       |
+| Every account keeps a login identifier (e-mail or personnel number)                  | `users_login_identifier_check` (0009)                                                                         |
+| Shift codes are M/E/N/ME; statuses, roles and preference values are the domain's     | Foreign key to `shift_types`; PostgreSQL enums built from domain constants                                    |
+| History survives membership changes and deactivation (D22)                           | Memberships are ended (`ended_on`) and users deactivated, never deleted; foreign keys protect roster rows     |
+| Approved versions are immutable; audit is append-only (D17)                          | Application: their repositories expose no update or delete; no triggers                                       |
+| Never two PUBLISHED rule-set versions of a lineage from the same day; one open draft | Partial unique indexes `staffing_rule_set_versions_effective_key`, `staffing_rule_set_versions_one_draft_key` |
+| Rule-set lifecycle columns are consistent (effective date, publication, retirement)  | Check constraints `staffing_rule_set_versions_*_check`; bounds `*_bounds_check` (0–99, max ≥ min or null)     |
+| Published / retired rule-set content is immutable; referenced versions are kept      | Application (no content update outside drafts); foreign keys from `schedules`, `schedule_versions`            |
+| State machine, authorization, night-rest, revision scope, visibility                 | Domain (`src/domain`) called from application use cases, not SQL                                              |
 
 ## Legacy tables
 
@@ -152,3 +156,25 @@ deployment never fails on existing data and no number is ever invented:
       created without a number in between, the build fails safely and nothing changes.
       `tests/integration/personnel-identity.test.ts` runs the staged SQL in rolled-back transactions
       to prove it fails with a missing number and succeeds after the backfill.
+
+## Staffing rule sets
+
+Decisions D105–D110. Migration `0011_staffing_rule_sets` is additive (expand step):
+
+- It creates the rule-set tables and **only** the Hospital Default lineage with its legacy baseline
+  v1 (fixed ids `HOSPITAL_RULE_SET_ID` / `LEGACY_BASELINE_VERSION_ID` in
+  `schema/staffing-rules.ts`): NORMAL M/E/N min 1, no max, effective from 1900-01-01, origin
+  `MIGRATION` (no actor, so no audit event). That is exactly the rule Production enforced before.
+- `schedules.staffing_rule_set_version_id` and `schedule_versions.staffing_rule_set_version_id` are
+  `NOT NULL DEFAULT <baseline>`: every existing schedule and approved version is pinned to the
+  baseline, and the previous deployment's inserts keep working during the release. No status,
+  revision, assignment or snapshot changes.
+- The development/test reset (`resetData`) truncates the rule-set tables and restores the same
+  baseline, the way reference data is kept.
+- The application always pins explicitly (`createSchedule`), so the column defaults are only a
+  compatibility net. **Contract step (later, separate, explicitly authorized):** once no
+  deployment older than this release runs, drop both defaults in a new migration
+  (`ALTER TABLE … ALTER COLUMN staffing_rule_set_version_id DROP DEFAULT`) and remove `.default(…)`
+  from the schema. Nothing depends on it.
+- No migration publishes any other rule set. The NICU pilot override is created and published by a
+  Hospital Admin through the rule-set workflow (D110; see deployment.md).

@@ -24,6 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Callout } from "@/components/ui/callout";
 import { IconWell } from "@/components/ui/icon-well";
 import { summarizePreferenceAlignment } from "@/domain/preferences/preference-alignment";
+import {
+  validationCategory,
+  type ValidationCategory,
+} from "@/domain/rules/validation-summary";
 import type { AssignmentCode } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
 import {
@@ -39,15 +43,17 @@ import {
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
-import { HealthBadge, HealthIcon } from "./health-icon";
+import { DayStateBadge, DayStateIcon } from "./day-state-icon";
 import { NurseAvatar } from "./nurse-avatar";
 import {
   PreferenceAlignmentSummary,
   PreferenceContext,
 } from "./preference-alignment";
 import {
-  HEALTH_PRESENTATION,
+  CATEGORY_LABELS,
+  DAY_STATE_PRESENTATION,
   HOLIDAY_LABEL,
+  findingCategoryLabel,
   RULE_TITLES,
   STAFFING_NOT_EVALUATED,
   findingFacts,
@@ -60,15 +66,33 @@ import {
   type StaffingIndicator,
 } from "./presentation";
 
-/** The day's health, holiday and edit mode as independent badges (icon + text). */
+/**
+ * The day's state, every open category, holiday and edit mode as
+ * independent badges (icon + text): no category hides another (D103).
+ */
 export function DayBadges({ day }: { day: DayReview }) {
-  const findings = day.findings.length;
+  const v = day.validation;
+  const categories: [
+    number,
+    string,
+    "destructive" | "attention" | "unplanned",
+  ][] = [
+    [v.ruleViolations, CATEGORY_LABELS.ruleViolation, "destructive"],
+    [v.shortages, CATEGORY_LABELS.shortage, "attention"],
+    [v.overstaffing, CATEGORY_LABELS.overstaffing, "attention"],
+    [v.undecided, CATEGORY_LABELS.undecided, "unplanned"],
+  ];
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <HealthBadge
-        health={day.health}
-        count={findings > 0 ? `(${faNumber(findings)})` : undefined}
-      />
+      <DayStateBadge state={v.state} />
+      {categories
+        .filter(([n]) => n > 0)
+        .map(([n, label, tone]) => (
+          <Badge key={label} tone={tone} size="sm">
+            <span className="font-semibold tabular-nums">{faNumber(n)}</span>
+            {label}
+          </Badge>
+        ))}
       {day.holiday && (
         <Badge tone="holiday">
           {HOLIDAY_LABEL}: {day.holiday.name}
@@ -150,11 +174,20 @@ function FindingItem({
   linked: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-1.5 rounded-lg border border-s-3 border-health-attention/30 border-s-health-attention bg-background p-3 shadow-xs">
+    <li
+      data-category={validationCategory(finding.violation)}
+      className={cn(
+        "flex flex-col gap-1.5 rounded-lg border border-s-3 bg-background p-3 shadow-xs",
+        CATEGORY_EDGE[validationCategory(finding.violation)],
+      )}
+    >
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
         {RULE_TITLES[finding.code]}
-        <Badge tone="attention" size="sm">
-          {findingSeverityLabel(finding)}
+        <Badge
+          tone={CATEGORY_TONE[validationCategory(finding.violation)]}
+          size="sm"
+        >
+          {findingCategoryLabel(finding)} · {findingSeverityLabel(finding)}
         </Badge>
       </p>
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -175,55 +208,106 @@ function FindingItem({
   );
 }
 
+const CATEGORY_TONE = {
+  RULE_VIOLATION: "destructive",
+  COVERAGE: "attention",
+  UNDECIDED: "unplanned",
+} as const satisfies Record<ValidationCategory, string>;
+
+const CATEGORY_EDGE: Record<ValidationCategory, string> = {
+  RULE_VIOLATION: "border-destructive/30 border-s-destructive",
+  COVERAGE: "border-health-attention/30 border-s-health-attention",
+  UNDECIDED: "border-health-unplanned/30 border-s-health-unplanned",
+};
+
+/** The categories in the order the day lists them (severity first, D103). */
+const CATEGORY_SECTIONS: readonly {
+  category: ValidationCategory;
+  title: string;
+}[] = [
+  { category: "RULE_VIOLATION", title: "نقض قوانین" },
+  { category: "COVERAGE", title: "مشکلات پوشش" },
+  { category: "UNDECIDED", title: "تصمیم‌های تعیین‌نشده" },
+];
+
 /**
- * The day's findings, first. Only a day with findings gets the attention
- * heading; a VALID or UNPLANNED day shows one quiet line saying what its
- * state means (never "needs attention" at full weight).
+ * The day's findings, first, grouped by category (D102): rule violations,
+ * coverage problems and undecided decisions are separate sections and an
+ * undecided nurse-day is never called a conflict. A READY or NOT STARTED day
+ * without findings shows one quiet line saying what its state means.
  */
 function Findings({ day, linked }: { day: DayReview; linked: boolean }) {
+  const state = day.validation.state;
   if (day.findings.length === 0)
     return (
       <p
         role="note"
-        data-health={day.health}
+        data-state={state}
         className={cn(
           "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm leading-relaxed",
-          day.health === "VALID"
+          state === "READY"
             ? "border-health-valid/25 bg-health-valid/5"
             : "bg-muted/60 text-muted-foreground",
         )}
       >
-        <HealthIcon health={day.health} className="mt-0.5" />
-        {HEALTH_PRESENTATION[day.health].description}
+        <DayStateIcon state={state} className="mt-0.5" />
+        {DAY_STATE_PRESENTATION[state].description}
       </p>
     );
   return (
-    <section
-      aria-labelledby="day-findings"
-      className="flex flex-col gap-2 rounded-xl border border-health-attention/55 bg-health-attention/8 p-3"
-    >
-      <h3
-        id="day-findings"
-        className="flex items-center gap-2 text-sm font-semibold text-health-attention-foreground"
-      >
-        <IconWell tone="attention">
-          <CircleAlert />
-        </IconWell>
-        نیاز به بررسی
-        <span className="font-normal tabular-nums">
-          ({faNumber(day.findings.length)} مورد)
-        </span>
-      </h3>
-      <ul className="flex flex-col gap-2">
-        {day.findings.map((f, i) => (
-          <FindingItem
-            key={`${f.code}-${f.nurseIds.join()}-${i}`}
-            finding={f}
-            linked={linked}
-          />
-        ))}
-      </ul>
-    </section>
+    <div className="flex flex-col gap-3">
+      {state === "NOT_STARTED" && (
+        <p
+          role="note"
+          className="flex items-start gap-2 rounded-lg border bg-muted/60 px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
+        >
+          <DayStateIcon state="NOT_STARTED" className="mt-0.5" />
+          {DAY_STATE_PRESENTATION.NOT_STARTED.description}
+        </p>
+      )}
+      {CATEGORY_SECTIONS.map(({ category, title }) => {
+        const findings = day.findings.filter(
+          (f) => validationCategory(f.violation) === category,
+        );
+        if (findings.length === 0) return null;
+        const id = `day-findings-${category.toLowerCase()}`;
+        return (
+          <section
+            key={category}
+            aria-labelledby={id}
+            data-category={category}
+            className="flex flex-col gap-2 rounded-xl border bg-card p-3"
+          >
+            <h3
+              id={id}
+              className="flex items-center gap-2 text-sm font-semibold"
+            >
+              <DayStateIcon state={category} />
+              {title}
+              <span className="font-normal tabular-nums">
+                ({faNumber(findings.length)} مورد)
+              </span>
+            </h3>
+            {category === "UNDECIDED" && state === "NOT_STARTED" ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                برای {faNumber(findings.length)} نفر از پرسنل هنوز تصمیمی ثبت
+                نشده است.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {findings.map((f, i) => (
+                  <FindingItem
+                    key={`${f.code}-${f.nurseIds.join()}-${i}`}
+                    finding={f}
+                    linked={linked}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -295,11 +379,18 @@ function StaffingMark({ indicator }: { indicator: StaffingIndicator }) {
   );
 }
 
+/** Where the day's bounds came from inside the pinned version (D106). */
+const SOURCE_LABELS = {
+  NORMAL: null,
+  HOLIDAY: "قانون روز تعطیل",
+  EXCEPTION: "استثنای این تاریخ",
+} as const;
+
 /**
- * Coverage per period (ME counts toward M and E). Where a staffing source
- * configures bounds, each period shows its minimum / maximum and a shortage
- * or excess mark; where none does, the day says once that staffing was not
- * evaluated (D44). Nothing here reads as "adequately staffed".
+ * Coverage per bucket (ME counts toward M and E, OFF toward none) against the
+ * bounds of the schedule's pinned rule-set version (D106): count, required
+ * range, and a shortage or overstaffing mark with its amount. A bucket within
+ * bounds stays neutral (no green, no check).
  */
 export function CoverageSummary({ day }: { day: DayReview }) {
   const evaluated = day.coverage.some((c) => c.status !== "NOT_CONFIGURED");
@@ -323,6 +414,7 @@ export function CoverageSummary({ day }: { day: DayReview }) {
             .length;
           const fromLong = c.covered - direct;
           const indicator = staffingIndicator(c);
+          const source = SOURCE_LABELS[c.source];
           return (
             <li
               key={c.period}
@@ -359,6 +451,11 @@ export function CoverageSummary({ day }: { day: DayReview }) {
               {evaluated && c.bounds && (
                 <span className="text-[0.6875rem] leading-snug text-muted-foreground tabular-nums">
                   {staffingBoundsLabel(c.bounds)}
+                </span>
+              )}
+              {source && (
+                <span className="text-[0.6875rem] leading-snug text-muted-foreground">
+                  {source}
                 </span>
               )}
               {evaluated && <StaffingMark indicator={indicator} />}
@@ -403,9 +500,9 @@ function ReadOnlyNurseRow({
         </Badge>
       )}
       {flagged && (
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-health-attention-foreground">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
           <CircleAlert aria-hidden="true" className="size-3.5" />
-          نیاز به بررسی
+          {CATEGORY_LABELS.ruleViolation}
         </span>
       )}
       {nurse.preference && (
@@ -461,9 +558,15 @@ function ShiftSection({
   );
 }
 
-/** Everyone a finding of this day (or one involving it) is about. */
+/** Everyone a rule violation of this day (or one involving it) is about. */
 export const flaggedNurses = (day: DayReview): ReadonlySet<string> =>
-  new Set([...day.findings, ...day.relatedFindings].flatMap((f) => f.nurseIds));
+  new Set(
+    [...day.findings, ...day.relatedFindings]
+      // Only rule violations flag a nurse: an undecided nurse-day is not a
+      // conflict (D102) and already reads «تعیین‌نشده» in the row.
+      .filter((f) => validationCategory(f.violation) === "RULE_VIOLATION")
+      .flatMap((f) => f.nurseIds),
+  );
 
 /**
  * Layer 2: one day. A side column (first on phones) says what the day's

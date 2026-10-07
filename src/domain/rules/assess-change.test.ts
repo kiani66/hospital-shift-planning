@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isoDate } from "../shared/dates";
 import { applyAssignmentEdits } from "../schedule/schedule-change";
 import type { Assignment } from "../shifts/assignment";
-import type { ShiftCode } from "../shifts/shift-type";
+import type { AssignmentCode, ShiftCode } from "../shifts/shift-type";
 import { assessChange, staffingImpact } from "./assess-change";
 import type { StaffingRequirement } from "./staffing";
 import { validateSchedule } from "./validate-schedule";
@@ -19,7 +19,7 @@ const a = (nurseId: string, date: string, shift: ShiftCode): Assignment => ({
 /** Validates before and after a change of `edits`, as the application will. */
 function assess(
   before: Assignment[],
-  edits: { nurseId: string; date: string; shift: ShiftCode | null }[],
+  edits: { nurseId: string; date: string; shift: AssignmentCode | null }[],
   staffingRequirements?: ReadonlyMap<ReturnType<typeof d>, StaffingRequirement>,
 ) {
   const typed = edits.map((e) => ({ ...e, date: d(e.date) }));
@@ -130,6 +130,50 @@ describe("assessChange", () => {
       );
       expect(same.warnings).toEqual([]);
       expect(same.persisting.map((v) => v.rule)).toEqual(["STAFFING"]);
+    });
+
+    describe("maximum is a hard rule for changes too (D102)", () => {
+      const req = new Map([[d("2026-10-25"), { N: { min: 1, max: 2 } }]]);
+      const two = [a("sara", "2026-10-25", "N"), a("ali", "2026-10-25", "N")];
+
+      it("blocks a change that introduces overstaffing", () => {
+        const result = assess(
+          two,
+          [{ nurseId: "reza", date: "2026-10-25", shift: "N" }],
+          req,
+        );
+        expect(result.blocked).toBe(true);
+        expect(result.blocking).toMatchObject([
+          { rule: "STAFFING", status: "ABOVE_MAXIMUM", covered: 3 },
+        ]);
+      });
+
+      it("blocks a change that worsens existing overstaffing", () => {
+        const three = [...two, a("reza", "2026-10-25", "N")];
+        const result = assess(
+          three,
+          [{ nurseId: "maryam", date: "2026-10-25", shift: "N" }],
+          req,
+        );
+        expect(result.blocked).toBe(true);
+      });
+
+      it("allows progressive repair of existing overstaffing", () => {
+        const four = [
+          ...two,
+          a("reza", "2026-10-25", "N"),
+          a("maryam", "2026-10-25", "N"),
+        ];
+        const result = assess(
+          four,
+          [{ nurseId: "maryam", date: "2026-10-25", shift: "OFF" }],
+          req,
+        );
+        expect(result.blocked).toBe(false);
+        expect(result.persisting).toMatchObject([
+          { rule: "STAFFING", status: "ABOVE_MAXIMUM", covered: 3 },
+        ]);
+      });
     });
 
     it("blocks both night rest and staffing shortages", () => {

@@ -10,7 +10,15 @@ import {
 import { REASON_SCOPES } from "../../../domain/change-requests/reason";
 import type { DateScopeKind } from "../../../domain/scope/date-scope";
 import { SCHEDULE_STATUSES } from "../../../domain/schedule/status";
-import { PREFERENCE_VALUES } from "../../../domain/shifts/shift-type";
+import {
+  COVERAGE_PERIODS,
+  PREFERENCE_VALUES,
+} from "../../../domain/shifts/shift-type";
+import {
+  DAY_TYPES,
+  RULE_SET_RETIRE_REASONS,
+  RULE_SET_STATUSES,
+} from "../../../domain/staffing-rules/model";
 
 // Enum values come from (or are checked against) the domain so they cannot drift.
 
@@ -108,3 +116,19 @@ export const NOTIFICATION_TYPES = [
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export const notificationType = pgEnum("notification_type", NOTIFICATION_TYPES);
+
+/** Staffing rule-set lifecycle (D105). */
+export const staffingRuleSetStatus = pgEnum(
+  "staffing_rule_set_status",
+  RULE_SET_STATUSES,
+);
+
+export const staffingRuleSetRetireReason = pgEnum(
+  "staffing_rule_set_retire_reason",
+  RULE_SET_RETIRE_REASONS,
+);
+
+export const staffingDayType = pgEnum("staffing_day_type", DAY_TYPES);
+
+/** The operational coverage buckets staffing is counted against (D42). */
+export const coveragePeriod = pgEnum("coverage_period", COVERAGE_PERIODS);

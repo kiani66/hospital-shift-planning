@@ -1,32 +1,42 @@
-import { ChevronLeft, ChevronRight, CircleAlert, Info } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  FilterX,
+  Info,
+  ListChecks,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
 import type {
+  PinnedRuleSetSummary,
   ReviewDay,
   ScheduleMonthReview,
 } from "@/application/schedules/review";
-import type { DayHealth } from "@/domain/schedule/day-health";
+import type { DayState } from "@/domain/rules/validation-summary";
 import { COVERAGE_PERIODS } from "@/domain/shifts/shift-type";
 import type { IsoDate } from "@/domain/shared/dates";
-import {
-  faDigits,
-  faNumber,
-  jalaliWeekday,
-  toJalali,
-} from "@/features/calendar/jalali";
+import { faNumber } from "@/features/calendar/jalali";
 import { monthGrid } from "@/features/calendar/month-grid";
 import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
-import { HealthIcon } from "./health-icon";
+import { DayStateIcon } from "./day-state-icon";
 import { LinkPending } from "./link-pending";
 import {
-  HEALTH_PRESENTATION,
+  CATEGORY_LABELS,
+  DAY_FILTER_LABELS,
+  DAY_FILTERS,
+  DAY_STATE_PRESENTATION,
   HOLIDAY_LABEL,
-  VALID_CAVEAT,
   dayCellLabel,
   dayCount,
+  matchesDayFilter,
+  validationSummaryText,
+  type DayFilter,
 } from "./presentation";
 
 const focusRing =
@@ -82,99 +92,176 @@ export function MonthNavLink({
   );
 }
 
-const findingCount = (day: ReviewDay) =>
-  day.findings.blocking + day.findings.other;
-
-/** "پنجشنبه ۷" for the attention-day links. */
-const shortDay = (date: IsoDate) =>
-  `${jalaliWeekday(date)} ${faDigits(toJalali(date).day)}`;
-
-/** The order the month summary lists states in: what needs work first. */
-const SUMMARY_ORDER: readonly DayHealth[] = [
-  "NEEDS_ATTENTION",
-  "UNPLANNED",
-  "VALID",
-];
+/** The pinned rule-set version as the Head Nurse reads it (D106). */
+export function ruleSetLabel(ruleSet: PinnedRuleSetSummary): string {
+  const scope =
+    ruleSet.departmentId === null ? "پیش‌فرض بیمارستان" : "قوانین ویژه بخش";
+  return `${scope} · نسخه ${faNumber(ruleSet.versionNo)}`;
+}
 
 /**
- * The month at a glance, above the calendar: days per health state, then a
- * link to every day that needs attention (so "which days need me" is one
- * row, not a scan of 30 cells; on phones especially). Aggregates only.
+ * The month at a glance, above the calendar (D104): whether the schedule is
+ * ready to finalize and, when not, what is open per category (undecided
+ * decisions, coverage problems split into shortages and overstaffing, rule
+ * violations, ready days), never one "blocking conflicts" number. Each
+ * category is a filter that marks its days in the calendar; filters never
+ * write. Aggregates only.
  */
 export function MonthSummary({
   month,
-  dayHref,
+  filter = null,
+  filterHref,
+  ruleSetHref,
 }: {
   month: ScheduleMonthReview;
-  dayHref: (date: IsoDate) => Route;
+  /** The active calendar filter, if any. */
+  filter?: DayFilter | null;
+  /** Where a filter chip leads (null clears the filter); none: no chips. */
+  filterHref?: (filter: DayFilter | null) => Route;
+  /** The pinned version's read-only page, when the viewer may open it. */
+  ruleSetHref?: Route;
 }) {
-  const attention = month.days.filter((d) => d.health === "NEEDS_ATTENTION");
+  const v = month.validation;
+  const text = validationSummaryText(v);
+  const daysFor = (f: DayFilter) =>
+    month.days.filter((d) => matchesDayFilter(f, d)).length;
+  const chips = DAY_FILTERS.filter((f) => daysFor(f) > 0);
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
-      <ul
-        aria-label="خلاصه وضعیت روزهای ماه"
-        className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
-      >
-        {SUMMARY_ORDER.map((state) => {
-          const n = month.totals[state];
-          const loud = state === "NEEDS_ATTENTION" && n > 0;
-          return (
-            <li
-              key={state}
-              data-health={state}
-              className={cn(
-                "inline-flex items-center gap-1.5",
-                loud
-                  ? "font-semibold text-health-attention-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              <HealthIcon health={state} />
-              <span>{HEALTH_PRESENTATION[state].label}:</span>{" "}
-              <span
-                className={cn(
-                  "tabular-nums",
-                  loud ? "text-current" : "font-semibold text-foreground",
-                )}
-              >
-                {dayCount(n)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {attention.length > 0 && (
-        <nav
-          aria-label="روزهای نیازمند بررسی"
-          className="flex min-w-0 flex-wrap items-center gap-1.5 sm:border-s sm:ps-6"
+    <section
+      aria-labelledby="month-validation-title"
+      data-validation={v.ready ? "ready" : "blocked"}
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border px-3 py-2.5 shadow-xs",
+        v.ready ? "border-health-valid/35 bg-health-valid/5" : "bg-card",
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2
+          id="month-validation-title"
+          className="flex items-center gap-2 text-sm font-semibold"
         >
-          <span className="text-xs text-muted-foreground">رفتن به:</span>
-          {attention.map((d) => (
+          {v.ready ? (
+            <CircleCheck
+              aria-hidden="true"
+              className="size-4 text-health-valid-foreground"
+            />
+          ) : (
+            <ListChecks aria-hidden="true" className="size-4 text-primary" />
+          )}
+          {text.title}
+        </h2>
+        <span className="text-xs text-muted-foreground">
+          قوانین پوشش:{" "}
+          {ruleSetHref ? (
             <Link
-              key={d.date}
-              href={dayHref(d.date)}
-              scroll={false}
-              prefetch={false}
-              aria-label={dayCellLabel(d)}
+              href={ruleSetHref}
               className={cn(
-                "inline-flex min-h-8 items-center gap-1 rounded-full border border-health-attention/55 bg-health-attention/12 px-2.5 text-xs font-medium text-health-attention-foreground transition-colors hover:bg-health-attention/22 pointer-coarse:min-h-10",
+                "rounded-sm font-medium text-primary underline-offset-4 hover:underline",
                 focusRing,
               )}
             >
-              <CircleAlert aria-hidden="true" className="size-3.5" />
-              {shortDay(d.date)}
-              <span className="font-normal tabular-nums">
-                ({faNumber(findingCount(d))})
-              </span>
+              {ruleSetLabel(month.ruleSet)}
             </Link>
-          ))}
+          ) : (
+            <span className="font-medium text-foreground">
+              {ruleSetLabel(month.ruleSet)}
+            </span>
+          )}
+        </span>
+      </div>
+      <ul
+        aria-label="خلاصه اعتبارسنجی برنامه"
+        className="flex flex-wrap gap-x-5 gap-y-1 text-sm"
+      >
+        {text.lines.map((line) => (
+          <li key={line} className="tabular-nums">
+            {line}
+          </li>
+        ))}
+      </ul>
+      {filterHref && chips.length > 0 && (
+        <nav
+          aria-label="نمایش روزها بر اساس دسته"
+          className="flex min-w-0 flex-wrap items-center gap-1.5 border-t pt-2"
+        >
+          <span className="text-xs text-muted-foreground">نمایش روزهای:</span>
+          {chips.map((f) => {
+            const on = filter === f;
+            return (
+              <Link
+                key={f}
+                href={filterHref(on ? null : f)}
+                scroll={false}
+                prefetch={false}
+                aria-current={on ? "true" : undefined}
+                data-filter={f}
+                className={cn(
+                  "inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors pointer-coarse:min-h-10",
+                  focusRing,
+                  on
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input bg-background hover:border-primary/35 hover:bg-accent",
+                )}
+              >
+                {DAY_FILTER_LABELS[f]}
+                <span className="font-normal tabular-nums">
+                  ({dayCount(daysFor(f))})
+                </span>
+              </Link>
+            );
+          })}
+          {filter && (
+            <Link
+              href={filterHref(null)}
+              scroll={false}
+              prefetch={false}
+              className={cn(
+                "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:bg-accent pointer-coarse:min-h-10",
+                focusRing,
+              )}
+            >
+              <FilterX aria-hidden="true" className="size-3.5" />
+              همه روزها
+            </Link>
+          )}
         </nav>
       )}
-    </div>
+    </section>
   );
 }
 
-/** The top line of a cell: day number, holiday tag, health marker. */
+/** One category's marker in a cell: its icon and (from `sm`) its count. */
+function CellMarker({
+  state,
+  count,
+}: {
+  state: "RULE_VIOLATION" | "COVERAGE" | "UNDECIDED";
+  count: number;
+}) {
+  if (count === 0) return null;
+  return (
+    <span
+      data-marker={state}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-0.5 rounded-full px-1 text-xs leading-5 font-semibold",
+        state === "RULE_VIOLATION" && "bg-destructive/12 text-destructive",
+        state === "COVERAGE" &&
+          "bg-health-attention/20 text-health-attention-foreground",
+        state === "UNDECIDED" &&
+          "bg-health-unplanned/15 text-health-unplanned-foreground",
+      )}
+    >
+      <DayStateIcon state={state} className="size-3.5 text-current" />
+      <span className="tabular-nums max-sm:hidden">{faNumber(count)}</span>
+    </span>
+  );
+}
+
+/**
+ * The top line of a cell: day number, holiday tag, and every category that
+ * is open on the day at once (D103). A day without decisions shows only its
+ * NOT STARTED mark; a ready day a small check.
+ */
 function CellTop({
   cell,
   today,
@@ -185,14 +272,13 @@ function CellTop({
   selected: boolean;
 }) {
   const day = cell.data;
-  const findings = findingCount(day);
   return (
     <span aria-hidden="true" className="flex items-start justify-between gap-1">
       <span className="flex min-w-0 items-center gap-1">
         <span
           className={cn(
             "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-sm leading-none font-semibold tabular-nums",
-            day.health === "UNPLANNED" && "text-muted-foreground",
+            day.state === "NOT_STARTED" && "text-muted-foreground",
             day.holiday && "text-holiday-foreground",
             selected && "text-primary",
             cell.date === today && "bg-primary text-primary-foreground",
@@ -207,41 +293,43 @@ function CellTop({
           </span>
         )}
       </span>
-      {day.health === "NEEDS_ATTENTION" ? (
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-health-attention/20 px-1 text-xs leading-5 font-semibold text-health-attention-foreground sm:px-1.5">
-          <CircleAlert className="size-3.5" />
-          <span className="tabular-nums max-sm:hidden">
-            {faNumber(findings)}
-          </span>
-        </span>
-      ) : (
-        <HealthIcon
-          health={day.health}
+      {day.state === "READY" || day.state === "NOT_STARTED" ? (
+        <DayStateIcon
+          state={day.state}
           className={cn(
             "mt-1 size-3.5",
-            day.health === "VALID"
+            day.state === "READY"
               ? "text-health-valid/80"
               : "text-health-unplanned",
           )}
         />
+      ) : (
+        <span className="flex flex-wrap justify-end gap-0.5">
+          <CellMarker state="RULE_VIOLATION" count={day.ruleViolations} />
+          <CellMarker
+            state="COVERAGE"
+            count={day.shortages + day.overstaffing}
+          />
+          <CellMarker state="UNDECIDED" count={day.undecided} />
+        </span>
       )}
     </span>
   );
 }
 
 /**
- * Coverage per period (M, E, N; ME counts toward M and E), the reason to
- * scan the calendar: the numbers are the cell's content, the codes are
- * small and tinted only by text color. From `md` up.
+ * Coverage per bucket (M, E, N; ME counts toward M and E, OFF toward none)
+ * against the pinned rules: a shortage is marked ↓, overstaffing ↑ (icon and
+ * number, never color alone). From `md` up.
  */
 function CellCoverage({ day }: { day: ReviewDay }) {
-  if (day.health === "UNPLANNED")
+  if (day.state === "NOT_STARTED")
     return (
       <span
         aria-hidden="true"
         className="mt-auto text-[0.6875rem] text-muted-foreground max-md:hidden"
       >
-        تعیین‌نشده
+        {DAY_STATE_PRESENTATION.NOT_STARTED.label}
       </span>
     );
   return (
@@ -249,19 +337,33 @@ function CellCoverage({ day }: { day: ReviewDay }) {
       aria-hidden="true"
       className="mt-auto grid max-w-36 grid-cols-3 gap-0.5 text-center max-md:hidden"
     >
-      {COVERAGE_PERIODS.map((p) => (
-        <span key={p} className="flex min-w-0 flex-col leading-tight">
+      {day.buckets.map((b) => (
+        <span
+          key={b.period}
+          data-bucket={b.period}
+          data-staffing={b.status}
+          className="flex min-w-0 flex-col leading-tight"
+        >
           <span
             dir="ltr"
             className={cn(
               "text-[0.625rem] font-bold",
-              SHIFT_PRESENTATION[p].accentClass,
+              SHIFT_PRESENTATION[b.period].accentClass,
             )}
           >
-            {p}
+            {b.period}
           </span>
-          <span className="text-sm font-semibold tabular-nums">
-            {faNumber(day.coverage[p])}
+          <span
+            className={cn(
+              "inline-flex items-center justify-center gap-px text-sm font-semibold tabular-nums",
+              b.status === "BELOW_MINIMUM" &&
+                "text-health-attention-foreground",
+              b.status === "ABOVE_MAXIMUM" && "text-status-warning-foreground",
+            )}
+          >
+            {b.status === "BELOW_MINIMUM" && <ArrowDown className="size-3" />}
+            {b.status === "ABOVE_MAXIMUM" && <ArrowUp className="size-3" />}
+            {faNumber(b.covered)}
           </span>
         </span>
       ))}
@@ -270,49 +372,57 @@ function CellCoverage({ day }: { day: ReviewDay }) {
 }
 
 /**
- * Hover: a quiet blue tint and hairline outline for ordinary days (the
- * open day keeps its own outline); a day needing attention deepens its
- * own warm tint instead of turning blue.
+ * Hover: a quiet blue tint and hairline outline for ordinary days (the open
+ * day keeps its own outline); a day with a problem deepens its own tint.
  */
-const HOVER: Record<DayHealth, string> = {
-  UNPLANNED: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
-  VALID: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
-  NEEDS_ATTENTION: "hover:bg-health-attention/18",
+const HOVER: Record<DayState, string> = {
+  NOT_STARTED: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
+  UNDECIDED: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
+  READY: "hover:bg-accent/80 hover:ring-1 hover:ring-primary/25",
+  COVERAGE: "hover:bg-health-attention/18",
+  RULE_VIOLATION: "hover:bg-destructive/10",
 };
+
+const loud = (state: DayState) =>
+  state === "COVERAGE" || state === "RULE_VIOLATION";
 
 /**
  * Layer 1 of the Head Nurse review: the whole month as a Saturday-first
  * calendar on a hairline grid. Each in-period day links to its detail
  * (`?day=`); days that only complete the first or last week are muted and
- * inert. A cell carries only aggregates (health, coverage counts, holiday),
- * never nurse data. Quiet by default, loud on exceptions: a VALID day adds
- * nothing but a small check, a day needing attention is tinted, outlined
- * and counted in the warm attention amber, an unplanned day is a cool gray
- * wash; the open day is outlined in the brand blue (D53, D56).
+ * inert. A cell carries only aggregates (category counts, coverage against
+ * the pinned rules, holiday), never nurse data. Quiet by default, loud on
+ * exceptions: a READY day adds nothing but a small check, a coverage problem
+ * is amber, a rule violation red, an undecided or not-started day a cool gray
+ * wash; the open day is outlined in the brand blue (D53, D56, D103).
  */
 export function MonthCalendar({
   month,
   today,
   dayHref,
   selected,
+  filter = null,
 }: {
   month: ScheduleMonthReview;
   today: IsoDate;
   dayHref: (date: IsoDate) => Route;
   /** The day open in the day detail, if any. */
   selected?: IsoDate | null;
+  /** Days this filter does not match are dimmed (never hidden). */
+  filter?: DayFilter | null;
 }) {
   const grid = monthGrid(month.period, month.days);
+  const unattributed = month.validation.unattributedRuleViolations;
   const hasHoliday = month.days.some((d) => d.holiday);
   return (
     <section aria-label="تقویم ماه" className="flex flex-col gap-2">
-      {month.unattributedFindings > 0 && (
+      {unattributed > 0 && (
         <p
           role="note"
-          className="flex items-start gap-2 rounded-md border border-health-attention/50 bg-health-attention/10 p-3 text-sm"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
         >
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {faNumber(month.unattributedFindings)} مورد نیاز به بررسی مربوط به
+          {faNumber(unattributed)} {CATEGORY_LABELS.ruleViolation} مربوط به
           شیفت‌هایی خارج از روزهای این برنامه است.
         </p>
       )}
@@ -343,58 +453,73 @@ export function MonthCalendar({
           <tbody>
             {grid.weeks.map((week) => (
               <tr key={week[0]!.date} className="[&:last-child>td]:border-b-0">
-                {week.map((cell) => (
-                  <td
-                    key={cell.date}
-                    className={cn(
-                      "h-14 border-e border-b p-0 align-top last:border-e-0 sm:h-16 md:h-[5.5rem] xl:h-24",
-                      !cell.data && "bg-inert-hatch",
-                    )}
-                  >
-                    {cell.data ? (
-                      <Link
-                        id={`day-${cell.date}`}
-                        href={dayHref(cell.date)}
-                        scroll={false}
-                        prefetch={false}
-                        aria-label={dayCellLabel(cell.data)}
-                        aria-current={cell.date === today ? "date" : undefined}
-                        data-health={cell.data.health}
-                        data-selected={cell.date === selected || undefined}
-                        className={cn(
-                          "relative flex h-full min-w-0 flex-col gap-1 p-1 transition-colors ring-inset focus-visible:ring-inset motion-reduce:transition-none sm:p-1.5",
-                          focusRing,
-                          HEALTH_PRESENTATION[cell.data.health].cellClass,
-                          cell.date === selected
-                            ? cn(
-                                "ring-2 ring-primary",
-                                cell.data.health === "NEEDS_ATTENTION"
-                                  ? HOVER.NEEDS_ATTENTION
-                                  : "bg-brand-soft hover:bg-brand-soft",
-                              )
-                            : HOVER[cell.data.health],
-                        )}
-                      >
-                        <CellTop
-                          cell={{ ...cell, data: cell.data }}
-                          today={today}
-                          selected={cell.date === selected}
-                        />
-                        <CellCoverage day={cell.data} />
-                        <LinkPending />
-                      </Link>
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="flex h-full p-1 text-sm text-muted-foreground/55 tabular-nums sm:p-1.5"
-                      >
-                        <span className="inline-flex size-6 items-center justify-center">
-                          {cell.dayNumber}
+                {week.map((cell) => {
+                  const dimmed =
+                    !!filter &&
+                    !!cell.data &&
+                    !matchesDayFilter(filter, cell.data);
+                  return (
+                    <td
+                      key={cell.date}
+                      className={cn(
+                        "h-14 border-e border-b p-0 align-top last:border-e-0 sm:h-16 md:h-[5.5rem] xl:h-24",
+                        !cell.data && "bg-inert-hatch",
+                      )}
+                    >
+                      {cell.data ? (
+                        <Link
+                          id={`day-${cell.date}`}
+                          href={dayHref(cell.date)}
+                          scroll={false}
+                          prefetch={false}
+                          aria-label={
+                            dayCellLabel(cell.data) +
+                            (dimmed ? "، خارج از فیلتر" : "")
+                          }
+                          aria-current={
+                            cell.date === today ? "date" : undefined
+                          }
+                          data-state={cell.data.state}
+                          data-filtered={
+                            filter ? (dimmed ? "out" : "in") : undefined
+                          }
+                          data-selected={cell.date === selected || undefined}
+                          className={cn(
+                            "relative flex h-full min-w-0 flex-col gap-1 p-1 transition-colors ring-inset focus-visible:ring-inset motion-reduce:transition-none sm:p-1.5",
+                            focusRing,
+                            DAY_STATE_PRESENTATION[cell.data.state].cellClass,
+                            dimmed && "opacity-35",
+                            cell.date === selected
+                              ? cn(
+                                  "ring-2 ring-primary",
+                                  loud(cell.data.state)
+                                    ? HOVER[cell.data.state]
+                                    : "bg-brand-soft hover:bg-brand-soft",
+                                )
+                              : HOVER[cell.data.state],
+                          )}
+                        >
+                          <CellTop
+                            cell={{ ...cell, data: cell.data }}
+                            today={today}
+                            selected={cell.date === selected}
+                          />
+                          <CellCoverage day={cell.data} />
+                          <LinkPending />
+                        </Link>
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="flex h-full p-1 text-sm text-muted-foreground/55 tabular-nums sm:p-1.5"
+                        >
+                          <span className="inline-flex size-6 items-center justify-center">
+                            {cell.dayNumber}
+                          </span>
                         </span>
-                      </span>
-                    )}
-                  </td>
-                ))}
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -407,9 +532,9 @@ export function MonthCalendar({
 }
 
 /**
- * One compact legend: what the numbers are, the three health markers, and
- * what VALID does not mean. The holiday entry only when the month has one
- * (no holiday source is connected yet, D41).
+ * One compact legend: what the numbers are, the day states and the
+ * shortage / overstaffing marks. The holiday entry only when the month has
+ * one (no holiday source is connected yet, D41).
  */
 function CalendarLegend({ hasHoliday }: { hasHoliday: boolean }) {
   return (
@@ -427,13 +552,21 @@ function CalendarLegend({ hasHoliday }: { hasHoliday: boolean }) {
           ))}
           <span>
             تعداد نفرات در پوشش صبح، عصر و شب (شیفت طولانی در صبح و عصر شمرده
-            می‌شود)
+            می‌شود؛ استراحت در پوشش شمرده نمی‌شود)
           </span>
         </span>
-        {(["NEEDS_ATTENTION", "VALID", "UNPLANNED"] as const).map((state) => (
+        <span className="inline-flex items-center gap-1 max-md:hidden">
+          <ArrowDown aria-hidden="true" className="size-3.5" />
+          {CATEGORY_LABELS.shortage}
+        </span>
+        <span className="inline-flex items-center gap-1 max-md:hidden">
+          <ArrowUp aria-hidden="true" className="size-3.5" />
+          {CATEGORY_LABELS.overstaffing}
+        </span>
+        {LEGEND_STATES.map((state) => (
           <span key={state} className="inline-flex items-center gap-1">
-            <HealthIcon health={state} className="size-3.5" />
-            {HEALTH_PRESENTATION[state].label}
+            <DayStateIcon state={state} className="size-3.5" />
+            {DAY_STATE_PRESENTATION[state].label}
           </span>
         ))}
         {hasHoliday && (
@@ -445,7 +578,15 @@ function CalendarLegend({ hasHoliday }: { hasHoliday: boolean }) {
           </span>
         )}
       </p>
-      <p>{VALID_CAVEAT}</p>
+      <p>{DAY_STATE_PRESENTATION.READY.description}</p>
     </div>
   );
 }
+
+const LEGEND_STATES: readonly DayState[] = [
+  "RULE_VIOLATION",
+  "COVERAGE",
+  "UNDECIDED",
+  "READY",
+  "NOT_STARTED",
+];

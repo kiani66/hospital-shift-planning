@@ -5,6 +5,7 @@ import { isoDate } from "@/domain/shared/dates";
 
 import {
   blockerLabel,
+  validationBlockerLines,
   dayList,
   shortJalaliDay,
   WORKFLOW_SUCCESS,
@@ -44,23 +45,50 @@ describe("day wording", () => {
   });
 });
 
-describe("blockerLabel", () => {
-  it("says how many findings block and where", () => {
+const CLEAN = {
+  undecided: 0,
+  undecidedDays: 0,
+  coverageProblems: 0,
+  shortages: 0,
+  overstaffing: 0,
+  ruleViolations: 0,
+};
+
+describe("blockerLabel / validationBlockerLines (D104)", () => {
+  it("names each open category separately, never as conflicts", () => {
+    const counts = {
+      undecided: 80,
+      undecidedDays: 12,
+      coverageProblems: 24,
+      shortages: 20,
+      overstaffing: 4,
+      ruleViolations: 7,
+    };
+    expect(validationBlockerLines(counts)).toEqual([
+      "۸۰ تصمیم تعیین‌نشده در ۱۲ روز",
+      "۲۴ مشکل پوشش (۲۰ کمبود نیرو، ۴ مازاد نیرو)",
+      "۷ نقض قانون",
+    ]);
+    const label = blockerLabel("VALIDATION", counts);
+    expect(label).toContain("۸۰ تصمیم تعیین‌نشده در ۱۲ روز");
+    expect(label).not.toMatch(/مغایرت/);
+  });
+
+  it("lists only open categories", () => {
     expect(
-      blockerLabel("BLOCKING_FINDINGS", {
-        count: 2,
-        dates: [isoDate("2026-10-26")],
+      validationBlockerLines({ ...CLEAN, undecided: 3, undecidedDays: 1 }),
+    ).toEqual(["۳ تصمیم تعیین‌نشده در ۱ روز"]);
+    expect(
+      validationBlockerLines({
+        ...CLEAN,
+        coverageProblems: 1,
+        overstaffing: 1,
       }),
-    ).toBe("۲ مغایرت مسدودکننده در ۴ آبان باید برطرف شود.");
-    expect(blockerLabel("BLOCKING_FINDINGS", { count: 1, dates: [] })).toBe(
-      "۱ مغایرت مسدودکننده باید برطرف شود.",
-    );
+    ).toEqual(["۱ مشکل پوشش (۱ مازاد نیرو)"]);
   });
 
   it("asks to close preference collection before submitting", () => {
-    expect(
-      blockerLabel("PREFERENCE_WINDOW_OPEN", { count: 0, dates: [] }),
-    ).toContain("ببندید");
+    expect(blockerLabel("PREFERENCE_WINDOW_OPEN", CLEAN)).toContain("ببندید");
   });
 });
 
@@ -99,7 +127,7 @@ describe("workflowErrorMessage", () => {
     ).toContain("ثبت ترجیحات");
   });
 
-  it("names the days of blocking findings", () => {
+  it("explains a refusal per category with the days to fix", () => {
     expect(
       workflowErrorMessage(
         "finalize",
@@ -118,8 +146,40 @@ describe("workflowErrorMessage", () => {
         }),
       ),
     ).toBe(
-      "۱ مغایرت مسدودکننده مانع این کار است؛ روزهای ۴ آبان را بررسی و اصلاح کنید.",
+      "این کار انجام نشد، چون برنامه هنوز کامل و معتبر نیست: ۱ نقض قانون. روزهای ۴ آبان را بررسی کنید.",
     );
+    const mixed = workflowErrorMessage(
+      "finalize",
+      error({
+        code: "RULE_VIOLATION",
+        violations: [
+          {
+            rule: "UNDECIDED",
+            severity: "error",
+            nurseId: "a",
+            date: isoDate("2026-10-24"),
+          },
+          {
+            rule: "UNDECIDED",
+            severity: "error",
+            nurseId: "b",
+            date: isoDate("2026-10-24"),
+          },
+          {
+            rule: "STAFFING",
+            severity: "error",
+            date: isoDate("2026-10-25"),
+            period: "N",
+            covered: 7,
+            status: "ABOVE_MAXIMUM",
+            bounds: { min: 3, max: 6 },
+          },
+        ],
+      }),
+    );
+    expect(mixed).toContain("۲ تصمیم تعیین‌نشده در ۱ روز");
+    expect(mixed).toContain("۱ مشکل پوشش (۱ مازاد نیرو)");
+    expect(mixed).not.toMatch(/مغایرت|نقض قانون/);
   });
 
   it("says the state changed when someone else acted first", () => {

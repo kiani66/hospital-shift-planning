@@ -631,6 +631,7 @@ describe("Phase 10 Hospital Admin policies", () => {
     "user.setPersonnelNumber",
     "user.issueTemporaryPassword",
     "personnel.import",
+    "staffingRules.manage",
   ] as const;
   it("an admin cannot change another user's password through self-service", () => {
     expect(
@@ -682,6 +683,57 @@ describe("Phase 10 Hospital Admin policies", () => {
       decide(admin, "schedule.approve", {
         departmentId: DEPT,
         submittedBy: "someone",
+      }).allowed,
+    ).toBe(false);
+  });
+});
+
+describe("staffing rule sets (D108)", () => {
+  const admin: Actor = {
+    userId: "admin",
+    isActive: true,
+    isHospitalAdmin: true,
+    memberships: [],
+    supervisedDepartmentIds: [],
+  };
+  const all = { ...actors, admin };
+  type Name = keyof typeof all;
+  const names = Object.keys(all) as Name[];
+  const cases: [Action, Name[]][] = [
+    ["staffingRules.manage", ["admin"]],
+    ["staffingRules.applyToSchedule", ["admin", "supervisor"]],
+    ["staffingRules.view", ["admin", "supervisor", "headNurse"]],
+  ];
+  describe.each(cases)("%s", (action, allowed) => {
+    it.each(names)("%s", (name) => {
+      const resource = (
+        action === "staffingRules.manage" ? {} : { departmentId: DEPT }
+      ) as ActionResources[Action];
+      expect(decide(all[name], action, resource).allowed).toBe(
+        allowed.includes(name),
+      );
+    });
+  });
+
+  it("names the denial of a Head Nurse applying rules", () => {
+    expect(
+      decide(actors.headNurse, "staffingRules.applyToSchedule", {
+        departmentId: DEPT,
+      }),
+    ).toEqual({ allowed: false, reason: "NOT_SUPERVISOR_OF_DEPARTMENT" });
+  });
+
+  it("does not widen schedule reads for Supervisors or Hospital Admins", () => {
+    expect(
+      decide(actors.supervisor, "schedule.viewDepartment", {
+        departmentId: DEPT,
+        status: "PLANNING",
+      }).allowed,
+    ).toBe(false);
+    expect(
+      decide(admin, "schedule.viewDepartment", {
+        departmentId: DEPT,
+        status: "APPROVED",
       }).allowed,
     ).toBe(false);
   });

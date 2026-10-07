@@ -25,8 +25,17 @@ import {
   legacyShiftChangeRequests,
   scheduleChangeCells,
   scheduleChanges,
+  scheduleRuleSetApplications,
   shiftChangeRequests,
   shiftTypes,
+  staffingRuleSetDateExceptions,
+  staffingRuleSetRequirements,
+  staffingRuleSets,
+  staffingRuleSetVersions,
+  HOSPITAL_RULE_SET_ID,
+  LEGACY_BASELINE_BOUNDS,
+  LEGACY_BASELINE_EFFECTIVE_FROM,
+  LEGACY_BASELINE_VERSION_ID,
   supervisorAssignments,
   users,
 } from "../schema";
@@ -41,7 +50,8 @@ import {
 
 /**
  * Every application table except reference data (`shift_types`,
- * `change_reasons`). The legacy
+ * `change_reasons`). Staffing rule sets are cleared too and the Hospital
+ * Default's legacy baseline (migration 0011) is restored by `resetData`. The legacy
  * Phase 2 change-request tables are cleared too: they reference schedules and
  * users, and this reset only ever runs on development, preview and test
  * databases (never production, `assertSeedAllowed`).
@@ -55,6 +65,7 @@ export const DATA_TABLES = [
   scheduleChangeCells,
   scheduleChanges,
   shiftChangeRequests,
+  scheduleRuleSetApplications,
   scheduleVersionAssignments,
   scheduleVersions,
   scheduleSubmissions,
@@ -66,6 +77,10 @@ export const DATA_TABLES = [
   preferenceWindowDates,
   preferenceWindows,
   schedules,
+  staffingRuleSetDateExceptions,
+  staffingRuleSetRequirements,
+  staffingRuleSetVersions,
+  staffingRuleSets,
   supervisorAssignments,
   departmentMemberships,
   departments,
@@ -93,13 +108,43 @@ export function assertSeedAllowed(
   }
 }
 
-/** Deletes all application data (keeps shift types and migration history). */
+/**
+ * Deletes all application data (keeps shift types and migration history) and
+ * restores the Hospital Default's legacy baseline rule set exactly as
+ * migration 0011 creates it, so new schedules can always be pinned.
+ */
 export async function resetData(db: DbExecutor): Promise<void> {
   const tables = sql.join(
     DATA_TABLES.map((t) => sql`${t}`),
     sql`, `,
   );
   await db.execute(sql`truncate table ${tables} restart identity cascade`);
+  await restoreLegacyBaseline(db);
+}
+
+async function restoreLegacyBaseline(db: DbExecutor): Promise<void> {
+  await db
+    .insert(staffingRuleSets)
+    .values({ id: HOSPITAL_RULE_SET_ID, departmentId: null });
+  await db.insert(staffingRuleSetVersions).values({
+    id: LEGACY_BASELINE_VERSION_ID,
+    ruleSetId: HOSPITAL_RULE_SET_ID,
+    versionNo: 1,
+    status: "PUBLISHED",
+    effectiveFrom: LEGACY_BASELINE_EFFECTIVE_FROM,
+    note: "قانون پایه پیشین سامانه: دست‌کم یک نفر در هر نوبت، بدون حداکثر",
+    origin: "MIGRATION",
+    publishedAt: new Date(),
+  });
+  await db.insert(staffingRuleSetRequirements).values(
+    (["M", "E", "N"] as const).map((coveragePeriod) => ({
+      versionId: LEGACY_BASELINE_VERSION_ID,
+      dayType: "NORMAL" as const,
+      coveragePeriod,
+      minStaff: LEGACY_BASELINE_BOUNDS.min,
+      maxStaff: LEGACY_BASELINE_BOUNDS.max,
+    })),
+  );
 }
 
 export interface SeedSummary {

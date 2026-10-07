@@ -1,7 +1,7 @@
 import type { ReviewDay, ReviewFinding } from "@/application/schedules/review";
 import type { RuleCode } from "@/domain/rules/diagnostic";
 import type { StaffingBounds, StaffingStatus } from "@/domain/rules/staffing";
-import type { DayHealth } from "@/domain/schedule/day-health";
+import type { DayState } from "@/domain/rules/validation-summary";
 import type { IsoDate } from "@/domain/shared/dates";
 import type {
   PreferenceValue,
@@ -12,70 +12,110 @@ import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
 
 /**
  * Wording and visual tokens of the Head Nurse month review. Business states
- * (`DayHealth`, rule codes, staffing status) are mapped here to Persian text
+ * (`DayState`, rule codes, staffing status) are mapped here to Persian text
  * and to semantic `health-*` / `holiday` tokens of `globals.css`; changing a
  * color means changing the token, never a rule. Every state is also carried
  * by an icon and text, never by color alone.
  */
 
-export interface HealthPresentation {
+export interface DayStatePresentation {
   /** Short label for the cell's accessible name, badges and the legend. */
   readonly label: string;
   /** Sentence for the day detail. */
   readonly description: string;
-  /** Badge tone (semantic `health-*` tokens through `Badge`). */
-  readonly tone: "unplanned" | "valid" | "attention";
+  /** Badge tone (semantic tokens through `Badge`). */
+  readonly tone: "unplanned" | "valid" | "attention" | "destructive";
   /**
    * Token classes for the month cell. Quiet by default, loud on exceptions:
-   * VALID adds nothing (no tint, no colored edge), UNPLANNED is muted, and
-   * only NEEDS_ATTENTION gets a tint and an outline.
+   * READY adds nothing, NOT_STARTED and UNDECIDED are a muted wash, a
+   * coverage problem is tinted amber and a rule violation red (D103).
    */
   readonly cellClass: string;
 }
 
 /**
- * VALID is worded as the result of a check («بدون مغایرت», «مغایرتی یافت
- * نشد»; D51), not as a quality of the day: it only says that no violation
- * was found among the implemented, applicable rules. The checks now include decision completeness and staffing minima, but
- * the wording still claims only the result of the implemented rules.
+ * A day's primary state (D103). The severity order is
+ * RULE_VIOLATION > COVERAGE > UNDECIDED > READY; NOT_STARTED marks a day
+ * without any decision yet. The state never hides the other counts: cells
+ * and the day detail show every category's count.
  */
-export const HEALTH_PRESENTATION: Readonly<
-  Record<DayHealth, HealthPresentation>
+export const DAY_STATE_PRESENTATION: Readonly<
+  Record<DayState, DayStatePresentation>
 > = {
-  UNPLANNED: {
-    label: "برنامه‌ریزی‌نشده",
-    description: "برای این روز هنوز تصمیمی ثبت نشده است.",
+  NOT_STARTED: {
+    label: "شروع‌نشده",
+    description:
+      "برای این روز هنوز هیچ تصمیمی ثبت نشده است. برای نهایی‌سازی، برای همه پرسنل شیفت کاری یا استراحت تعیین و پوشش نفرات را تأمین کنید.",
     tone: "unplanned",
     cellClass: "bg-health-unplanned/5",
   },
-  VALID: {
-    label: "بدون مغایرت",
+  UNDECIDED: {
+    label: "تصمیم تعیین‌نشده",
     description:
-      "مغایرتی یافت نشد: در قوانین پیاده‌سازی‌شده فعلی موردی دیده نشد. تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.",
-    tone: "valid",
-    cellClass: "",
+      "برای برخی پرسنل هنوز تصمیمی (شیفت کاری یا استراحت) ثبت نشده است.",
+    tone: "unplanned",
+    cellClass: "bg-health-unplanned/5",
   },
-  NEEDS_ATTENTION: {
-    label: "نیاز به بررسی",
-    description: "در این روز موردی هست که باید بررسی شود.",
+  COVERAGE: {
+    label: "مشکل پوشش",
+    description:
+      "پوشش نفرات دست‌کم در یک نوبت خارج از حداقل یا حداکثر قوانین این برنامه است.",
     tone: "attention",
     cellClass:
       "bg-health-attention/10 shadow-[inset_0_0_0_1.5px_var(--color-health-attention)]",
   },
+  RULE_VIOLATION: {
+    label: "نقض قانون",
+    description:
+      "در این روز یک قانون برنامه‌ریزی (مثل استراحت پس از شیفت شب) نقض شده است.",
+    tone: "destructive",
+    cellClass:
+      "bg-destructive/5 shadow-[inset_0_0_0_1.5px_var(--color-destructive)]",
+  },
+  READY: {
+    label: "آماده",
+    description:
+      "این روز آماده نهایی‌سازی است: تصمیم همه پرسنل ثبت شده، پوشش نفرات در محدوده قوانین است و قانونی نقض نشده است.",
+    tone: "valid",
+    cellClass: "",
+  },
 };
-
-/** What VALID does and does not mean, once for the whole month (legend). */
-export const VALID_CAVEAT = `«${HEALTH_PRESENTATION.VALID.label}» یعنی در قوانین پیاده‌سازی‌شده فعلی موردی یافت نشد؛ تصمیم‌های روز و حداقل پوشش نفرات نیز بررسی می‌شود.`;
 
 export const HOLIDAY_LABEL = "تعطیل رسمی";
 
-/** Accessible name of a month cell: date, health, findings and holiday in one sentence. */
+/** The three categories by name (D102): never "conflict" for an undecided day. */
+export const CATEGORY_LABELS = {
+  undecided: "تصمیم تعیین‌نشده",
+  coverage: "مشکل پوشش",
+  shortage: "کمبود نیرو",
+  overstaffing: "مازاد نیرو",
+  ruleViolation: "نقض قانون",
+} as const;
+
+/** A day's non-zero category counts, e.g. "۳ تصمیم تعیین‌نشده، ۱ کمبود نیرو". */
+export function dayCountsLabel(day: {
+  readonly undecided: number;
+  readonly shortages: number;
+  readonly overstaffing: number;
+  readonly ruleViolations: number;
+}): string {
+  return [
+    [day.ruleViolations, CATEGORY_LABELS.ruleViolation],
+    [day.shortages, CATEGORY_LABELS.shortage],
+    [day.overstaffing, CATEGORY_LABELS.overstaffing],
+    [day.undecided, CATEGORY_LABELS.undecided],
+  ]
+    .filter(([n]) => (n as number) > 0)
+    .map(([n, label]) => `${faNumber(n as number)} ${label}`)
+    .join("، ");
+}
+
+/** Accessible name of a month cell: date, state, every category's count and holiday. */
 export function dayCellLabel(day: ReviewDay): string {
-  const findings = day.findings.blocking + day.findings.other;
+  const counts = dayCountsLabel(day);
   const parts = [
     formatJalaliDate(day.date, { weekday: true }),
-    HEALTH_PRESENTATION[day.health].label +
-      (findings > 0 ? ` (${faNumber(findings)} مورد)` : ""),
+    DAY_STATE_PRESENTATION[day.state].label + (counts ? ` (${counts})` : ""),
   ];
   if (day.holiday) parts.push(`${HOLIDAY_LABEL}: ${day.holiday.name}`);
   return parts.join("، ");
@@ -84,13 +124,128 @@ export function dayCellLabel(day: ReviewDay): string {
 /** "۱۲ روز" etc. for the month totals. */
 export const dayCount = (n: number) => `${faNumber(n)} روز`;
 
+/** The month's counts per category (D104). */
+export interface MonthValidationCounts {
+  readonly undecided: number;
+  readonly undecidedDays: number;
+  readonly coverageProblems: number;
+  readonly shortages: number;
+  readonly overstaffing: number;
+  readonly ruleViolations: number;
+  readonly readyDays: number;
+  readonly totalDays: number;
+  readonly ready: boolean;
+}
+
+export interface ValidationSummaryText {
+  readonly title: string;
+  /** One line per category, in severity-neutral reading order. */
+  readonly lines: readonly string[];
+}
+
+/**
+ * The operational monthly summary (D104): never one lumped "blocking
+ * conflicts" number. Blocked: what is still open, per category. Clean: that
+ * the schedule is ready to finalize, with each category confirmed.
+ */
+export function validationSummaryText(
+  v: MonthValidationCounts,
+): ValidationSummaryText {
+  if (v.ready)
+    return {
+      title: "برنامه آماده نهایی‌سازی است.",
+      lines: [
+        `همه ${dayCount(v.totalDays)} آماده است`,
+        "تصمیم تعیین‌نشده‌ای نمانده است",
+        "پوشش نفرات در محدوده قوانین است",
+        "قانون مسدودکننده‌ای نقض نشده است",
+      ],
+    };
+  const lines: string[] = [];
+  if (v.undecided > 0)
+    lines.push(
+      `${faNumber(v.undecided)} ${CATEGORY_LABELS.undecided} در ${dayCount(v.undecidedDays)}`,
+    );
+  if (v.coverageProblems > 0) {
+    const parts = [
+      ...(v.shortages > 0
+        ? [`${faNumber(v.shortages)} ${CATEGORY_LABELS.shortage}`]
+        : []),
+      ...(v.overstaffing > 0
+        ? [`${faNumber(v.overstaffing)} ${CATEGORY_LABELS.overstaffing}`]
+        : []),
+    ];
+    lines.push(
+      `${faNumber(v.coverageProblems)} ${CATEGORY_LABELS.coverage} (${parts.join("، ")})`,
+    );
+  }
+  if (v.ruleViolations > 0)
+    lines.push(
+      `${faNumber(v.ruleViolations)} ${CATEGORY_LABELS.ruleViolation}`,
+    );
+  lines.push(`${faNumber(v.readyDays)} روز از ${dayCount(v.totalDays)} آماده`);
+  return { title: "برنامه هنوز آماده نهایی‌سازی نیست.", lines };
+}
+
+/** Calendar filters by category (D104). Filters never write; they mark days. */
+export const DAY_FILTERS = [
+  "undecided",
+  "coverage",
+  "shortage",
+  "overstaffing",
+  "violations",
+  "ready",
+] as const;
+
+export type DayFilter = (typeof DAY_FILTERS)[number];
+
+export const isDayFilter = (value: unknown): value is DayFilter =>
+  typeof value === "string" &&
+  (DAY_FILTERS as readonly string[]).includes(value);
+
+export const DAY_FILTER_LABELS: Readonly<Record<DayFilter, string>> = {
+  undecided: CATEGORY_LABELS.undecided,
+  coverage: CATEGORY_LABELS.coverage,
+  shortage: CATEGORY_LABELS.shortage,
+  overstaffing: CATEGORY_LABELS.overstaffing,
+  violations: CATEGORY_LABELS.ruleViolation,
+  ready: "روزهای آماده",
+};
+
+/** Whether `day` is one of the days `filter` marks. */
+export function matchesDayFilter(
+  filter: DayFilter,
+  day: {
+    readonly undecided: number;
+    readonly shortages: number;
+    readonly overstaffing: number;
+    readonly ruleViolations: number;
+    readonly ready: boolean;
+  },
+): boolean {
+  switch (filter) {
+    case "undecided":
+      return day.undecided > 0;
+    case "coverage":
+      return day.shortages + day.overstaffing > 0;
+    case "shortage":
+      return day.shortages > 0;
+    case "overstaffing":
+      return day.overstaffing > 0;
+    case "violations":
+      return day.ruleViolations > 0;
+    case "ready":
+      return day.ready;
+  }
+}
+
 /** Short title of each rule, shown above its message. */
 export const RULE_TITLES: Readonly<Record<RuleCode, string>> = {
   NIGHT_REST: "استراحت پس از شیفت شب",
   UNDECIDED: "تصمیم تعیین‌نشده",
   DUPLICATE_ASSIGNMENT: "بیش از یک شیفت در یک روز",
   OUTSIDE_PERIOD: "شیفت خارج از دوره برنامه",
-  STAFFING: "تأمین نفرات",
+  STAFFING: "پوشش نفرات",
 };
 
 const day = (date: IsoDate) => formatJalaliDate(date, { weekday: true });
@@ -113,7 +268,9 @@ export function findingMessage(finding: ReviewFinding): string {
     case "OUTSIDE_PERIOD":
       return `برای ${name} در ${day(v.date)} شیفتی ثبت شده که خارج از دوره این برنامه است.`;
     case "STAFFING":
-      return `نوبت ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر دارد: ${staffingStatusLabel(v.status, v.bounds)}.`;
+      return v.status === "BELOW_MINIMUM"
+        ? `پوشش ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداقل ${faNumber(v.bounds.min!)} نفر لازم است (کمبود ${faNumber(v.bounds.min! - v.covered)} نفر).`
+        : `پوشش ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداکثر ${faNumber(v.bounds.max!)} نفر مجاز است (مازاد ${faNumber(v.covered - v.bounds.max!)} نفر).`;
     default:
       return v satisfies never;
   }
@@ -122,6 +279,17 @@ export function findingMessage(finding: ReviewFinding): string {
 /** What the finding means for the workflow. */
 export const findingSeverityLabel = (finding: ReviewFinding) =>
   finding.blocking ? "مانع نهایی‌سازی" : "هشدار";
+
+/** The category a finding belongs to, by name (D102). */
+export function findingCategoryLabel(finding: ReviewFinding): string {
+  const v = finding.violation;
+  if (v.rule === "UNDECIDED") return CATEGORY_LABELS.undecided;
+  if (v.rule === "STAFFING")
+    return v.status === "BELOW_MINIMUM"
+      ? CATEGORY_LABELS.shortage
+      : CATEGORY_LABELS.overstaffing;
+  return CATEGORY_LABELS.ruleViolation;
+}
 
 /** One dated shift a finding is about: "شب · چهارشنبه ۶ آبان ۱۴۰۵". */
 export interface FindingFact {
@@ -216,7 +384,7 @@ export function staffingStatusLabel(
     case "ABOVE_MAXIMUM":
       return `بیشتر از حداکثر (${faNumber(bounds!.max!)} نفر)`;
     case "WITHIN_BOUNDS":
-      return "در محدوده تعریف‌شده";
+      return "در محدوده قوانین";
   }
 }
 
@@ -264,7 +432,7 @@ export function staffingIndicatorLabel(indicator: StaffingIndicator): string {
     case "NOT_EVALUATED":
       return "ارزیابی نشده";
     case "WITHIN":
-      return "در محدوده تعریف‌شده";
+      return "در محدوده قوانین";
     case "SHORTAGE":
       return `کمبود ${faNumber(indicator.gap)} نفر`;
     case "EXCESS":
@@ -272,11 +440,28 @@ export function staffingIndicatorLabel(indicator: StaffingIndicator): string {
   }
 }
 
-/** "حداقل ۳ · حداکثر ۵"; a bound that is not set says so, never a guessed number. */
+/**
+ * "حداقل ۳ · حداکثر ۶" from the pinned version; a version without a maximum
+ * says «بدون حداکثر», never a guessed number.
+ */
 export function staffingBoundsLabel(bounds: StaffingBounds | null): string {
-  const part = (word: string, value: number | undefined) =>
-    value === undefined ? `${word} تعریف نشده` : `${word} ${faNumber(value)}`;
-  return `${part("حداقل", bounds?.min)} · ${part("حداکثر", bounds?.max)}`;
+  const min =
+    bounds?.min === undefined
+      ? "حداقل تعریف نشده"
+      : `حداقل ${faNumber(bounds.min)}`;
+  const max =
+    bounds?.max === undefined
+      ? "بدون حداکثر"
+      : `حداکثر ${faNumber(bounds.max)}`;
+  return `${min} · ${max}`;
+}
+
+/** "۳–۶" (or "۳+" without a maximum) for compact displays. */
+export function staffingRangeLabel(bounds: StaffingBounds | null): string {
+  if (!bounds || bounds.min === undefined) return "—";
+  return bounds.max === undefined
+    ? `${faNumber(bounds.min)}+`
+    : `${faNumber(bounds.min)}–${faNumber(bounds.max)}`;
 }
 
 /** Labels of the «انطباق با ترجیحات» summary (`PreferenceAlignment`). */

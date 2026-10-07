@@ -35,7 +35,6 @@ import {
   discardRevision,
   previewScheduleAdjustment,
 } from "../../src/application/schedules/schedule-changes";
-import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
 import { getDepartmentForPage } from "../../src/application/workspace/queries";
 import type { Actor } from "../../src/domain/authz/actor";
@@ -64,6 +63,11 @@ import {
   listVersions,
 } from "../../src/infrastructure/repositories/versions";
 import { completeScheduleFixture } from "../support/complete-schedule";
+import {
+  pinTestRuleSet,
+  publishTestRuleSet,
+  ruleContent,
+} from "./support/rule-sets";
 import { setupTestDatabase } from "./support/database";
 
 const { db } = setupTestDatabase();
@@ -75,16 +79,13 @@ const NOW = new Date("2026-10-01T06:30:00Z");
 type Who =
   "head" | "erHead" | "nurse1" | "nurse2" | "nurse3" | "erNurse" | "supervisor";
 const actors = {} as Record<Who, Actor>;
-let staffing: StaffingRequirementsSource | undefined;
 const as = (actor: Actor, clock: Date = NOW): AppContext => ({
   db,
   actor,
   clock: () => clock,
-  ...(staffing && { staffing }),
 });
 
 beforeEach(async () => {
-  staffing = undefined;
   const load = async (id: string) => (await loadActor(db, id, TODAY))!;
   actors.head = await load(U.icuHead.id);
   actors.erHead = await load(U.erHead.id);
@@ -739,11 +740,26 @@ describe("applying and rejecting (Head Nurse)", () => {
     ok(await apply(id));
   });
 
-  it("14. a configured staffing minimum blocks a newly introduced shortage", async () => {
-    staffing = {
-      requirementsFor: async () =>
-        new Map([[d("2026-10-25"), { M: { min: 2 } }]]),
-    };
+  it("14. a pinned staffing minimum blocks a newly introduced shortage", async () => {
+    // The schedule's pinned version requires two in the Morning on that day.
+    const versionId = await publishTestRuleSet(db, {
+      departmentId: DEMO_ICU.id,
+      createdBy: U.supervisor.id,
+      content: ruleContent(
+        { min: 1, max: null },
+        {
+          exceptions: [
+            {
+              date: d("2026-10-25"),
+              period: "M",
+              bounds: { min: 2, max: null },
+              note: null,
+            },
+          ],
+        },
+      ),
+    });
+    await pinTestRuleSet(db, S, versionId);
     const { id } = ok(await unavailable());
     const review = await getChangeRequestReview(as(actors.head), {
       departmentId: DEMO_ICU.id,

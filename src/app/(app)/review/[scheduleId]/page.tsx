@@ -97,7 +97,7 @@ export default async function SupervisorReviewPage({
       />
       <div className="flex flex-col gap-3">
         <SupervisorWorkflowNotice workflow={workflow} />
-        <MonthSummary month={month} dayHref={here} />
+        <MonthSummary month={month} />
         <MonthCalendar
           month={month}
           today={today}

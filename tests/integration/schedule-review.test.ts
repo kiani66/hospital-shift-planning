@@ -5,7 +5,6 @@ import type { HolidayCalendar } from "../../src/application/calendar/holidays";
 import { NotFoundError } from "../../src/application/errors";
 import { getDepartmentSchedules } from "../../src/application/schedules/queries";
 import { getScheduleReview } from "../../src/application/schedules/review";
-import type { StaffingRequirementsSource } from "../../src/application/schedules/staffing-requirements";
 import type { AppContext } from "../../src/application/use-case";
 import type { Actor } from "../../src/domain/authz/actor";
 import {
@@ -38,6 +37,11 @@ import { snapshotRosterFromMemberships } from "../../src/infrastructure/reposito
 import { createSchedule } from "../../src/infrastructure/repositories/schedules";
 import { setUserActive } from "../../src/infrastructure/repositories/users";
 import { setupTestDatabase } from "./support/database";
+import {
+  pinTestRuleSet,
+  publishTestRuleSet,
+  ruleContent,
+} from "./support/rule-sets";
 
 const { db, pool } = setupTestDatabase();
 const U = DEMO_USERS;
@@ -101,15 +105,35 @@ const tableCounts = async () =>
   ).rows[0];
 
 describe("month overview", () => {
-  it("shows every day of the period as unplanned before anything is assigned", async () => {
+  it("shows every day of the period as NOT STARTED before anything is decided (D103)", async () => {
     const { month, day } = await review(actors.icuHead);
     expect(month).toMatchObject({
       scheduleId: S,
       period: { start: "2026-10-23", end: "2026-11-21" },
       label: "آبان ۱۴۰۵",
       status: "DRAFT",
-      totals: { UNPLANNED: 30, VALID: 0, NEEDS_ATTENTION: 0 },
-      unattributedFindings: 0,
+      totals: {
+        NOT_STARTED: 30,
+        UNDECIDED: 0,
+        COVERAGE: 0,
+        RULE_VIOLATION: 0,
+        READY: 0,
+      },
+      // Coverage maths stays truthful: every bucket of every day is short.
+      validation: {
+        coverageProblems: 90,
+        shortages: 90,
+        ruleViolations: 0,
+        unattributedRuleViolations: 0,
+        readyDays: 0,
+        totalDays: 30,
+        ready: false,
+      },
+      ruleSet: {
+        versionNo: 1,
+        departmentId: null,
+        legacyBaseline: true,
+      },
     });
     expect(month.days).toHaveLength(30);
     expect(month.days[0]!.date).toBe("2026-10-23");
@@ -117,7 +141,7 @@ describe("month overview", () => {
     expect(day).toBeNull();
   });
 
-  it("aggregates per day: assignment types, coverage (ME counts for M and E) and health", async () => {
+  it("aggregates per day: assignment types, coverage (ME counts for M and E) and every category", async () => {
     await assign(U.icuNurse1.id, "2026-10-24", "M");
     await assign(U.icuNurse2.id, "2026-10-24", "ME");
     await assign(U.icuNurse3.id, "2026-10-24", "N");
@@ -128,21 +152,33 @@ describe("month overview", () => {
     const { month } = await review(actors.icuHead);
     const byDate = new Map(month.days.map((d) => [d.date, d]));
     expect(byDate.get(isoDate("2026-10-24"))).toMatchObject({
-      health: "NEEDS_ATTENTION",
+      state: "UNDECIDED",
+      decisions: 3,
       shifts: { M: 1, E: 0, N: 1, ME: 1 },
       coverage: { M: 2, E: 1, N: 1 },
-      findings: { blocking: 3, other: 0 },
+      undecided: 3,
+      shortages: 0,
+      ruleViolations: 0,
       holiday: null,
     });
-    expect(byDate.get(isoDate("2026-10-25"))!.health).toBe("NEEDS_ATTENTION");
+    // N only: M and E are short (the legacy baseline needs one each).
+    expect(byDate.get(isoDate("2026-10-25"))).toMatchObject({
+      state: "COVERAGE",
+      shortages: 2,
+    });
+    // Night rest is reported on the day after the Night and wins the severity.
     expect(byDate.get(isoDate("2026-10-26"))).toMatchObject({
-      health: "NEEDS_ATTENTION",
-      findings: { blocking: 8, other: 0 },
+      state: "RULE_VIOLATION",
+      ruleViolations: 1,
+      shortages: 2,
+      undecided: 5,
     });
     expect(month.totals).toEqual({
-      UNPLANNED: 27,
-      VALID: 0,
-      NEEDS_ATTENTION: 3,
+      NOT_STARTED: 27,
+      UNDECIDED: 1,
+      COVERAGE: 1,
+      RULE_VIOLATION: 1,
+      READY: 0,
     });
   });
 
@@ -161,9 +197,10 @@ describe("month overview", () => {
     await assign(U.icuNurse1.id, "2026-10-23", "E");
 
     const { month, day } = await review(actors.icuHead, { day: "2026-10-23" });
+    // Night on the previous schedule's last day, E on this one's first day.
     expect(month.days[0]).toMatchObject({
-      health: "NEEDS_ATTENTION",
-      findings: { blocking: 8, other: 0 },
+      state: "RULE_VIOLATION",
+      ruleViolations: 1,
     });
     expect(day!.findings.filter((f) => f.code === "NIGHT_REST")).toEqual([
       expect.objectContaining({
@@ -197,7 +234,8 @@ describe("month overview", () => {
     const { month } = await review(actors.icuHead);
     expect(month.days.at(-1)).toMatchObject({
       date: "2026-11-21",
-      health: "NEEDS_ATTENTION",
+      state: "RULE_VIOLATION",
+      ruleViolations: 1,
     });
   });
 
@@ -213,12 +251,10 @@ describe("month overview", () => {
     };
     const { month } = await review(actors.icuHead, {}, { holidays });
     const holidayDays = month.days.filter((d) => d.holiday);
-    expect(holidayDays.map((d) => [d.date, d.health, d.holiday!.name])).toEqual(
-      [
-        ["2026-10-24", "NEEDS_ATTENTION", "تعطیل آزمایشی"],
-        ["2026-10-30", "UNPLANNED", "تعطیل دوم"],
-      ],
-    );
+    expect(holidayDays.map((d) => [d.date, d.state, d.holiday!.name])).toEqual([
+      ["2026-10-24", "COVERAGE", "تعطیل آزمایشی"],
+      ["2026-10-30", "NOT_STARTED", "تعطیل دوم"],
+    ]);
   });
 });
 
@@ -253,7 +289,7 @@ describe("day detail", () => {
     const { day } = await review(actors.icuHead, { day: "2026-10-28" });
     expect(day).toMatchObject({
       date: "2026-10-28",
-      health: "NEEDS_ATTENTION",
+      validation: { state: "UNDECIDED", undecided: 2 },
       holiday: null,
       findings: [
         expect.objectContaining({ code: "UNDECIDED" }),
@@ -309,37 +345,57 @@ describe("day detail", () => {
     ).toEqual([U.icuNurse1.id]);
   });
 
-  it("reports operational coverage with no staffing requirement configured", async () => {
+  it("reports operational coverage against the legacy baseline pin (min 1, no max)", async () => {
     const { day } = await review(actors.icuHead, { day: "2026-10-28" });
+    const within = { status: "WITHIN_BOUNDS", gap: 0, source: "NORMAL" };
     expect(day!.coverage).toEqual([
-      { period: "M", covered: 2, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
-      { period: "E", covered: 2, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
-      { period: "N", covered: 1, bounds: { min: 1 }, status: "WITHIN_BOUNDS" },
+      { period: "M", covered: 2, bounds: { min: 1 }, ...within },
+      { period: "E", covered: 2, bounds: { min: 1 }, ...within },
+      { period: "N", covered: 1, bounds: { min: 1 }, ...within },
     ]);
   });
 
-  it("compares coverage (not codes) with requirements once a source provides them", async () => {
-    const requirementsFor = vi.fn<
-      StaffingRequirementsSource["requirementsFor"]
-    >(
-      async () =>
-        new Map([[isoDate("2026-10-28"), { M: { min: 3 }, E: { max: 1 } }]]),
+  it("compares coverage (not codes) with the PINNED version's bounds (D106)", async () => {
+    const versionId = await publishTestRuleSet(db, {
+      departmentId: DEMO_ICU.id,
+      createdBy: DEMO_USERS.supervisor.id,
+      content: ruleContent(
+        { min: 1, max: null },
+        {
+          holiday: { E: { min: 0, max: 1 } },
+          exceptions: [
+            {
+              date: isoDate("2026-10-28"),
+              period: "M",
+              bounds: { min: 3, max: null },
+              note: null,
+            },
+          ],
+        },
+      ),
+    });
+    // Publishing alone changes nothing: the schedule is still on its pin.
+    const unpinned = await review(actors.icuHead, { day: "2026-10-28" });
+    expect(unpinned.day!.coverage.map((c) => c.status)).toEqual([
+      "WITHIN_BOUNDS",
+      "WITHIN_BOUNDS",
+      "WITHIN_BOUNDS",
+    ]);
+
+    await pinTestRuleSet(db, DEMO_SCHEDULE.id, versionId);
+    const listOfficialHolidays = vi.fn<HolidayCalendar["listOfficialHolidays"]>(
+      async () => [{ date: isoDate("2026-10-28"), name: "تعطیل آزمایشی" }],
     );
     const { day } = await review(
       actors.icuHead,
       { day: "2026-10-28" },
-      { staffing: { requirementsFor } },
+      { holidays: { listOfficialHolidays } },
     );
-    expect(requirementsFor).toHaveBeenCalledWith({
-      departmentId: DEMO_ICU.id,
-      dates: Array.from({ length: 30 }, (_, i) =>
-        addDays(isoDate("2026-10-23"), i),
-      ),
-    });
-    expect(day!.coverage.map((c) => [c.period, c.status])).toEqual([
-      ["M", "BELOW_MINIMUM"],
-      ["E", "ABOVE_MAXIMUM"],
-      ["N", "WITHIN_BOUNDS"],
+    // M: the date exception (3) wins; E: the holiday bound (max 1); N: normal.
+    expect(day!.coverage.map((c) => [c.period, c.status, c.bounds])).toEqual([
+      ["M", "BELOW_MINIMUM", { min: 3 }],
+      ["E", "ABOVE_MAXIMUM", { min: 0, max: 1 }],
+      ["N", "WITHIN_BOUNDS", { min: 1 }],
     ]);
   });
 
@@ -557,19 +613,20 @@ describe("performance", () => {
 
     const month = await queriesFor(large);
     expect(month.result.month.days).toHaveLength(31);
-    expect(month.result.month.totals.NEEDS_ATTENTION).toBe(0);
+    expect(month.result.month.totals.RULE_VIOLATION).toBe(0);
     expect(month.count).toBe((await queriesFor(small)).count);
-    // Schedule, assignments, adjacent boundary days; and for the Phase 8
-    // workflow the preference windows and submissions (their people's names
-    // are one more query once a submission exists), all independent of size.
-    expect(month.count).toBeGreaterThanOrEqual(4);
-    expect(month.count).toBeLessThanOrEqual(5);
+    // Schedule, assignments, adjacent boundary days; the pinned rule-set
+    // version (head, day-type bounds, date exceptions, D106); and for the
+    // Phase 8 workflow the preference windows and submissions (their people's
+    // names are one more query once a submission exists), all independent of size.
+    expect(month.count).toBeGreaterThanOrEqual(7);
+    expect(month.count).toBeLessThanOrEqual(8);
 
     const withDay = await queriesFor(large, isoDate("2027-04-01"));
     expect(withDay.count).toBe(
       (await queriesFor(small, isoDate("2027-04-01"))).count,
     );
-    expect(withDay.count).toBeLessThanOrEqual(7);
+    expect(withDay.count).toBeLessThanOrEqual(10);
     const detail = withDay.result.day!;
     expect(
       detail.shifts.reduce((n, s) => n + s.nurses.length, 0) +

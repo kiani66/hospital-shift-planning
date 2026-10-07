@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { DbExecutor } from "../db/database";
 import { auditEvents } from "../db/schema";
@@ -70,4 +70,28 @@ export async function listAuditEventsForSchedule(
     .from(auditEvents)
     .where(eq(auditEvents.scheduleId, scheduleId))
     .orderBy(asc(auditEvents.id));
+}
+
+/**
+ * Events of one entity type, newest first: of the given entity ids, or of
+ * every entity of that type when `entityIds` is omitted (one query, uses
+ * `audit_events_entity_idx`).
+ */
+export async function listAuditEventsForEntities(
+  db: DbExecutor,
+  input: { entityType: string; entityIds?: readonly string[] },
+): Promise<AuditEventRecord[]> {
+  if (input.entityIds && input.entityIds.length === 0) return [];
+  return db
+    .select()
+    .from(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.entityType, input.entityType),
+        input.entityIds
+          ? inArray(auditEvents.entityId, [...input.entityIds])
+          : undefined,
+      ),
+    )
+    .orderBy(desc(auditEvents.id));
 }

@@ -50,7 +50,9 @@ test.describe("approval workflow", () => {
     await expect(finalize).toBeDisabled();
     const blockers = page.locator("#workflow-blockers");
     await expect(blockers).toContainText("نهایی‌سازی فعلاً ممکن نیست");
-    await expect(blockers).toContainText("۱ مغایرت مسدودکننده در ۴ آبان");
+    // Each category is named on its own, with its days (D104).
+    await expect(blockers).toContainText("۱ نقض قانون");
+    await expect(blockers).not.toContainText("مغایرت");
 
     // Fix it from the blocker's day link: nurse 1 gets no shift on 4 Aban.
     await blockers.getByRole("link", { name: "۴ آبان" }).click();
