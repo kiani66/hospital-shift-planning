@@ -130,7 +130,7 @@ describe("D111 candidate presentation", () => {
   it("NO_SHORTAGE shows no candidate groups", () => {
     const html = render({ ...base, status: "NO_SHORTAGE" });
     expect(html).toContain('role="status"');
-    expect(html).toContain("دیگر کمبود");
+    expect(html).toContain("تکمیل شد");
     expect(html).not.toContain("قابل انتخاب");
   });
   it("only exposes BELOW_MINIMUM M/E/N entry points", () => {
@@ -162,6 +162,8 @@ describe("D111 candidate presentation", () => {
         scheduleId: id,
         date: day.date,
         coverage: day.coverage,
+        period: { start: date, end: date },
+        revision: 1,
       }),
     );
     expect(html).toContain("(M)");
@@ -172,6 +174,8 @@ describe("D111 candidate presentation", () => {
           scheduleId: id,
           date: day.date,
           coverage: [],
+          period: { start: date, end: date },
+          revision: 1,
         }),
       ),
     ).toBe("");

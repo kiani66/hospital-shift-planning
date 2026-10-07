@@ -118,10 +118,12 @@ export default async function SupervisorReviewPage({
           <DayDetail
             candidates={
               <ShortageCandidates
-                key={`${scheduleId}-${review.day.date}-${review.month.revision}`}
+                key={`${scheduleId}-${review.day.date}`}
                 scheduleId={scheduleId}
                 date={review.day.date}
                 coverage={review.day.coverage}
+                period={review.month.period}
+                revision={review.month.revision}
               />
             }
             day={review.day}

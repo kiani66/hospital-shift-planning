@@ -1,10 +1,15 @@
+import type { ReactNode } from "react";
 import type {
   AvailableCandidateView,
   CoverageCandidates,
   NotAllowedCandidateView,
 } from "@/application/schedules/coverage-candidates";
 import { FindingItem } from "@/features/schedule-review/finding-item";
-import { candidateDayLabel, candidatePreferenceLabel } from "./presentation";
+import {
+  candidateDayLabel,
+  candidatePreferenceLabel,
+  candidateCompletionMessage,
+} from "./presentation";
 
 function Person({
   person,
@@ -26,9 +31,15 @@ function Person({
 }
 
 /** Map directly: backend order is the D111 order; identities are never printed as ids. */
-export function CandidateList({ data }: { data: CoverageCandidates }) {
+export function CandidateList({
+  data,
+  assignControl,
+}: {
+  data: CoverageCandidates;
+  assignControl?: (person: AvailableCandidateView) => ReactNode;
+}) {
   if (data.status === "NO_SHORTAGE")
-    return <p role="status">این بازه دیگر کمبود پوشش ندارد.</p>;
+    return <p role="status">{candidateCompletionMessage(data.shift)}</p>;
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <section aria-label="قابل انتخاب" className="flex flex-col gap-2">
@@ -43,6 +54,7 @@ export function CandidateList({ data }: { data: CoverageCandidates }) {
                 className="flex min-w-0 flex-col gap-1 rounded-lg border p-3"
               >
                 <Person person={person} />
+                {data.canAssign && assignControl?.(person)}
               </li>
             ))}
           </ul>

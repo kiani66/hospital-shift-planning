@@ -94,7 +94,9 @@ test("shortage preview preserves OFF, soft preferences, findings and all persist
   await signInAndWait(page, d.headEmail);
   await page.goto(url(d));
   const panel = page.getByRole("region", { name: "افراد برای جبران کمبود" });
-  await expect(panel.getByRole("button")).toHaveCount(2); // E and M; N is already filled.
+  await expect(
+    panel.getByRole("button", { name: /^افراد برای کمبود/ }),
+  ).toHaveCount(2); // E and M; N is already filled.
   await panel.getByRole("button", { name: /کمبود صبح \(M\)/ }).press("Enter");
   const available = panel.getByRole("region", {
     name: "قابل انتخاب",
@@ -108,7 +110,7 @@ test("shortage preview preserves OFF, soft preferences, findings and all persist
   await expect(available).toContainText("مانع انتخاب نیست");
   await expect(forbidden).toContainText(blocked!.displayName);
   await expect(forbidden).toContainText("استراحت");
-  await expect(available.getByRole("button")).toHaveCount(0);
+  await expect(available.getByRole("button")).toHaveCount(2);
   await expect(forbidden.getByRole("button")).toHaveCount(0);
   expect(await panel.innerText()).not.toMatch(
     /[a-f0-9]{8}-[a-f0-9]{4}-|امتیاز|درصد|بهترین|ساعت/,
@@ -142,15 +144,16 @@ test("loading, query failure, retry and stale resolved shortage", async ({
     await route.abort("failed");
   });
   await panel.getByRole("button", { name: /کمبود صبح \(M\)/ }).click();
-  await expect(panel.getByRole("status")).toHaveText("در حال دریافت افراد…");
+  await expect(panel.getByRole("status")).toHaveText(
+    "در حال دریافت یا ثبت اطلاعات…",
+  );
   release();
   await expect(panel.getByRole("alert")).toContainText("دریافت افراد ممکن نشد");
   await page.unroute("**/*");
   await assign(d, head!.id, "M");
   await panel.getByRole("button", { name: "تلاش دوباره" }).click();
-  await expect(panel.getByRole("status")).toContainText(
-    "دیگر کمبود پوشش ندارد",
-  );
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  await expect(panel.getByRole("status")).toContainText("تکمیل شد");
   await expect(
     panel.getByRole("region", { name: "قابل انتخاب", exact: true }),
   ).toHaveCount(0);

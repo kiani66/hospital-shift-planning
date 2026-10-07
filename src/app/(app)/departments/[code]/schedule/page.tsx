@@ -342,10 +342,12 @@ export default async function DepartmentSchedulePage({
           <DayDetail
             candidates={
               <ShortageCandidates
-                key={`${selected.id}-${review.day.date}-${review.month.revision}`}
+                key={`${selected.id}-${review.day.date}`}
                 scheduleId={selected.id}
                 date={review.day.date}
                 coverage={review.day.coverage}
+                period={review.month.period}
+                revision={review.month.revision}
               />
             }
             day={review.day}

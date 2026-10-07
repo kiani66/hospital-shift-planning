@@ -4,9 +4,12 @@ import { getCoverageCandidates } from "@/application/schedules/coverage-candidat
 import { requireRequestContext } from "@/features/auth/guards";
 import { readCoverageCandidatesAction } from "./actions";
 import { candidateAccessError, candidateQueryError } from "./presentation";
-vi.mock("@/application/schedules/coverage-candidates", () => ({
+vi.mock("@/application/schedules/coverage-candidates", async () => ({
+  ...(await vi.importActual("@/application/schedules/coverage-candidates")),
   getCoverageCandidates: vi.fn(),
+  assignCoverageCandidate: vi.fn(),
 }));
+vi.mock("next/cache", () => ({ refresh: vi.fn() }));
 vi.mock("@/features/auth/guards", () => ({ requireRequestContext: vi.fn() }));
 const input = {
   scheduleId: "00000000-0000-4000-8000-000000000001",
