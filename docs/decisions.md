@@ -1798,3 +1798,94 @@ Enforced in `application/schedules/start-revision.ts` (`startScheduleRevision`) 
   inherits it.
 
 Enforced in `application/staffing-rules/` and `features/staffing-rules/`.
+
+## Coverage candidate recommendation decisions
+
+Approved by the product owner after the Candidate Recommendation source audit (answers to the
+audit's open questions). Paths are relative to `src/`. This record adds a feature and amends no
+earlier decision: planning edits (D7, D48), Supervisor visibility (D12), effective-dated memberships
+(D19), the roster snapshot (D21), preferences (D35, D65), Hospital Admin scope (D78), explicit OFF
+(D100), the validation categories (D102) and rule-set pinning (D106) stay exactly as recorded.
+
+### D111 · Candidate Recommendation V1
+
+- **Purpose.** Help a Head Nurse resolve an existing coverage shortage by listing who could fill
+  it. Deterministic, rule-based, explainable and non-generative; it is not automatic scheduling,
+  never selects a person and never writes on its own. The Head Nurse decides.
+- **Entry condition.** Offered only for a real shortage: a coverage period of a day whose status
+  under the schedule's pinned rule-set version (D106) is `BELOW_MINIMUM`. Without a configured
+  minimum, or when the period is not below it, the feature is not offered. It is not a generic
+  "find a nurse for any shift" tool.
+- **Target and ME.** The target is `schedule + department + date + coverage period`, and the
+  candidate shift is the period's own code: Morning shortage → `M`, Evening → `E`, Night → `N`.
+  `ME` is never offered for a Morning or Evening shortage in V1. Ordinary editing may still assign
+  `ME`, and ME keeps counting toward M and E (D42); nothing about its coverage changes.
+- **Candidate universe.** A nurse is in the universe only when all three hold: on the schedule's
+  **roster** (D21), an **active account** (D22, D80), and a department **membership effective on
+  the target date** (D19). Anyone failing any of them is left out entirely, never listed as Not
+  Allowed. The feature never adds people to a roster, changes memberships, bypasses the roster
+  constraint or looks at other departments.
+- **Day status.** A nurse with a working assignment (`M`, `E`, `N` or `ME`) on the target date is
+  not a candidate: V1 never reshuffles. The candidate day statuses are `UNASSIGNED` (no row,
+  undecided, D100) and `OFF_ASSIGNMENT` (an explicit OFF decision). An OFF candidate stays
+  eligible, but replacing the OFF decision requires an explicit confirmation in the UI; the
+  replacement is the ordinary single-cell change OFF → shift, never OFF plus a shift (D15).
+- **Groups.** **Available**: passes the hard-rule assessment. **Not Allowed**: in the universe but
+  the hypothetical assignment is blocked by one or more existing hard rules; it carries the
+  structured violations (`Violation`, D43) that block it, worded by the existing finding
+  presentation. No other categories (no "recommended" / "acceptable") and no score.
+- **Ordering, without a weighted score.** Available: day status (`UNASSIGNED` before
+  `OFF_ASSIGNMENT`), then preference (`SAME_SHIFT` before `NONE` before `DIFFERENT_SHIFT` before
+  `OFF_PREFERENCE`), then `users.id` ascending. Not Allowed: `users.id` ascending. The personnel
+  number may be displayed but is never a sort key. Preference is the nurse's stored wish for the
+  date compared by exact code with the candidate shift (`preferenceFit`'s comparison); no row is
+  `NONE`, `OFF` is `OFF_PREFERENCE`. A preference never makes a nurse Not Allowed (D35), and the
+  preference workflow is unchanged. Workload, fairness, hours, Night counts, consecutive days and
+  overtime are not ranking inputs, and neighbouring days affect the result only through the
+  existing rules that read them (night rest, D7/D20).
+- **Hard rules: one evaluation, no new rule.** A candidate is assessed as the hypothetical change
+  "nurse X gets the candidate shift on the target date" with the same pure assessment that guards
+  post-finalization changes (D69, D102): apply the edit to the working copy, validate before and
+  after with the neighbouring schedules' boundary days and the pinned staffing bounds, and block a
+  new or worse error-severity finding attributable to the changed cell. Recommendation preview and
+  recommendation write share that assessment (`assessEdits`); there is no second, candidate-only
+  rule set. No hard scheduling rule is added.
+- **Write: a dedicated, stricter command (intentional).** Assigning from the candidate list goes
+  through its own application command. It follows the planning editor's path: `assignment.edit`
+  for the schedule's department, the schedule row lock and the caller's revision (D49), the roster,
+  period, status and revision scope of `canEditAssignment` (D14, D48), active accounts (D80), the
+  existing assignment persistence and the existing `assignment.created` / `assignment.changed`
+  audit events (no recommendation snapshot, no new audit table or event). Unlike the planning
+  editor it re-runs the shared hard-rule assessment inside the transaction and refuses the write
+  when it blocks (`RULE_VIOLATION`). It never introduces a rule, starts a revision, extends a
+  revision scope, withdraws a submission, bypasses a lock or uses the post-finalization adjustment
+  path (`adjustSchedule` / `writeScheduleChange`) to obtain validation. A recommendation is a
+  preview, never a write authorization.
+- **Normal editing is unchanged.** `setAssignments` keeps D7/D48 exactly: violations remain allowed
+  while planning and are reported by validation. The stricter write-time check applies only to the
+  candidate command.
+- **Shortage precondition at write time.** The candidate command also requires the target coverage
+  period to be still `BELOW_MINIMUM` when it writes. If the shortage was resolved after the list was
+  loaded, nothing is assigned and the caller refreshes coverage and candidates and says the
+  shortage is already resolved. This is a precondition of this use case, not a schedule rule.
+- **Editability and past dates.** No new date rule: a cell may be assigned exactly when
+  `canEditAssignment` allows it (the whole period in DRAFT, PLANNING, FINALIZED and a first-cycle
+  RETURNED; only revision days in REVISING and a returned revision; nothing in SUBMITTED or
+  APPROVED). Otherwise the list may still be previewed where authorization allows, but nothing
+  can be assigned from it.
+- **Authorization.** Preview follows `schedule.viewDepartment`: the department's Head Nurse
+  always, a Supervisor only where D12 already lets them view the schedule (FINALIZED on; never
+  DRAFT or PLANNING). Supervisors are read-only for this feature. Hospital Admins (D78) and nurses
+  have no access; an admin who is also the department's Head Nurse acts as Head Nurse. No new
+  policy action and no widened visibility.
+- **Refresh.** After a successful assignment, coverage is recalculated by the normal page read,
+  the candidate list is re-read (the assigned nurse leaves it), and the day stays open; when the
+  period is no longer below its minimum the shortage is shown as resolved.
+- **Out of scope.** Automatic or generative scheduling, best-person selection, scores, reshuffling,
+  cross-department staffing, new staffing or hard rules, workload / fairness / overtime
+  optimization, push notifications, preference workflow changes, recommendation-specific audit
+  persistence, new revision behaviour and automatic workflow transitions.
+
+Enforced so far in `domain/schedule/assess-edits.ts` (`assessEdits`, the shared hard-rule
+assessment), used by `application/schedules/schedule-changes.ts` (`evaluateScheduleChange`). The
+candidate query, ordering, command and UI follow in later slices and must reuse it.
