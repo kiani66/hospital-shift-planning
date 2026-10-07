@@ -36,6 +36,7 @@ export * from "./authz/policies";
 export * from "./rules/assess-change";
 export * from "./schedule/schedule-change";
 export * from "./schedule/assess-edits";
+export * from "./candidates/evaluate-candidates";
 export * from "./change-requests/model";
 export * from "./change-requests/reason";
 export * from "./change-requests/request";
