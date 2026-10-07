@@ -74,7 +74,10 @@ import { ConflictError, NotFoundError } from "../errors";
 import { toActionError, type ActionError } from "../result";
 import { defineCommand, type AppContext, type UnitOfWork } from "../use-case";
 import { assignmentAuditAction } from "./edit-assignments";
-import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
+import {
+  loadScheduleForAssignmentUpdate,
+  saveSchedule,
+} from "./load-for-update";
 import { NO_HOLIDAY_DATA, type HolidayCalendar } from "../calendar/holidays";
 import {
   holidayDates,
@@ -435,7 +438,10 @@ export const adjustSchedule = defineCommand({
   name: "schedule.adjust",
   input: adjustScheduleInput,
   async handler(uow, input): Promise<ScheduleChangeResult> {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("schedule.adjust", { departmentId: schedule.departmentId });
     // Checked after authorizing, so an outsider learns nothing from CONFLICT.
     if (schedule.revision !== input.expectedRevision) throw new ConflictError();
@@ -489,7 +495,10 @@ export const discardRevision = defineCommand({
     expectedRevision: z.number().int().nonnegative(),
   }),
   async handler(uow, input) {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("schedule.discardRevision", {
       departmentId: schedule.departmentId,
     });

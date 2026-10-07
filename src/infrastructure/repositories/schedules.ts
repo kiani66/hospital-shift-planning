@@ -1,5 +1,6 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, or, sql } from "drizzle-orm";
 
+import { addDays } from "../../domain/shared/dates";
 import type { DatePeriod } from "../../domain/shared/period";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { DbExecutor, Transaction } from "../db/database";
@@ -99,6 +100,52 @@ export async function lockScheduleForUpdate(
     .from(schedules)
     .where(eq(schedules.id, id))
     .for("update");
+  return row ? toRecord(row) : null;
+}
+
+/**
+ * Assignment writers acquire the target and both boundary schedules BEFORE
+ * reading cells, in one global UUID order. Period/department are immutable;
+ * the preliminary read is only for discovering this set, never for validation.
+ * At most three rows (non-overlapping department periods) are locked.
+ *
+ * All working-copy writers use this protocol, including revision restoration.
+ * A newly created neighbour starts empty; its first writer also locks this
+ * target, even if it was not visible when this transaction discovered its set.
+ * No account/request/membership lock may precede these schedule locks.
+ */
+export async function lockScheduleForAssignmentUpdate(
+  tx: Transaction,
+  id: string,
+): Promise<ScheduleRecord | null> {
+  const target = await findScheduleById(tx, id);
+  if (!target) return null;
+  const previousDay = addDays(target.period.start, -1);
+  const nextDay = addDays(target.period.end, 1);
+  const rows = await tx
+    .select(columns)
+    .from(schedules)
+    .where(
+      or(
+        eq(schedules.id, id),
+        and(
+          eq(schedules.departmentId, target.departmentId),
+          or(
+            and(
+              lte(schedules.periodStart, previousDay),
+              gte(schedules.periodEnd, previousDay),
+            ),
+            and(
+              lte(schedules.periodStart, nextDay),
+              gte(schedules.periodEnd, nextDay),
+            ),
+          ),
+        ),
+      ),
+    )
+    .orderBy(asc(schedules.id))
+    .for("update");
+  const row = rows.find((row) => row.id === id);
   return row ? toRecord(row) : null;
 }
 

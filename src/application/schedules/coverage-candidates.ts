@@ -41,7 +41,10 @@ import {
 import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
-import { listRosterMembersOn } from "../../infrastructure/repositories/roster";
+import {
+  listRosterMembersOn,
+  lockRosterMemberOn,
+} from "../../infrastructure/repositories/roster";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
 import { NO_HOLIDAY_DATA } from "../calendar/holidays";
 import { ConflictError, NotFoundError } from "../errors";
@@ -52,7 +55,10 @@ import {
 } from "../staffing-rules/pinned";
 import { defineCommand, type AppContext } from "../use-case";
 import { writeAssignmentChanges } from "./edit-assignments";
-import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
+import {
+  loadScheduleForAssignmentUpdate,
+  saveSchedule,
+} from "./load-for-update";
 import type { ReviewFinding } from "./review";
 
 /**
@@ -365,7 +371,10 @@ export const assignCoverageCandidate = defineCommand({
   name: "coverageCandidate.assign",
   input: assignCoverageCandidateInput,
   async handler(uow, input): Promise<AssignCoverageCandidateOutput> {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("assignment.edit", { departmentId: schedule.departmentId });
     const { period } = schedule;
     const { date, shift, nurseId } = input;
@@ -397,10 +406,10 @@ export const assignCoverageCandidate = defineCommand({
 
     if (!(await lockActiveSchedulingUsers(uow.tx, [nurseId])))
       throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
-    const [member] = await listRosterMembersOn(uow.tx, {
+    const member = await lockRosterMemberOn(uow.tx, {
       scheduleId: schedule.id,
       onDate: date,
-      userIds: [nurseId],
+      userId: nurseId,
     });
     if (!member) throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
 

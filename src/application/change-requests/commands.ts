@@ -42,7 +42,7 @@ import {
 } from "../../infrastructure/repositories/schedules";
 import { ConflictError, NotFoundError } from "../errors";
 import { defineCommand, type UnitOfWork } from "../use-case";
-import { loadScheduleForUpdate } from "../schedules/load-for-update";
+import { loadScheduleForAssignmentUpdate } from "../schedules/load-for-update";
 import {
   todayFor,
   writeScheduleChange,
@@ -512,7 +512,10 @@ export const applyChangeRequest = defineCommand({
   async handler(uow, input): Promise<ApplyChangeRequestOutput> {
     const found = await findChangeRequest(uow.tx, input.requestId);
     if (!found) throw new NotFoundError("Change request");
-    const schedule = await loadScheduleForUpdate(uow, found.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      found.scheduleId,
+    );
     const request = await loadRequestForUpdate(uow, input.requestId);
     uow.authorize("changeRequest.apply", {
       departmentId: schedule.departmentId,

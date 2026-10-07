@@ -1,6 +1,7 @@
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import {
   lockScheduleForUpdate,
+  lockScheduleForAssignmentUpdate,
   updateSchedule,
   type ScheduleRecord,
 } from "../../infrastructure/repositories/schedules";
@@ -20,6 +21,16 @@ export async function loadScheduleForUpdate(
   if (!schedule) throw new NotFoundError("Schedule");
   if (expectedRevision !== undefined && schedule.revision !== expectedRevision)
     throw new ConflictError();
+  return schedule;
+}
+
+/** Shared boundary-lock protocol for every working-copy assignment writer. */
+export async function loadScheduleForAssignmentUpdate(
+  uow: UnitOfWork,
+  scheduleId: string,
+): Promise<ScheduleRecord> {
+  const schedule = await lockScheduleForAssignmentUpdate(uow.tx, scheduleId);
+  if (!schedule) throw new NotFoundError("Schedule");
   return schedule;
 }
 

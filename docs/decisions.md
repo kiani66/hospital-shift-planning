@@ -1886,6 +1886,7 @@ earlier decision: planning edits (D7, D48), Supervisor visibility (D12), effecti
   optimization, push notifications, preference workflow changes, recommendation-specific audit
   persistence, new revision behaviour and automatic workflow transitions.
 
-Enforced so far in `domain/schedule/assess-edits.ts` (`assessEdits`, the shared hard-rule
-assessment), used by `application/schedules/schedule-changes.ts` (`evaluateScheduleChange`). The
-candidate query, ordering, command and UI follow in later slices and must reuse it.
+Implemented through the approved slices: shared `domain/schedule/assess-edits.ts` assessment,
+candidate ordering, application query and command, and the read/assignment UI. Concurrency
+hardening before merge protects adjacent scheduling inputs and dated membership eligibility
+through the assignment transaction; the approved business decisions above remain unchanged.

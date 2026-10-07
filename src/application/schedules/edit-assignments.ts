@@ -21,7 +21,10 @@ import { listRoster } from "../../infrastructure/repositories/roster";
 import type { ScheduleRecord } from "../../infrastructure/repositories/schedules";
 import { ConflictError } from "../errors";
 import { defineCommand, type UnitOfWork } from "../use-case";
-import { loadScheduleForUpdate, saveSchedule } from "./load-for-update";
+import {
+  loadScheduleForAssignmentUpdate,
+  saveSchedule,
+} from "./load-for-update";
 
 const isoDateInput = z
   .string()
@@ -90,7 +93,10 @@ export const setAssignments = defineCommand({
   name: "assignment.set",
   input: setAssignmentsInput,
   async handler(uow, input): Promise<SetAssignmentsOutput> {
-    const schedule = await loadScheduleForUpdate(uow, input.scheduleId);
+    const schedule = await loadScheduleForAssignmentUpdate(
+      uow,
+      input.scheduleId,
+    );
     uow.authorize("assignment.edit", { departmentId: schedule.departmentId });
 
     const nurseIds = [...new Set(input.changes.map((c) => c.nurseId))];
