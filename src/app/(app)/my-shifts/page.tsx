@@ -4,6 +4,7 @@ import { getMyShiftsMonth } from "@/application/my-shifts/queries";
 import { isIsoDate } from "@/domain/shared/dates";
 import { isInPeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import {
   adjacentJalaliMonth,
   jalaliMonthLabel,
@@ -31,6 +32,7 @@ export default async function MyShiftsPage({
   searchParams,
 }: PageProps<"/my-shifts">) {
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const params = await searchParams;
   // "Today" is Tehran's calendar day, not the server's (UTC) one.
   const today = todayIn(APP_TIMEZONE);
@@ -68,6 +70,7 @@ export default async function MyShiftsPage({
         description="شیفت‌های شما در هر ماه، با ساعت کاری و وضعیت تأیید برنامه."
       />
       <MyShiftsView
+        shiftLabels={shiftLabels}
         month={data}
         label={jalaliMonthLabel(month)}
         previous={neighbour("previous")}

@@ -91,7 +91,7 @@ export const DATA_TABLES = [
 // account shares the demo password.
 let demoPasswordHash: Promise<string> | undefined;
 
-const SHIFT_LABELS = { M: "صبح", E: "عصر", N: "شب", ME: "صبح و عصر" } as const;
+const SHIFT_LABELS = { M: "صبح", E: "عصر", N: "شب", ME: "طولانی" } as const;
 
 export class SeedNotAllowedError extends Error {
   override readonly name = "SeedNotAllowedError";

@@ -8,7 +8,10 @@ import {
 
 import { SHIFT_CODES } from "@/domain/shifts/shift-type";
 import { BrandMark, PRODUCT_NAME } from "@/features/shell/brand-mark";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import {
+  SHIFT_PRESENTATION,
+  type ShiftLabels,
+} from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 /** What the product does, in the words the app itself uses. No claims. */
@@ -30,7 +33,12 @@ const HIGHLIGHTS: readonly { icon: LucideIcon; text: string }[] = [
  * `aria-hidden` and the text is plain paragraphs (the form's `h1` stays
  * the page's only heading).
  */
-export function LoginBrandPanel() {
+export function LoginBrandPanel({
+  shiftLabels,
+}: {
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
+}) {
   return (
     <div className="relative isolate overflow-hidden text-sidebar-foreground bg-brand-panel">
       <div
@@ -110,7 +118,7 @@ export function LoginBrandPanel() {
                   >
                     {code}
                   </span>
-                  {shift.name}
+                  {shiftLabels[code]}
                 </li>
               );
             })}

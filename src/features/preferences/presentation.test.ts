@@ -9,7 +9,6 @@ import {
   CLOSED_HEADLINE,
   LOCK_REASONS,
   NO_PREFERENCE,
-  PREFERENCE_OPTIONS,
   closedMonthHeadline,
   countPreferences,
   groupDays,
@@ -17,13 +16,20 @@ import {
   isRetryableSaveError,
   myPreferenceText,
   preferenceOption,
+  preferenceOptions,
   preferencesHref,
   saveErrorMessage,
 } from "./presentation";
+import {
+  RENAMED_SHIFT_LABELS,
+  SHIFT_LABELS,
+} from "../../../tests/support/shift-labels";
 
 const aban = eachDay(isoDate("2026-10-23"), isoDate("2026-11-21")).map(
   (date) => ({ date }),
 );
+
+const PREFERENCE_OPTIONS = preferenceOptions(SHIFT_LABELS);
 
 describe("preference options", () => {
   it("offers exactly the persisted preference values, one choice each, from the shared shift display", () => {
@@ -32,24 +38,33 @@ describe("preference options", () => {
     ]);
     for (const o of PREFERENCE_OPTIONS) {
       expect(o.code).toBe(o.value);
-      expect(o.short).toBe(ASSIGNMENT_PRESENTATION[o.value].name);
+      expect(o.short).toBe(SHIFT_LABELS[o.value]);
       expect(o.className).toBe(ASSIGNMENT_PRESENTATION[o.value].tokenClass);
       expect(o.icon).toBe(ASSIGNMENT_PRESENTATION[o.value].icon);
     }
     // "No preference" is the absence of a value, never a sixth option.
     expect(PREFERENCE_OPTIONS.map((o) => o.short)).not.toContain(NO_PREFERENCE);
-    expect(preferenceOption("ME").label).toContain("صبح + عصر");
+    expect(preferenceOption("ME", SHIFT_LABELS).label).toBe(
+      "طولانی (صبح + عصر)",
+    );
+    // Names follow the labels; the value stays the stable code.
+    const renamed = preferenceOption("OFF", RENAMED_SHIFT_LABELS);
+    expect(renamed.value).toBe("OFF");
+    expect(renamed.code).toBe("OFF");
+    expect(renamed.short).toBe("مرخصی‌روز");
   });
 
   it("says «ترجیح من» once, with the short Persian name only", () => {
-    expect(PREFERENCE_VALUES.map(myPreferenceText)).toEqual([
+    expect(
+      PREFERENCE_VALUES.map((v) => myPreferenceText(v, SHIFT_LABELS)),
+    ).toEqual([
       "ترجیح من: صبح",
       "ترجیح من: عصر",
       "ترجیح من: شب",
       "ترجیح من: طولانی",
       "ترجیح من: استراحت",
     ]);
-    expect(myPreferenceText(null)).toBe("بدون ترجیح");
+    expect(myPreferenceText(null, SHIFT_LABELS)).toBe("بدون ترجیح");
   });
 
   it("never words a preference as an assignment", () => {

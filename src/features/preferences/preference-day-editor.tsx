@@ -10,13 +10,14 @@ import {
 } from "react";
 
 import type { PreferenceValue } from "@/domain/shifts/shift-type";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 import { clearMyPreferenceAction, setMyPreferenceAction } from "./actions";
 import {
-  PREFERENCE_OPTIONS,
   myPreferenceText,
   preferenceOption,
+  preferenceOptions,
 } from "./presentation";
 import {
   createPreferenceSaver,
@@ -82,6 +83,7 @@ export function PreferenceDayEditor({
   value,
   dayLabel,
   onConfirmed,
+  shiftLabels,
 }: {
   scheduleId: string;
   date: string;
@@ -91,7 +93,10 @@ export function PreferenceDayEditor({
   dayLabel: string;
   /** The server confirmed a new stored value for this day. */
   onConfirmed: (value: PreferenceChoice) => void;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
+  const options = preferenceOptions(shiftLabels);
   const saver = usePreferenceSaver(scheduleId, date, value);
   const state = useSyncExternalStore(
     saver.subscribe,
@@ -109,11 +114,11 @@ export function PreferenceDayEditor({
   }, [saver, phase, confirmed]);
 
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  const selectedIndex = PREFERENCE_OPTIONS.findIndex((o) => o.value === shown);
+  const selectedIndex = options.findIndex((o) => o.value === shown);
   const [focusIndex, setFocusIndex] = useState(Math.max(selectedIndex, 0));
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const index = nextIndex(event.key, focusIndex, PREFERENCE_OPTIONS.length);
+    const index = nextIndex(event.key, focusIndex, options.length);
     if (index === null) return;
     event.preventDefault();
     setFocusIndex(index);
@@ -125,9 +130,9 @@ export function PreferenceDayEditor({
       ? null
       : failure.value === null
         ? "پاک کردن"
-        : `«${preferenceOption(failure.value).short}»`;
+        : `«${preferenceOption(failure.value, shiftLabels).short}»`;
 
-  const current = shown === null ? null : preferenceOption(shown);
+  const current = shown === null ? null : preferenceOption(shown, shiftLabels);
   // While a save is reported, the clear action shrinks to its icon (it keeps
   // its accessible name), so «ترجیح من: …» keeps its room on a 360px phone.
   const reporting = phase === "saving" || phase === "saved";
@@ -151,7 +156,9 @@ export function PreferenceDayEditor({
               className="hidden size-4 shrink-0 text-muted-foreground min-[24rem]:block"
             />
           )}
-          <span className="truncate">{myPreferenceText(shown)}</span>
+          <span className="truncate">
+            {myPreferenceText(shown, shiftLabels)}
+          </span>
         </p>
         <span role="status" className="flex shrink-0 items-center text-xs">
           {phase === "saving" ? (
@@ -194,7 +201,7 @@ export function PreferenceDayEditor({
         onKeyDown={onKeyDown}
         className="grid grid-cols-5 gap-1 @2xl:w-80 @2xl:shrink-0"
       >
-        {PREFERENCE_OPTIONS.map((option, i) => {
+        {options.map((option, i) => {
           const selected = option.value === shown;
           return (
             <button

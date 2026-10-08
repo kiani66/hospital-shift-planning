@@ -5,12 +5,14 @@ import { requireRequestContext } from "@/features/auth/guards";
 import { managementPageRead } from "@/features/management/page-read";
 import { PageHeader } from "@/features/shell/page-header";
 import { RuleSetAdminView } from "@/features/staffing-rules/admin-view";
+import { loadShiftLabels } from "@/features/shifts/labels";
 
 export const metadata: Metadata = { title: "قوانین پوشش نفرات" };
 
 /** Hospital Admin only (`staffingRules.manage`); anyone else gets a 404. */
 export default async function StaffingRulesAdminPage() {
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const administration = await managementPageRead(
     getRuleSetAdministration(ctx),
   );
@@ -20,7 +22,10 @@ export default async function StaffingRulesAdminPage() {
         title="قوانین پوشش نفرات"
         description="حداقل و حداکثر نفرات هر نوبت (صبح، عصر، شب) به‌صورت نسخه‌دار: پیش‌فرض بیمارستان و قوانین ویژه هر بخش."
       />
-      <RuleSetAdminView administration={administration} />
+      <RuleSetAdminView
+        administration={administration}
+        shiftLabels={shiftLabels}
+      />
     </>
   );
 }

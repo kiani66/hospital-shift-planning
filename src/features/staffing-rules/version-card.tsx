@@ -10,13 +10,13 @@ import {
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 
 import {
-  BUCKET_NAMES,
   RULE_SET_STATE_LABELS,
   RULE_SET_STATE_TONES,
   dayTypeSummary,
   effectiveFromText,
   versionLabel,
 } from "./presentation";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * One rule-set version, read-only: its state, when it applies, every
@@ -29,12 +29,15 @@ export function RuleSetVersionCard({
   names,
   actions,
   highlight,
+  shiftLabels,
 }: {
   version: RuleSetVersionView;
   names: ReadonlyMap<string, string>;
   actions?: ReactNode;
   /** A short marker, e.g. «برنامه به این نسخه متصل است». */
   highlight?: string;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const who = (id: string | null) => (id ? (names.get(id) ?? "—") : "سامانه");
   const c = version.content;
@@ -61,11 +64,11 @@ export function RuleSetVersionCard({
       </header>
       <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
         <dt className="text-muted-foreground">روزهای عادی</dt>
-        <dd>{dayTypeSummary(c.normal)}</dd>
+        <dd>{dayTypeSummary(c.normal, shiftLabels)}</dd>
         <dt className="text-muted-foreground">روزهای تعطیل</dt>
         <dd>
           {Object.keys(c.holiday).length > 0
-            ? dayTypeSummary(c.holiday)
+            ? dayTypeSummary(c.holiday, shiftLabels)
             : "مانند روزهای عادی"}
         </dd>
         <dt className="text-muted-foreground">استثنای تاریخ</dt>
@@ -76,11 +79,11 @@ export function RuleSetVersionCard({
             <ul className="flex flex-col">
               {c.exceptions.map((e) => (
                 <li key={`${e.date}${e.period}`}>
-                  {formatJalaliDate(e.date)} · {BUCKET_NAMES[e.period]}{" "}
-                  {dayTypeSummary({ [e.period]: e.bounds }).replace(
-                    `${BUCKET_NAMES[e.period]} `,
-                    "",
-                  )}
+                  {formatJalaliDate(e.date)} · {shiftLabels[e.period]}{" "}
+                  {dayTypeSummary(
+                    { [e.period]: e.bounds },
+                    shiftLabels,
+                  ).replace(`${shiftLabels[e.period]} `, "")}
                   {e.note && ` (${e.note})`}
                 </li>
               ))}
@@ -89,8 +92,7 @@ export function RuleSetVersionCard({
         </dd>
       </dl>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        پوشش هر نوبت: شیفت طولانی (ME) یک نفر در صبح و یک نفر در عصر شمرده
-        می‌شود؛ استراحت در پوشش شمرده نمی‌شود.
+        {`پوشش هر نوبت: شیفت ${shiftLabels.ME} (ME) یک نفر در ${shiftLabels.M} و یک نفر در ${shiftLabels.E} شمرده می‌شود؛ ${shiftLabels.OFF} در پوشش شمرده نمی‌شود.`}
       </p>
       {version.note && (
         <p dir="auto" className="text-sm">

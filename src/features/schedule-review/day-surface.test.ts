@@ -11,6 +11,7 @@ import {
   PreferenceAlignmentSummary,
   PreferenceContext,
 } from "./preference-alignment";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 /** Visible text of server-rendered markup (tags dropped, spaces collapsed). */
 const text = (html: string) =>
@@ -77,6 +78,7 @@ describe("CoverageSummary", () => {
   it("states once that staffing was not evaluated when no bounds are configured", () => {
     const html = render(
       createElement(CoverageSummary, {
+        shiftLabels: SHIFT_LABELS,
         day: day([
           { period: "M", covered: 1, bounds: null, status: "NOT_CONFIGURED" },
           { period: "E", covered: 2, bounds: null, status: "NOT_CONFIGURED" },
@@ -93,6 +95,7 @@ describe("CoverageSummary", () => {
   it("shows current staffing, the pinned minimum / maximum and shortage / excess", () => {
     const html = render(
       createElement(CoverageSummary, {
+        shiftLabels: SHIFT_LABELS,
         day: day([
           {
             period: "M",
@@ -124,6 +127,7 @@ describe("CoverageSummary", () => {
   it("keeps a period within bounds neutral (no green, no check)", () => {
     const html = render(
       createElement(CoverageSummary, {
+        shiftLabels: SHIFT_LABELS,
         day: day([
           {
             period: "M",
@@ -161,6 +165,7 @@ describe("CoverageSummary: pilot 3–6 and the source of the bounds (D106)", () 
     const t = text(
       render(
         createElement(CoverageSummary, {
+          shiftLabels: SHIFT_LABELS,
           day: day(
             (["M", "E", "N"] as const).map((period) => ({
               period,
@@ -180,6 +185,7 @@ describe("CoverageSummary: pilot 3–6 and the source of the bounds (D106)", () 
     const t = text(
       render(
         createElement(CoverageSummary, {
+          shiftLabels: SHIFT_LABELS,
           day: day([
             {
               period: "M",
@@ -218,7 +224,12 @@ describe("PreferenceContext", () => {
     hideMissing?: boolean,
   ) =>
     render(
-      createElement(PreferenceContext, { preference, shift, hideMissing }),
+      createElement(PreferenceContext, {
+        shiftLabels: SHIFT_LABELS,
+        preference,
+        shift,
+        hideMissing,
+      }),
     );
 
   it("tells an explicit rest wish apart from no preference", () => {

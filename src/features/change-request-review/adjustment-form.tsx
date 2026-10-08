@@ -13,7 +13,7 @@ import {
 } from "@/domain/shifts/shift-type";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import { requestErrorMessage } from "@/features/change-requests/presentation";
-import { assignmentName } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 
 import {
   adjustScheduleAction,
@@ -24,8 +24,6 @@ import { PreviewPanel } from "./preview-panel";
 
 const FIELD_CLASS =
   "min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
-
-const shiftLabel = assignmentName;
 
 /**
  * A Head Nurse's direct operational adjustment of one nurse's shift on this
@@ -41,6 +39,7 @@ export function AdjustmentForm({
   date,
   nurses,
   reasons,
+  shiftLabels,
 }: {
   scheduleId: string;
   revision: number;
@@ -51,6 +50,8 @@ export function AdjustmentForm({
     readonly shift: AssignmentCode | null;
   }[];
   reasons: readonly ReasonView[];
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const ids = {
     nurse: useId(),
@@ -134,7 +135,7 @@ export function AdjustmentForm({
             </option>
             {nurses.map((n) => (
               <option key={n.userId} value={n.userId}>
-                {n.displayName} — {shiftLabel(n.shift)}
+                {n.displayName} — {assignmentName(n.shift, shiftLabels)}
               </option>
             ))}
           </select>
@@ -157,7 +158,7 @@ export function AdjustmentForm({
             {ASSIGNMENT_CODES.filter((c) => c !== current?.shift).map(
               (code) => (
                 <option key={code} value={code}>
-                  {shiftLabel(code)}
+                  {assignmentName(code, shiftLabels)}
                 </option>
               ),
             )}
@@ -186,7 +187,7 @@ export function AdjustmentForm({
         {fresh &&
           preview.status === "ready" &&
           (preview.preview.ok ? (
-            <PreviewPanel preview={preview.preview} />
+            <PreviewPanel preview={preview.preview} shiftLabels={shiftLabels} />
           ) : (
             <p role="alert" className="text-sm text-destructive">
               {requestErrorMessage("adjust", preview.preview.error)}

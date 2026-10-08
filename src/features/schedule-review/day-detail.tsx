@@ -30,9 +30,10 @@ import { faNumber } from "@/features/calendar/jalali";
 import { editDenialLabel } from "@/features/schedule-editing/presentation";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import {
-  COVERAGE_PERIOD_NAMES,
   SHIFT_PRESENTATION,
+  shiftFullName,
   shiftHoursLabel,
+  type ShiftLabels,
 } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
@@ -118,7 +119,15 @@ const CATEGORY_SECTIONS: readonly {
  * undecided nurse-day is never called a conflict. A READY or NOT STARTED day
  * without findings shows one quiet line saying what its state means.
  */
-function Findings({ day, linked }: { day: DayReview; linked: boolean }) {
+function Findings({
+  day,
+  linked,
+  shiftLabels,
+}: {
+  day: DayReview;
+  linked: boolean;
+  shiftLabels: ShiftLabels;
+}) {
   const state = day.validation.state;
   if (day.findings.length === 0)
     return (
@@ -182,6 +191,7 @@ function Findings({ day, linked }: { day: DayReview; linked: boolean }) {
                     key={`${f.code}-${f.nurseIds.join()}-${i}`}
                     finding={f}
                     linked={linked}
+                    shiftLabels={shiftLabels}
                   />
                 ))}
               </ul>
@@ -197,7 +207,15 @@ function Findings({ day, linked }: { day: DayReview; linked: boolean }) {
  * Findings reported on the neighbouring day that involve this one (the
  * Night before a violating shift), so either day explains the conflict.
  */
-function RelatedFindings({ day, linked }: { day: DayReview; linked: boolean }) {
+function RelatedFindings({
+  day,
+  linked,
+  shiftLabels,
+}: {
+  day: DayReview;
+  linked: boolean;
+  shiftLabels: ShiftLabels;
+}) {
   if (day.relatedFindings.length === 0) return null;
   return (
     <section
@@ -222,10 +240,10 @@ function RelatedFindings({ day, linked }: { day: DayReview; linked: boolean }) {
             <span className="font-medium">{RULE_TITLES[f.code]}</span>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <FindingNurses finding={f} linked={linked} />
-              <FindingFacts finding={f} />
+              <FindingFacts finding={f} shiftLabels={shiftLabels} />
             </span>
             <span className="text-xs leading-relaxed text-muted-foreground">
-              {findingMessage(f)}
+              {findingMessage(f, shiftLabels)}
             </span>
           </li>
         ))}
@@ -274,7 +292,13 @@ const SOURCE_LABELS = {
  * range, and a shortage or overstaffing mark with its amount. A bucket within
  * bounds stays neutral (no green, no check).
  */
-export function CoverageSummary({ day }: { day: DayReview }) {
+export function CoverageSummary({
+  day,
+  shiftLabels,
+}: {
+  day: DayReview;
+  shiftLabels: ShiftLabels;
+}) {
   const evaluated = day.coverage.some((c) => c.status !== "NOT_CONFIGURED");
   return (
     <section
@@ -317,7 +341,7 @@ export function CoverageSummary({ day }: { day: DayReview }) {
                 >
                   {c.period}
                 </span>
-                پوشش {COVERAGE_PERIOD_NAMES[c.period]}
+                پوشش {shiftLabels[c.period]}
               </span>
               <span className="text-lg leading-tight font-semibold tabular-nums">
                 {faNumber(c.covered)}{" "}
@@ -327,7 +351,7 @@ export function CoverageSummary({ day }: { day: DayReview }) {
               </span>
               {fromLong > 0 && (
                 <span className="text-[0.6875rem] leading-snug text-muted-foreground">
-                  {faNumber(fromLong)} نفر از شیفت طولانی
+                  {faNumber(fromLong)} نفر از شیفت {shiftLabels.ME}
                 </span>
               )}
               {evaluated && c.bounds && (
@@ -362,10 +386,12 @@ function ReadOnlyNurseRow({
   nurse,
   shift,
   flagged,
+  shiftLabels,
 }: {
   nurse: ReviewNurse;
   shift: AssignmentCode | null;
   flagged: boolean;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <li className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
@@ -389,7 +415,11 @@ function ReadOnlyNurseRow({
       )}
       {nurse.preference && (
         <span className="ms-auto min-w-0">
-          <PreferenceContext preference={nurse.preference} shift={shift} />
+          <PreferenceContext
+            preference={nurse.preference}
+            shift={shift}
+            shiftLabels={shiftLabels}
+          />
         </span>
       )}
     </li>
@@ -399,11 +429,12 @@ function ReadOnlyNurseRow({
 function ShiftSection({
   shift,
   flagged,
+  shiftLabels,
 }: {
   shift: ReviewShift;
   flagged: ReadonlySet<string>;
+  shiftLabels: ShiftLabels;
 }) {
-  const p = SHIFT_PRESENTATION[shift.code];
   const id = `shift-${shift.code}`;
   return (
     <section
@@ -412,9 +443,11 @@ function ShiftSection({
     >
       <h3 id={id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <ShiftChip code={shift.code} size="md" />
-        <span className="font-semibold">{p.fullName}</span>
+        <span className="font-semibold">
+          {shiftFullName(shift.code, shiftLabels)}
+        </span>
         <span className="text-xs text-muted-foreground">
-          {shiftHoursLabel(shift.code)}
+          {shiftHoursLabel(shift.code, shiftLabels)}
         </span>
         <span className="ms-auto text-sm font-semibold whitespace-nowrap tabular-nums">
           {faNumber(shift.nurses.length)} نفر
@@ -425,13 +458,17 @@ function ShiftSection({
           کسی برای این شیفت ثبت نشده است.
         </p>
       ) : (
-        <ul aria-label={`پرستاران شیفت ${p.name}`} className="divide-y">
+        <ul
+          aria-label={`پرستاران شیفت ${shiftLabels[shift.code]}`}
+          className="divide-y"
+        >
           {shift.nurses.map((n) => (
             <ReadOnlyNurseRow
               key={n.userId}
               nurse={n}
               shift={shift.code}
               flagged={flagged.has(n.userId)}
+              shiftLabels={shiftLabels}
             />
           ))}
         </ul>
@@ -464,6 +501,7 @@ export function DayDetail({
   editor,
   adjustment,
   directSwap,
+  shiftLabels,
 }: {
   candidates?: ReactNode;
   day: DayReview;
@@ -471,6 +509,8 @@ export function DayDetail({
   /** Phase 9: the Head Nurse's operational adjustment, where the editor cannot act. */
   adjustment?: ReactNode;
   directSwap?: ReactNode;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const flagged = flaggedNurses(day);
   return (
@@ -483,9 +523,13 @@ export function DayDetail({
         )}
         {adjustment}
         {directSwap}
-        <Findings day={day} linked={!!editor} />
-        <RelatedFindings day={day} linked={!!editor} />
-        <CoverageSummary day={day} />
+        <Findings day={day} linked={!!editor} shiftLabels={shiftLabels} />
+        <RelatedFindings
+          day={day}
+          linked={!!editor}
+          shiftLabels={shiftLabels}
+        />
+        <CoverageSummary day={day} shiftLabels={shiftLabels} />
         {candidates}
         <PreferenceAlignmentSummary
           alignment={summarizePreferenceAlignment(day.roster)}
@@ -501,12 +545,13 @@ export function DayDetail({
                   key={shift.code}
                   shift={shift}
                   flagged={flagged}
+                  shiftLabels={shiftLabels}
                 />
               ))}
             </div>
             <details className="rounded-xl border bg-card shadow-xs">
               <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
-                استراحت ({faNumber(day.off.length)} نفر)
+                {shiftLabels.OFF} ({faNumber(day.off.length)} نفر)
               </summary>
               <ul className="divide-y border-t px-3">
                 {day.off.map((n) => (
@@ -515,6 +560,7 @@ export function DayDetail({
                     nurse={n}
                     shift="OFF"
                     flagged={flagged.has(n.userId)}
+                    shiftLabels={shiftLabels}
                   />
                 ))}
               </ul>
@@ -539,6 +585,7 @@ export function DayDetail({
                       nurse={n}
                       shift={null}
                       flagged={flagged.has(n.userId)}
+                      shiftLabels={shiftLabels}
                     />
                   ))}
                 </ul>

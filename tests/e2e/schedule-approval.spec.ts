@@ -60,7 +60,7 @@ test.describe("approval workflow", () => {
     await expect(day).toHaveAccessibleName("دوشنبه ۴ آبان ۱۴۰۵");
     await day
       .getByRole("group", { name: `شیفت ${nurse1}` })
-      .getByRole("button", { name: "استراحت" })
+      .getByRole("button", { name: "استراحت (OFF)" })
       .click();
     await expect(day.getByRole("status").first()).toContainText("ثبت شد");
     await day.getByRole("button", { name: "بستن جزئیات روز" }).click();

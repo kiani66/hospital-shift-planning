@@ -16,6 +16,7 @@ import {
   scopeLabel,
   versionLabel,
 } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 const form = (entries: [string, string][]) => {
   const f = new FormData();
@@ -41,7 +42,10 @@ describe("rule-set wording", () => {
     expect(boundsText({ min: 1, max: null })).toBe("دست‌کم ۱ نفر");
     expect(boundsText({ min: 2, max: 2 })).toBe("دقیقاً ۲ نفر");
     expect(
-      dayTypeSummary({ M: { min: 3, max: 6 }, N: { min: 2, max: null } }),
+      dayTypeSummary(
+        { M: { min: 3, max: 6 }, N: { min: 2, max: null } },
+        SHIFT_LABELS,
+      ),
     ).toBe("صبح ۳ تا ۶ نفر · شب دست‌کم ۲ نفر");
   });
 
@@ -76,6 +80,7 @@ describe("parseContentForm", () => {
         ["exception.max", ""],
         ["exception.note", "  "],
       ]),
+      SHIFT_LABELS,
     );
     expect(result).toEqual({
       ok: true,
@@ -135,7 +140,7 @@ describe("parseContentForm", () => {
   ] as [[string, string][], string][])(
     "explains an invalid entry %#",
     (entries, words) => {
-      const result = parseContentForm(form(entries));
+      const result = parseContentForm(form(entries), SHIFT_LABELS);
       expect(result.ok).toBe(false);
       expect(!result.ok && result.message).toContain(words);
     },

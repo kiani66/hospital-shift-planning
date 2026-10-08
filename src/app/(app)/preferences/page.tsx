@@ -5,6 +5,7 @@ import {
   type PreferenceMonthCalendar,
 } from "@/application/preferences/queries";
 import { requireRequestContext } from "@/features/auth/guards";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import {
   adjacentJalaliMonth,
   jalaliMonthLabel,
@@ -40,6 +41,7 @@ export default async function PreferencesPage({
   searchParams,
 }: PageProps<"/preferences">) {
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const params = await searchParams;
   const scheduleId =
     typeof params.schedule === "string" ? params.schedule : undefined;
@@ -67,6 +69,7 @@ export default async function PreferencesPage({
         description="ترجیح شیفت خود را برای روزهای هر ماه ثبت کنید. ترجیح، درخواست شماست و شیفت قطعی نیست."
       />
       <PreferencesView
+        shiftLabels={shiftLabels}
         page={page}
         month={month}
         previous={neighbour("previous")}

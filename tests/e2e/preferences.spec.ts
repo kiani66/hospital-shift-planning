@@ -375,7 +375,7 @@ test.describe("nurse preferences", () => {
       name: "ترجیحات ثبت‌شده من",
     });
     await expect(submitted.getByRole("listitem")).toHaveCount(1);
-    // «ترجیح من:» then the shared chip (code + name; OFF would read «استراحت»).
+    // «ترجیح من:» then the shared chip (code + label, e.g. «OFF استراحت»).
     await expect(day(page, SAT_2_ABAN)).toContainText("ترجیح من:");
     await expect(day(page, SAT_2_ABAN)).toContainText("Mصبح");
     await expect(summaryCount(page, "M")).toContainText("۱");

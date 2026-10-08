@@ -1,12 +1,13 @@
 import { CircleDashed } from "lucide-react";
 
 import { faNumber } from "@/features/calendar/jalali";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
 import {
   NO_PREFERENCE,
-  PREFERENCE_OPTIONS,
+  preferenceOptions,
   type PreferenceCounts,
 } from "./presentation";
 
@@ -20,9 +21,12 @@ export const SUMMARY_HEADING_ID = "preference-summary";
 export function PreferenceSummary({
   counts,
   className,
+  shiftLabels,
 }: {
   counts: PreferenceCounts;
   className?: string;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <section
@@ -36,14 +40,13 @@ export function PreferenceSummary({
         خلاصه ترجیحات این ماه
       </h2>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(6.75rem,1fr))] gap-1.5 text-xs">
-        {PREFERENCE_OPTIONS.map((o) => (
+        {preferenceOptions(shiftLabels).map((o) => (
           <li
             key={o.value}
             data-summary={o.value}
             className="flex min-h-8 items-center gap-1.5 rounded-md border px-1.5"
           >
-            {/* OFF's chip already reads «استراحت»; the others add their name. */}
-            <ShiftChip code={o.value} size="xs" icon label />
+            <ShiftChip code={o.value} size="xs" icon label={o.short} />
             <span className="ms-auto font-semibold tabular-nums">
               <span className="sr-only">: </span>
               {faNumber(counts.byValue[o.value])}

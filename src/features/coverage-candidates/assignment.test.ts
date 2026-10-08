@@ -22,6 +22,7 @@ import {
   needsOffConfirmation,
   offReplacementMessage,
 } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));
 vi.mock("@/features/auth/guards", () => ({ requireRequestContext: vi.fn() }));
@@ -70,15 +71,16 @@ const ctx = { actor: { trusted: true } };
 const render = (value: CoverageCandidates, pending = false) =>
   renderToStaticMarkup(
     createElement(CandidateList, {
+      shiftLabels: SHIFT_LABELS,
       data: value,
       assignControl: (candidate) =>
         createElement(
           Button,
           {
             disabled: pending,
-            "aria-label": `${candidateAssignLabel(value.shift)} برای ${candidate.displayName}`,
+            "aria-label": `${candidateAssignLabel(value.shift, SHIFT_LABELS)} برای ${candidate.displayName}`,
           },
-          candidateAssignLabel(value.shift),
+          candidateAssignLabel(value.shift, SHIFT_LABELS),
         ),
     }),
   );
@@ -266,6 +268,7 @@ describe("Candidate assignment presentation", () => {
     (shift) => {
       const html = renderToStaticMarkup(
         createElement(OffConfirmation, {
+          shiftLabels: SHIFT_LABELS,
           candidate: { ...person, dayStatus: "OFF_ASSIGNMENT" },
           date,
           shift,
@@ -275,9 +278,11 @@ describe("Candidate assignment presentation", () => {
         }),
       );
       expect(html).toContain("جایگزینی تصمیم OFF");
-      expect(html).toContain(offReplacementMessage(person, date, shift));
+      expect(html).toContain(
+        offReplacementMessage(person, date, shift, SHIFT_LABELS),
+      );
       expect(html).toContain("OFF حذف");
-      expect(html).toContain(candidateAssignLabel(shift));
+      expect(html).toContain(candidateAssignLabel(shift, SHIFT_LABELS));
       expect(html).toContain("انصراف");
       expect(html).toContain("aria-describedby=");
       expect(html).not.toContain(id);
@@ -286,6 +291,7 @@ describe("Candidate assignment presentation", () => {
   it("pending confirmation disables Cancel and Confirm", () => {
     const html = renderToStaticMarkup(
       createElement(OffConfirmation, {
+        shiftLabels: SHIFT_LABELS,
         candidate: person,
         date,
         shift: "N",
@@ -310,7 +316,7 @@ describe("Candidate assignment presentation", () => {
   });
   it("resolved target names completion and contains no more assignment controls", () => {
     const html = render({ ...data, revision: 19, status: "NO_SHORTAGE" });
-    expect(html).toContain(candidateCompletionMessage("N"));
+    expect(html).toContain(candidateCompletionMessage("N", SHIFT_LABELS));
     expect(html).toContain('role="status"');
     expect(html).not.toContain("<button");
   });

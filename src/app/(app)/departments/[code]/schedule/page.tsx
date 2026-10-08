@@ -61,6 +61,7 @@ import {
 } from "@/features/schedule-review/month-calendar";
 import { requireDepartmentPage } from "@/features/shell/department-page";
 import { PageHeader } from "@/features/shell/page-header";
+import { loadShiftLabels, type ShiftLabels } from "@/features/shifts/labels";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
 export const metadata: Metadata = { title: "برنامه بخش" };
@@ -72,6 +73,7 @@ function dayEditor(
   day: DayReview,
   schedule: { id: string; revision: number; period: DatePeriod },
   links: { previous: DayLink | null; next: DayLink | null },
+  shiftLabels: ShiftLabels,
 ) {
   if (!day.edit.allowed) return undefined;
   const flagged = flaggedNurses(day);
@@ -99,6 +101,7 @@ function dayEditor(
       }))}
       previousDayHref={links.previous?.href ?? null}
       nextDayHref={links.next?.href ?? null}
+      shiftLabels={shiftLabels}
     />
   );
 }
@@ -129,6 +132,7 @@ export default async function DepartmentSchedulePage({
 }: PageProps<"/departments/[code]/schedule">) {
   const department = await requireDepartmentPage(params, "department.manage");
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const { schedule, day, month, filter } = await searchParams;
   // `?filter=undecided|coverage|…` marks the days of one category (D104).
   const activeFilter = isDayFilter(filter) ? filter : null;
@@ -252,6 +256,7 @@ export default async function DepartmentSchedulePage({
           shift: n.shift,
         }))}
         reasons={await getAdjustmentReasons(ctx)}
+        shiftLabels={shiftLabels}
       />
     ) : undefined;
 
@@ -314,6 +319,7 @@ export default async function DepartmentSchedulePage({
           dayHref={here}
           selected={review.day?.date ?? null}
           filter={activeFilter}
+          shiftLabels={shiftLabels}
         />
       </div>
       <div className="mt-6">
@@ -348,9 +354,11 @@ export default async function DepartmentSchedulePage({
                 coverage={review.day.coverage}
                 period={review.month.period}
                 revision={review.month.revision}
+                shiftLabels={shiftLabels}
               />
             }
             day={review.day}
+            shiftLabels={shiftLabels}
             adjustment={adjustment}
             directSwap={
               (review.day.edit.allowed ||
@@ -363,6 +371,7 @@ export default async function DepartmentSchedulePage({
                   date={review.day.date}
                   nurses={review.day.roster}
                   reasons={await getAdjustmentReasons(ctx)}
+                  shiftLabels={shiftLabels}
                 />
               )
             }
@@ -375,6 +384,7 @@ export default async function DepartmentSchedulePage({
                 period: review.month.period,
               },
               dayLinks,
+              shiftLabels,
             )}
           />
         </DayDetailDialog>

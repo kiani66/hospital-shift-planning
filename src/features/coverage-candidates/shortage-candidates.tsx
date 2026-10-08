@@ -9,7 +9,7 @@ import type { DatePeriod } from "@/domain/shared/period";
 import { COVERAGE_PERIODS } from "@/domain/shifts/shift-type";
 import { Button } from "@/components/ui/button";
 import { FindingItem } from "@/features/schedule-review/finding-item";
-import { COVERAGE_PERIOD_NAMES } from "@/features/shifts/catalog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import {
   readCoverageCandidatesAction,
   assignCoverageCandidateAction,
@@ -39,12 +39,15 @@ export function ShortageCandidates({
   coverage,
   period,
   revision,
+  shiftLabels,
 }: {
   scheduleId: string;
   date: IsoDate;
   coverage: DayReview["coverage"];
   period: DatePeriod;
   revision: number;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const id = useId();
   const [opened, setOpened] = useState<readonly CandidateShift[]>([]);
@@ -147,7 +150,11 @@ export function ShortageCandidates({
           outcome.ok
             ? {
                 error: false,
-                message: candidateSavedMessage(shift, candidate.displayName),
+                message: candidateSavedMessage(
+                  shift,
+                  candidate.displayName,
+                  shiftLabels,
+                ),
               }
             : {
                 error: true,
@@ -188,7 +195,12 @@ export function ShortageCandidates({
           {!!feedback.findings?.length && (
             <ul className="flex flex-col gap-2">
               {feedback.findings.map((finding, index) => (
-                <FindingItem key={index} finding={finding} linked={false} />
+                <FindingItem
+                  key={index}
+                  finding={finding}
+                  linked={false}
+                  shiftLabels={shiftLabels}
+                />
               ))}
             </ul>
           )}
@@ -218,7 +230,7 @@ export function ShortageCandidates({
                   });
               }}
             >
-              افراد برای کمبود {COVERAGE_PERIOD_NAMES[shift]} ({shift})
+              افراد برای کمبود {shiftLabels[shift]} ({shift})
             </Button>
             <div
               id={`${id}-${shift}`}
@@ -236,10 +248,11 @@ export function ShortageCandidates({
                       )}
                     <CandidateList
                       data={result.data}
+                      shiftLabels={shiftLabels}
                       assignControl={(candidate) => (
                         <Button
                           disabled={pending}
-                          aria-label={`${candidateAssignLabel(shift)} برای ${candidate.displayName}`}
+                          aria-label={`${candidateAssignLabel(shift, shiftLabels)} برای ${candidate.displayName}`}
                           onClick={() => {
                             if (busy.current) return;
                             if (needsOffConfirmation(candidate))
@@ -253,7 +266,7 @@ export function ShortageCandidates({
                         >
                           {pending
                             ? "در حال انجام…"
-                            : candidateAssignLabel(shift)}
+                            : candidateAssignLabel(shift, shiftLabels)}
                         </Button>
                       )}
                     />
@@ -282,6 +295,7 @@ export function ShortageCandidates({
         <OffConfirmation
           {...confirmation}
           date={date}
+          shiftLabels={shiftLabels}
           pending={pending}
           onCancel={() => {
             if (!busy.current) setConfirmation(null);

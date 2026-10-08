@@ -11,7 +11,7 @@ import type {
   AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * Wording of the Head Nurse's assignment editing. Pure: the server action
@@ -78,24 +78,20 @@ export const NETWORK_FAILURE: EditFailure = {
 /** The id of a nurse's row in the day editor; findings link to it. */
 export const nurseRowId = (userId: string) => `nurse-${userId}`;
 
-/** "صبح (M)", or "تعیین‌نشده". */
-export const shiftWord = (shift: AssignmentCode | null) =>
-  shift === null
-    ? "تعیین‌نشده"
-    : shift === "OFF"
-      ? "استراحت"
-      : `${ASSIGNMENT_PRESENTATION[shift].name} (${shift})`;
-
 /**
  * One sentence for a saved edit. `names` maps nurse ids to display names;
- * `dayLabel` names the day when the edit is on one day.
+ * `dayLabel` names the day when the edit is on one day; `labels` names the
+ * shifts (`shift_types`).
  */
 export function savedMessage(
   changes: readonly AssignmentChange[],
   names: ReadonlyMap<string, string>,
   dayLabel: (date: string) => string,
+  labels: ShiftLabels,
   undo = false,
 ): string {
+  const shiftWord = (shift: AssignmentCode | null) =>
+    assignmentName(shift, labels);
   if (changes.length === 0) return "تغییری لازم نبود؛ همین مقدار ثبت شده بود.";
   if (undo)
     return `آخرین تغییر بازگردانده شد (${faNumber(changes.length)} مورد).`;

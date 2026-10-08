@@ -6,7 +6,10 @@ import type { DatePeriod } from "@/domain/shared/period";
 import type { IsoDate } from "@/domain/shared/dates";
 import { monthGrid } from "@/features/calendar/month-grid";
 import { LinkPending } from "@/features/schedule-review/link-pending";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import {
+  ASSIGNMENT_PRESENTATION,
+  type ShiftLabels,
+} from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +43,7 @@ export function ShiftCalendar({
   selected,
   label,
   dayHref,
+  shiftLabels,
 }: {
   period: DatePeriod;
   days: readonly MyShiftDay[];
@@ -47,6 +51,7 @@ export function ShiftCalendar({
   selected: IsoDate | null;
   label: string;
   dayHref: (date: IsoDate) => Route;
+  shiftLabels: ShiftLabels;
 }) {
   const grid = monthGrid(period, days);
   const PendingIcon = CHANGE_PENDING.icon;
@@ -97,7 +102,9 @@ export function ShiftCalendar({
                         href={dayHref(cell.date)}
                         scroll={false}
                         prefetch={false}
-                        aria-label={dayCellLabel(day, { selected: isSelected })}
+                        aria-label={dayCellLabel(day, shiftLabels, {
+                          selected: isSelected,
+                        })}
                         aria-current={cell.date === today ? "date" : undefined}
                         data-selected={isSelected || undefined}
                         data-shifts={day.entries.map((e) => e.shift).join(" ")}
@@ -153,7 +160,7 @@ export function ShiftCalendar({
                                   ASSIGNMENT_PRESENTATION[e.shift].accentClass,
                                 )}
                               >
-                                {ASSIGNMENT_PRESENTATION[e.shift].name}
+                                {shiftLabels[e.shift]}
                               </span>
                             </span>
                           ))}

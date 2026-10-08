@@ -87,7 +87,7 @@ test.describe("my shifts", () => {
     ).toBeVisible();
     await expect(
       calendar(page).getByRole("link", {
-        name: "یکشنبه ۳ آبان ۱۴۰۵: استراحت، موقت",
+        name: "یکشنبه ۳ آبان ۱۴۰۵: استراحت (OFF)، موقت",
       }),
     ).toBeVisible();
 

@@ -20,6 +20,7 @@ import {
   formatJalaliDateTime,
   formatJalaliRange,
 } from "@/features/calendar/jalali";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 
@@ -48,9 +49,12 @@ import { RequestActionButton } from "./request-action-button";
 export function RequestsView({
   options,
   requests,
+  shiftLabels,
 }: {
   options: ChangeRequestOptions;
   requests: readonly MyChangeRequestItem[];
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const toAnswer = requests.filter(
     (r) => r.role === "COUNTERPART" && r.status === "PENDING",
@@ -74,7 +78,7 @@ export function RequestsView({
           <ul className="flex flex-col gap-3">
             {toAnswer.map((r) => (
               <li key={r.id}>
-                <RequestCard request={r} />
+                <RequestCard request={r} shiftLabels={shiftLabels} />
               </li>
             ))}
           </ul>
@@ -133,7 +137,11 @@ export function RequestsView({
                         className="flex flex-wrap items-center justify-between gap-3 py-3"
                       >
                         <span className="flex items-center gap-3">
-                          <ShiftChip code={a.shift} size="sm" label />
+                          <ShiftChip
+                            code={a.shift}
+                            size="sm"
+                            label={shiftLabels[a.shift]}
+                          />
                           <span className="text-sm font-medium">
                             {dateLabel}
                           </span>
@@ -150,6 +158,7 @@ export function RequestsView({
                             shift={a.shift}
                             reasons={options.reasons}
                             swapCandidates={s.swapCandidates[a.date] ?? []}
+                            shiftLabels={shiftLabels}
                           />
                         )}
                       </li>
@@ -182,7 +191,7 @@ export function RequestsView({
           <ul className="flex flex-col gap-3">
             {mine.map((r) => (
               <li key={r.id}>
-                <RequestCard request={r} />
+                <RequestCard request={r} shiftLabels={shiftLabels} />
               </li>
             ))}
           </ul>
@@ -203,7 +212,7 @@ export function RequestsView({
           <ul className="flex flex-col gap-3">
             {answered.map((r) => (
               <li key={r.id}>
-                <RequestCard request={r} />
+                <RequestCard request={r} shiftLabels={shiftLabels} />
               </li>
             ))}
           </ul>
@@ -213,7 +222,13 @@ export function RequestsView({
   );
 }
 
-function RequestCard({ request: r }: { request: MyChangeRequestItem }) {
+function RequestCard({
+  request: r,
+  shiftLabels,
+}: {
+  request: MyChangeRequestItem;
+  shiftLabels: ShiftLabels;
+}) {
   const status = REQUEST_STATUS[r.status];
   const title = `${REQUEST_TYPE_LABELS[r.type]} · ${formatJalaliDate(r.date, { weekday: true })}`;
   const headingId = `request-${r.id}`;
@@ -238,7 +253,9 @@ function RequestCard({ request: r }: { request: MyChangeRequestItem }) {
         </div>
       </div>
 
-      <p className="text-sm leading-relaxed">{requestSummary(r)}</p>
+      <p className="text-sm leading-relaxed">
+        {requestSummary(r, shiftLabels)}
+      </p>
 
       <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
         <dt className="text-muted-foreground">برنامه</dt>
@@ -247,12 +264,20 @@ function RequestCard({ request: r }: { request: MyChangeRequestItem }) {
         </dd>
         <dt className="text-muted-foreground">شیفت</dt>
         <dd className="flex flex-wrap items-center gap-1.5">
-          <ShiftChip code={r.requesterShift} size="xs" label />
+          <ShiftChip
+            code={r.requesterShift}
+            size="xs"
+            label={shiftLabels[r.requesterShift]}
+          />
           {r.targetShift && (
             <>
               <span aria-hidden="true">←</span>
               <span className="sr-only">به</span>
-              <ShiftChip code={r.targetShift} size="xs" label />
+              <ShiftChip
+                code={r.targetShift}
+                size="xs"
+                label={shiftLabels[r.targetShift]}
+              />
             </>
           )}
         </dd>
@@ -318,7 +343,7 @@ function RequestCard({ request: r }: { request: MyChangeRequestItem }) {
               variant="default"
               triggerLabel="موافقت با جابه‌جایی"
               title="موافقت با جابه‌جایی"
-              description={`${requestSummary(r)} با موافقت شما، درخواست برای سرپرستار قابل بررسی می‌شود؛ تا او اعمالش نکند، برنامه تغییری نمی‌کند.`}
+              description={`${requestSummary(r, shiftLabels)} با موافقت شما، درخواست برای سرپرستار قابل بررسی می‌شود؛ تا او اعمالش نکند، برنامه تغییری نمی‌کند.`}
               confirmLabel="بله، موافقم"
             />
           )}

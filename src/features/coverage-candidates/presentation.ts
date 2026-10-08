@@ -11,7 +11,7 @@ import type { Violation } from "@/domain/rules/violation";
 import type { DatePeriod } from "@/domain/shared/period";
 import { formatJalaliDate } from "@/features/calendar/jalali";
 import { editFailure } from "@/features/schedule-editing/presentation";
-import { COVERAGE_PERIOD_NAMES } from "@/features/shifts/catalog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 import type {
   CandidateDayStatus,
@@ -22,12 +22,23 @@ export const candidateDayLabel: Record<CandidateDayStatus, string> = {
   UNASSIGNED: "شیفت روز: تعیین‌نشده",
   OFF_ASSIGNMENT: "شیفت روز: OFF — برای تخصیص شیفت، تصمیم OFF باید تغییر کند.",
 };
-export const candidatePreferenceLabel: Record<CandidatePreference, string> = {
-  SAME_SHIFT: "ترجیح: همین شیفت",
-  NONE: "ترجیح: ثبت نشده",
-  DIFFERENT_SHIFT: "ترجیح: شیفت دیگر",
-  OFF_PREFERENCE: "ترجیح: OFF — درخواست استراحت؛ مانع انتخاب نیست.",
-};
+export function candidatePreferenceLabel(
+  preference: CandidatePreference,
+  labels: ShiftLabels,
+): string {
+  switch (preference) {
+    case "SAME_SHIFT":
+      return "ترجیح: همین شیفت";
+    case "NONE":
+      return "ترجیح: ثبت نشده";
+    case "DIFFERENT_SHIFT":
+      return "ترجیح: شیفت دیگر";
+    case "OFF_PREFERENCE":
+      return `ترجیح: OFF — درخواست ${labels.OFF}؛ مانع انتخاب نیست.`;
+    default:
+      return preference satisfies never;
+  }
+}
 export const candidateQueryError = "دریافت افراد ممکن نشد. دوباره تلاش کنید.";
 export const candidateAccessError =
   "برنامه در دسترس نیست یا اجازه مشاهده آن را ندارید.";
@@ -41,18 +52,26 @@ export const needsOffConfirmation = (
 ) =>
   candidate.dayStatus === "OFF_ASSIGNMENT" || candidate.requiresOffReplacement;
 
-export const candidateAssignLabel = (shift: CandidateShift) =>
-  `تخصیص شیفت ${COVERAGE_PERIOD_NAMES[shift]}`;
-export const candidateCompletionMessage = (shift: CandidateShift) =>
-  `پوشش موردنیاز شیفت ${COVERAGE_PERIOD_NAMES[shift]} تکمیل شد.`;
-export const candidateSavedMessage = (shift: CandidateShift, name: string) =>
-  `شیفت ${COVERAGE_PERIOD_NAMES[shift]} برای «${name}» ثبت شد.`;
+export const candidateAssignLabel = (
+  shift: CandidateShift,
+  labels: ShiftLabels,
+) => `تخصیص شیفت ${labels[shift]}`;
+export const candidateCompletionMessage = (
+  shift: CandidateShift,
+  labels: ShiftLabels,
+) => `پوشش موردنیاز شیفت ${labels[shift]} تکمیل شد.`;
+export const candidateSavedMessage = (
+  shift: CandidateShift,
+  name: string,
+  labels: ShiftLabels,
+) => `شیفت ${labels[shift]} برای «${name}» ثبت شد.`;
 export const offReplacementMessage = (
   candidate: AvailableCandidateView,
   date: IsoDate,
   shift: CandidateShift,
+  labels: ShiftLabels,
 ) =>
-  `«${candidate.displayName}» در ${formatJalaliDate(date)} OFF است. با ادامه، تصمیم OFF حذف و شیفت ${COVERAGE_PERIOD_NAMES[shift]} جایگزین می‌شود.`;
+  `«${candidate.displayName}» در ${formatJalaliDate(date)} OFF است. با ادامه، تصمیم OFF حذف و شیفت ${labels[shift]} جایگزین می‌شود.`;
 
 export type CandidateFailureKind =
   | "NO_SHORTAGE"

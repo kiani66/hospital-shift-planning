@@ -5,7 +5,7 @@ import type { ReasonView } from "@/application/change-requests/queries";
 import type { ReviewRosterNurse } from "@/application/schedules/review";
 import { Button } from "@/components/ui/button";
 import type { RequestFormState } from "@/features/change-requests/actions";
-import { assignmentName } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 import { directSwapAction } from "./actions";
 
 const fieldClass =
@@ -17,12 +17,14 @@ export function DirectSwapForm({
   date,
   nurses,
   reasons,
+  shiftLabels,
 }: {
   scheduleId: string;
   revision: number;
   date: string;
   nurses: readonly ReviewRosterNurse[];
   reasons: readonly ReasonView[];
+  shiftLabels: ShiftLabels;
 }) {
   const [state, action, pending] = useActionState(directSwapAction, {
     status: "idle",
@@ -59,7 +61,7 @@ export function DirectSwapForm({
               </option>
               {decided.map((n) => (
                 <option key={n.userId} value={n.userId}>
-                  {n.displayName} — {assignmentName(n.shift)}
+                  {n.displayName} — {assignmentName(n.shift, shiftLabels)}
                 </option>
               ))}
             </select>

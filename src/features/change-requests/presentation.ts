@@ -6,8 +6,12 @@ import type {
   ChangeRequestType,
   SwapConsentStatus,
 } from "@/domain/change-requests/model";
-import type { AssignmentCode, ShiftCode } from "@/domain/shifts/shift-type";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import {
+  isWorkingShift,
+  type AssignmentCode,
+  type ShiftCode,
+} from "@/domain/shifts/shift-type";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * Persian wording of Shift Change Requests (Phase 9). The server decides;
@@ -56,26 +60,37 @@ export const REJECTION_LABELS: Record<ChangeRequestRejection, string> = {
   COUNTERPART_DECLINED: "همکار با جابه‌جایی موافقت نکرد.",
 };
 
-const shift = (code: AssignmentCode | null) =>
+/**
+ * A decision inside a sentence: "شیفت صبح" for a working shift, the bare
+ * label for one without hours (OFF, "استراحت"), or "تعیین‌نشده".
+ */
+export const decisionPhrase = (
+  code: AssignmentCode | null,
+  labels: ShiftLabels,
+) =>
   code === null
     ? "تعیین‌نشده"
-    : code === "OFF"
-      ? "استراحت"
-      : `شیفت ${ASSIGNMENT_PRESENTATION[code].name}`;
+    : isWorkingShift(code)
+      ? `شیفت ${labels[code]}`
+      : labels[code];
 
 /**
  * One sentence of what was asked, from the nurse's own point of view
  * (`role`), with the shifts the request was made against.
  */
-export function requestSummary(request: {
-  readonly type: ChangeRequestType;
-  readonly requesterShift: AssignmentCode;
-  readonly targetShift: ShiftCode | null;
-  readonly counterpart: { readonly displayName: string } | null;
-  readonly counterpartShift: AssignmentCode | null;
-  readonly requester: { readonly displayName: string };
-  readonly role?: "REQUESTER" | "COUNTERPART";
-}): string {
+export function requestSummary(
+  request: {
+    readonly type: ChangeRequestType;
+    readonly requesterShift: AssignmentCode;
+    readonly targetShift: ShiftCode | null;
+    readonly counterpart: { readonly displayName: string } | null;
+    readonly counterpartShift: AssignmentCode | null;
+    readonly requester: { readonly displayName: string };
+    readonly role?: "REQUESTER" | "COUNTERPART";
+  },
+  labels: ShiftLabels,
+): string {
+  const shift = (code: AssignmentCode | null) => decisionPhrase(code, labels);
   const mine = shift(request.requesterShift);
   switch (request.type) {
     case "UNAVAILABLE":

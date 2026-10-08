@@ -8,7 +8,7 @@ import {
   type AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 export interface DayOption {
@@ -32,6 +32,7 @@ export function RangeForm({
   rangeEnds,
   onApply,
   onCancel,
+  shiftLabels,
 }: {
   id: string;
   nurseName: string;
@@ -40,6 +41,7 @@ export function RangeForm({
   rangeEnds: readonly DayOption[];
   onApply: (shift: AssignmentCode | null, dates: IsoDate[]) => void;
   onCancel: () => void;
+  shiftLabels: ShiftLabels;
 }) {
   const [shift, setShift] = useState<AssignmentCode | "NONE">(
     initialShift ?? "M",
@@ -53,7 +55,7 @@ export function RangeForm({
   const options = [
     ...ASSIGNMENT_CODES.map((code) => ({
       value: code as AssignmentCode | "NONE",
-      label: `${ASSIGNMENT_PRESENTATION[code].name} (${code})`,
+      label: assignmentName(code, shiftLabels),
     })),
     { value: "NONE" as const, label: "تعیین‌نشده" },
   ];

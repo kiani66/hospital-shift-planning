@@ -43,14 +43,14 @@ import {
   type AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import {
-  COVERAGE_PERIOD_NAMES,
+  ASSIGNMENT_PRESENTATION,
   SHIFT_PRESENTATION,
+  type ShiftLabels,
 } from "@/features/shifts/catalog";
 import { staffingRangeLabel } from "@/features/schedule-review/presentation";
 import { faNumber } from "@/features/calendar/jalali";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import { PreferenceContext } from "@/features/schedule-review/preference-alignment";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 import type { DayOption } from "./range-form";
@@ -68,7 +68,7 @@ import {
   type ShiftFilter,
 } from "./presentation";
 import { RangeForm } from "./range-form";
-import { editorKeyCommand, SHORTCUT_HELP } from "./shortcuts";
+import { editorKeyCommand, shortcutHelp } from "./shortcuts";
 
 /** A rostered nurse on the edited day (server data; `shift` is the stored one). */
 export interface EditorNurse {
@@ -144,6 +144,7 @@ export function DayEditor({
   coverage,
   previousDayHref,
   nextDayHref,
+  shiftLabels,
 }: {
   scheduleId: string;
   /** The schedule revision the page was rendered with. */
@@ -161,6 +162,8 @@ export function DayEditor({
   }[];
   previousDayHref: Route | null;
   nextDayHref: Route | null;
+  /** Descriptive shift names (`shift_types.label`); controls show the codes. */
+  shiftLabels: ShiftLabels;
 }) {
   const router = useRouter();
   const ids = { list: useId(), search: useId(), status: useId() };
@@ -199,7 +202,7 @@ export function DayEditor({
     () => new Map(nurses.map((n) => [n.userId, n.displayName])),
     [nurses],
   );
-  const labels = useMemo(
+  const dayLabels = useMemo(
     () =>
       new Map<string, string>([
         [date, dayLabel],
@@ -237,7 +240,8 @@ export function DayEditor({
             message: savedMessage(
               result.changes,
               names,
-              (d) => labels.get(d) ?? d,
+              (d) => dayLabels.get(d) ?? d,
+              shiftLabels,
               undo,
             ),
             undo: result.changes.length > 0 ? result.changes : null,
@@ -408,7 +412,7 @@ export function DayEditor({
     { value: "UNASSIGNED", label: "تعیین‌نشده" },
     ...ASSIGNMENT_CODES.map((code) => ({
       value: code,
-      label: ASSIGNMENT_PRESENTATION[code].name,
+      label: shiftLabels[code],
       code,
     })),
   ];
@@ -450,7 +454,7 @@ export function DayEditor({
               وقتی یکی از دکمه‌های شیفت یک پرستار انتخاب (فوکوس) شده است:
             </p>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
-              {SHORTCUT_HELP.map((s) => (
+              {shortcutHelp(shiftLabels).map((s) => (
                 <div key={s.keys} className="contents">
                   <dt dir="ltr" className="text-end font-mono font-semibold">
                     {s.keys}
@@ -463,7 +467,11 @@ export function DayEditor({
         </details>
       </div>
 
-      <LiveCoverage coverage={coverage} covered={live} />
+      <LiveCoverage
+        coverage={coverage}
+        covered={live}
+        shiftLabels={shiftLabels}
+      />
 
       <div className="flex flex-col gap-2 md:flex-row md:items-start">
         <div className="flex flex-wrap items-center gap-1">
@@ -599,6 +607,7 @@ export function DayEditor({
               tabCol={tabStop?.id === n.userId ? tabStop.col : null}
               rangeOpen={rangeFor === n.userId}
               rangeEnds={rangeEnds}
+              shiftLabels={shiftLabels}
               registerCell={registerCell}
               onFocusCell={(col) => setActive({ id: n.userId, col })}
               onAssign={(shift) => assign(n.userId, shift)}
@@ -703,6 +712,7 @@ function NurseRow({
   onToggleRange,
   onApplyRange,
   date,
+  shiftLabels,
 }: {
   nurse: EditorNurse;
   /** The shift shown: the stored one or a pending edit. */
@@ -718,6 +728,7 @@ function NurseRow({
   onToggleRange: () => void;
   onApplyRange: (shift: AssignmentCode | null, dates: IsoDate[]) => void;
   date: IsoDate;
+  shiftLabels: ShiftLabels;
 }) {
   const rangeId = useId();
   const preferenceId = useId();
@@ -786,6 +797,7 @@ function NurseRow({
             id={preferenceId}
             preference={nurse.preference}
             shift={shift}
+            shiftLabels={shiftLabels}
           />
         </div>
 
@@ -803,11 +815,7 @@ function NurseRow({
                 {...cellProps(col)}
                 aria-pressed={selected}
                 aria-describedby={preferenceId}
-                aria-label={
-                  code === "OFF"
-                    ? ASSIGNMENT_PRESENTATION[code].name
-                    : `${ASSIGNMENT_PRESENTATION[code].name} (${code})`
-                }
+                aria-label={`${shiftLabels[code]} (${code})`}
                 onClick={() => onAssign(code)}
                 className={cn(
                   control,
@@ -820,9 +828,7 @@ function NurseRow({
                   selected && pending && "opacity-70",
                 )}
               >
-                <span dir={code === "OFF" ? undefined : "ltr"}>
-                  {code === "OFF" ? "استراحت" : code}
-                </span>
+                <span dir="ltr">{code}</span>
               </button>
             );
           })}
@@ -869,6 +875,7 @@ function NurseRow({
           rangeEnds={rangeEnds}
           onApply={onApplyRange}
           onCancel={onToggleRange}
+          shiftLabels={shiftLabels}
         />
       )}
     </li>
@@ -884,12 +891,14 @@ function NurseRow({
 function LiveCoverage({
   coverage,
   covered,
+  shiftLabels,
 }: {
   coverage: readonly {
     readonly period: BaseShift;
     readonly bounds: StaffingBounds | null;
   }[];
   covered: Readonly<Record<BaseShift, number>>;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     // A polite live region (not role=status: the save message is the status).
@@ -924,7 +933,7 @@ function LiveCoverage({
               >
                 {period}
               </span>
-              {COVERAGE_PERIOD_NAMES[period]}
+              {shiftLabels[period]}
             </span>
             <span className="tabular-nums">
               <span className="text-base font-semibold">

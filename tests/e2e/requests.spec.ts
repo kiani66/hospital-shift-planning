@@ -181,7 +181,7 @@ test.describe("nurse change requests", () => {
     await dialog.getByRole("radio", { name: /^جابه‌جایی با همکار/ }).check();
     await dialog
       .getByLabel("همکار برای جابه‌جایی")
-      .selectOption({ label: `${partner} — استراحت` });
+      .selectOption({ label: `${partner} — استراحت (OFF)` });
     await dialog.getByLabel("علت").selectOption({ label: "بیماری" });
     await dialog.getByRole("button", { name: "ثبت درخواست" }).click();
     await expect(dialog).toBeHidden();

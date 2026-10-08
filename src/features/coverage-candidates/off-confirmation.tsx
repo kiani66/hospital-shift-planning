@@ -4,6 +4,7 @@ import type { IsoDate } from "@/domain/shared/dates";
 import type { CandidateShift } from "@/domain/candidates/evaluate-candidates";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { candidateAssignLabel, offReplacementMessage } from "./presentation";
 
 export function OffConfirmation({
@@ -13,6 +14,7 @@ export function OffConfirmation({
   pending,
   onCancel,
   onConfirm,
+  shiftLabels,
 }: {
   candidate: AvailableCandidateView;
   date: IsoDate;
@@ -20,12 +22,13 @@ export function OffConfirmation({
   pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <Dialog
       open
       title="جایگزینی تصمیم OFF"
-      description={offReplacementMessage(candidate, date, shift)}
+      description={offReplacementMessage(candidate, date, shift, shiftLabels)}
       onClose={onCancel}
       preventClose={pending}
     >
@@ -39,7 +42,7 @@ export function OffConfirmation({
           انصراف
         </Button>
         <Button disabled={pending} onClick={onConfirm}>
-          {pending ? "در حال تخصیص…" : candidateAssignLabel(shift)}
+          {pending ? "در حال تخصیص…" : candidateAssignLabel(shift, shiftLabels)}
         </Button>
       </div>
     </Dialog>

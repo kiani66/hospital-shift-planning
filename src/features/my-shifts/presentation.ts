@@ -21,7 +21,7 @@ import {
   type AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 
 export interface PublicationPresentation {
   /** Compact label (badges, cell names). */
@@ -133,18 +133,13 @@ export const shiftDurationLabel = (code: AssignmentCode) =>
     isWorkingShift(code) ? shiftDurationMinutes(SHIFT_TYPES[code]) : 0,
   );
 
-/** "صبح (M)": the Persian name with the code, for text-only places. */
-export const shiftName = (code: AssignmentCode) =>
-  code === "OFF"
-    ? "استراحت"
-    : `${ASSIGNMENT_PRESENTATION[code].name} (${code})`;
-
 /**
  * The calendar cell's accessible name: the date, the shift(s) or "no shift",
  * and how settled each one is, e.g. «سه‌شنبه ۴ آبان ۱۴۰۵: شب (N)، موقت».
  */
 export function dayCellLabel(
   day: Pick<MyShiftDay, "date" | "entries" | "changePending">,
+  labels: ShiftLabels,
   options: { selected?: boolean } = {},
 ): string {
   const date = formatJalaliDate(day.date, { weekday: true });
@@ -153,7 +148,7 @@ export function dayCellLabel(
       ? ["تعیین‌نشده"]
       : day.entries.map((e) =>
           [
-            shiftName(e.shift),
+            assignmentName(e.shift, labels),
             PUBLICATION_PRESENTATION[e.publication].label,
             ...(e.changePending ? [CHANGE_PENDING.label] : []),
           ].join("، "),

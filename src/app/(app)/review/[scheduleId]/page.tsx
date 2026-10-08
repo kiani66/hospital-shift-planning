@@ -8,6 +8,7 @@ import { getSupervisorScheduleReview } from "@/application/schedules/supervisor-
 import { addDays, type IsoDate } from "@/domain/shared/dates";
 import { isInPeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import {
   faNumber,
   formatJalaliDate,
@@ -43,6 +44,7 @@ export default async function SupervisorReviewPage({
   searchParams,
 }: PageProps<"/review/[scheduleId]">) {
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const { scheduleId } = await params;
   const { day } = await searchParams;
   const review = await getSupervisorScheduleReview(ctx, {
@@ -100,6 +102,7 @@ export default async function SupervisorReviewPage({
         <SupervisorWorkflowNotice workflow={workflow} />
         <MonthSummary month={month} />
         <MonthCalendar
+          shiftLabels={shiftLabels}
           month={month}
           today={today}
           dayHref={here}
@@ -116,8 +119,10 @@ export default async function SupervisorReviewPage({
         >
           {/* No editor: the Supervisor never changes assignments. */}
           <DayDetail
+            shiftLabels={shiftLabels}
             candidates={
               <ShortageCandidates
+                shiftLabels={shiftLabels}
                 key={`${scheduleId}-${review.day.date}`}
                 scheduleId={scheduleId}
                 date={review.day.date}

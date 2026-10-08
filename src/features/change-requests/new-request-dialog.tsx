@@ -22,12 +22,16 @@ import {
   type ShiftCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 
 import { createChangeRequestAction, type RequestFormState } from "./actions";
-import { REQUEST_TYPE_DESCRIPTIONS, REQUEST_TYPE_LABELS } from "./presentation";
+import {
+  REQUEST_TYPE_DESCRIPTIONS,
+  REQUEST_TYPE_LABELS,
+  decisionPhrase,
+} from "./presentation";
 
 const FIELD_CLASS =
   "min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none aria-invalid:border-destructive";
@@ -55,6 +59,7 @@ export function NewRequestDialog({
   shift,
   reasons,
   swapCandidates,
+  shiftLabels,
 }: {
   scheduleId: string;
   date: IsoDate;
@@ -62,6 +67,8 @@ export function NewRequestDialog({
   shift: AssignmentCode;
   reasons: readonly ReasonView[];
   swapCandidates: readonly SwapCandidate[];
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<ChangeRequestType>(
@@ -131,7 +138,7 @@ export function NewRequestDialog({
         description={
           <span className="flex flex-wrap items-center gap-2">
             {dateLabel}
-            <ShiftChip code={shift} size="xs" label />
+            <ShiftChip code={shift} size="xs" label={shiftLabels[shift]} />
           </span>
         }
       >
@@ -198,9 +205,13 @@ export function NewRequestDialog({
                       checked={targetShift === code}
                       onChange={() => setTargetShift(code)}
                       className="size-4 accent-primary"
-                      aria-label={`${code} — ${ASSIGNMENT_PRESENTATION[code].name}`}
+                      aria-label={`${code} — ${shiftLabels[code]}`}
                     />
-                    <ShiftChip code={code} size="xs" label />
+                    <ShiftChip
+                      code={code}
+                      size="xs"
+                      label={shiftLabels[code]}
+                    />
                   </label>
                 ))}
               </div>
@@ -237,12 +248,7 @@ export function NewRequestDialog({
                   </option>
                   {swapCandidates.map((c) => (
                     <option key={c.userId} value={c.userId}>
-                      {c.displayName} —{" "}
-                      {c.shift === null
-                        ? "تعیین‌نشده"
-                        : c.shift === "OFF"
-                          ? "استراحت"
-                          : `شیفت ${ASSIGNMENT_PRESENTATION[c.shift].name} (${c.shift})`}
+                      {`${c.displayName} — ${decisionPhrase(c.shift, shiftLabels)}${c.shift ? ` (${c.shift})` : ""}`}
                     </option>
                   ))}
                 </select>

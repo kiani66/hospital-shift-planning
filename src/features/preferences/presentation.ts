@@ -23,7 +23,11 @@ import {
   toJalali,
   type JalaliMonth,
 } from "@/features/calendar/jalali";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import {
+  ASSIGNMENT_PRESENTATION,
+  shiftFullName,
+  type ShiftLabels,
+} from "@/features/shifts/catalog";
 
 /**
  * Persian wording and calendar layout of the nurse's preference page. Dates
@@ -51,31 +55,39 @@ export interface PreferenceOption {
 
 /**
  * The approved preference values in display order, from the shared shift
- * presentation (`ASSIGNMENT_PRESENTATION`). `OFF` exists in the persisted model as
- * "leave / unavailable" and is offered as a rest request (D35); it is a
- * preference here, not an assignment.
+ * presentation (`ASSIGNMENT_PRESENTATION`) and the `shift_types` labels.
+ * `OFF` exists in the persisted model as "leave / unavailable" and is
+ * offered as a rest request (D35); it is a preference here, not an
+ * assignment.
  */
-export const PREFERENCE_OPTIONS: readonly PreferenceOption[] =
+export const preferenceOptions = (
+  labels: ShiftLabels,
+): readonly PreferenceOption[] =>
   PREFERENCE_VALUES.map((value) => {
     const shift = ASSIGNMENT_PRESENTATION[value];
     return {
       value,
       code: shift.code,
-      short: shift.name,
-      label: shift.fullName,
+      short: labels[value],
+      label: shiftFullName(value, labels),
       className: shift.tokenClass,
       icon: shift.icon,
     };
   });
 
-export const preferenceOption = (value: PreferenceValue): PreferenceOption =>
-  PREFERENCE_OPTIONS.find((o) => o.value === value)!;
+export const preferenceOption = (
+  value: PreferenceValue,
+  labels: ShiftLabels,
+): PreferenceOption =>
+  preferenceOptions(labels).find((o) => o.value === value)!;
 
 export const NO_PREFERENCE = "بدون ترجیح";
 
 /** «ترجیح من: صبح», or «بدون ترجیح»: once per card, never repeated. */
-export const myPreferenceText = (value: PreferenceValue | null): string =>
-  value === null ? NO_PREFERENCE : `ترجیح من: ${preferenceOption(value).short}`;
+export const myPreferenceText = (
+  value: PreferenceValue | null,
+  labels: ShiftLabels,
+): string => (value === null ? NO_PREFERENCE : `ترجیح من: ${labels[value]}`);
 
 /** Why a day is read-only, shown next to it (never just a disabled control). */
 export const LOCK_REASONS: Record<MyPreferenceLock, string> = {

@@ -31,6 +31,7 @@ import {
   MonthNavLink,
   type MonthLink,
 } from "@/features/schedule-review/month-calendar";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 import { cn } from "@/lib/utils";
@@ -213,9 +214,11 @@ function ScheduleFacts({
 function ClosedMonth({
   schedule,
   today,
+  shiftLabels,
 }: {
   schedule: MyPreferenceSchedule;
   today: IsoDate;
+  shiftLabels: ShiftLabels;
 }) {
   const headline =
     closedMonthHeadline(schedule.days.map((d) => d.lock)) ??
@@ -246,7 +249,7 @@ function ClosedMonth({
           مشاهده شیفت‌های من
         </Link>
       </section>
-      <PreferenceSummary counts={counts} />
+      <PreferenceSummary counts={counts} shiftLabels={shiftLabels} />
       <section
         aria-labelledby="submitted-preferences"
         className="flex flex-col gap-2 rounded-lg border bg-card p-3"
@@ -271,7 +274,12 @@ function ClosedMonth({
                   <DateBlock view={view} className="w-11 py-0.5" />
                   <span className="flex min-w-0 flex-1 items-center gap-2">
                     <span className="font-medium">ترجیح من:</span>
-                    <ShiftChip code={day.value} size="sm" icon label />
+                    <ShiftChip
+                      code={day.value}
+                      size="sm"
+                      icon
+                      label={shiftLabels[day.value]}
+                    />
                   </span>
                 </li>
               );
@@ -291,9 +299,11 @@ function ClosedMonth({
 function EditableMonth({
   schedule,
   today,
+  shiftLabels,
 }: {
   schedule: MyPreferenceSchedule;
   today: IsoDate;
+  shiftLabels: ShiftLabels;
 }) {
   const groups = groupDays(schedule.days, today);
   return (
@@ -307,6 +317,7 @@ function EditableMonth({
         scheduleId={schedule.id}
         groups={groups}
         initiallyOpen={initiallyOpenGroup(groups)}
+        shiftLabels={shiftLabels}
       />
     </div>
   );
@@ -322,12 +333,15 @@ export function PreferencesView({
   previous,
   next,
   today,
+  shiftLabels,
 }: {
   page: MyPreferencesPage;
   month: JalaliMonth;
   previous: MonthLink | null;
   next: MonthLink | null;
   today: IsoDate;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const { selected } = page;
   const nothingAnywhere = !selected && page.schedules.length === 0;
@@ -357,9 +371,17 @@ export function PreferencesView({
           }
         />
       ) : selected.editable ? (
-        <EditableMonth schedule={selected} today={today} />
+        <EditableMonth
+          schedule={selected}
+          today={today}
+          shiftLabels={shiftLabels}
+        />
       ) : (
-        <ClosedMonth schedule={selected} today={today} />
+        <ClosedMonth
+          schedule={selected}
+          today={today}
+          shiftLabels={shiftLabels}
+        />
       )}
     </div>
   );

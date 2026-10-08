@@ -35,6 +35,7 @@ import {
   preferenceLabel,
   staffingStatusLabel,
 } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 const period = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
 const ISO_OR_CODE =
@@ -242,7 +243,7 @@ describe("finding messages", () => {
       date: isoDate("2026-10-25"),
       shift: "M",
     });
-    expect(findingMessage(f)).toBe(
+    expect(findingMessage(f, SHIFT_LABELS)).toBe(
       "«سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ شیفت شب دارد و روز بعد (یکشنبه ۳ آبان ۱۴۰۵) شیفت صبح برایش ثبت شده است؛ پس از شیفت شب، روز بعد باید استراحت باشد.",
     );
     expect(findingSeverityLabel(f)).toBe("مانع نهایی‌سازی");
@@ -258,9 +259,9 @@ describe("finding messages", () => {
       nurseId: "u1",
       date: isoDate("2026-10-25"),
     });
-    expect(findingMessage(f)).toContain(text);
-    expect(findingMessage(f)).toContain("«سارا نمونه»");
-    expect(findingMessage(f)).not.toMatch(ISO_OR_CODE);
+    expect(findingMessage(f, SHIFT_LABELS)).toContain(text);
+    expect(findingMessage(f, SHIFT_LABELS)).toContain("«سارا نمونه»");
+    expect(findingMessage(f, SHIFT_LABELS)).not.toMatch(ISO_OR_CODE);
     expect(RULE_TITLES[rule]).toMatch(/^[؀-ۿ]/);
   });
 
@@ -273,7 +274,7 @@ describe("finding messages", () => {
       date: isoDate("2026-10-25"),
       shift: "ME",
     });
-    expect(findingFacts(f)).toEqual([
+    expect(findingFacts(f, SHIFT_LABELS)).toEqual([
       {
         role: "شب",
         date: "2026-10-24",
@@ -287,7 +288,7 @@ describe("finding messages", () => {
         shift: "ME",
       },
     ]);
-    expect(findingResolution(f)).toBe(
+    expect(findingResolution(f, SHIFT_LABELS)).toBe(
       "برای رفع: شیفت طولانی روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.",
     );
   });
@@ -301,10 +302,12 @@ describe("finding messages", () => {
         nurseId: "u1",
         date: isoDate("2026-10-25"),
       });
-      expect(findingFacts(f)).toHaveLength(1);
-      expect(findingFacts(f)[0]!.dateLabel).toBe("یکشنبه ۳ آبان ۱۴۰۵");
-      expect(findingResolution(f)).toMatch(/^برای رفع: /);
-      expect(findingResolution(f)).not.toMatch(ISO_OR_CODE);
+      expect(findingFacts(f, SHIFT_LABELS)).toHaveLength(1);
+      expect(findingFacts(f, SHIFT_LABELS)[0]!.dateLabel).toBe(
+        "یکشنبه ۳ آبان ۱۴۰۵",
+      );
+      expect(findingResolution(f, SHIFT_LABELS)).toMatch(/^برای رفع: /);
+      expect(findingResolution(f, SHIFT_LABELS)).not.toMatch(ISO_OR_CODE);
     },
   );
 
@@ -354,12 +357,12 @@ describe("coverage findings (D102: both bounds are hard rules)", () => {
       });
       expect(f.nurses).toEqual([]);
       expect(f.scope).toBe("SHIFT");
-      expect(findingMessage(f)).toContain("پوشش عصر");
-      expect(findingMessage(f)).toContain(words);
-      expect(findingMessage(f)).not.toMatch(ISO_OR_CODE);
+      expect(findingMessage(f, SHIFT_LABELS)).toContain("پوشش عصر");
+      expect(findingMessage(f, SHIFT_LABELS)).toContain(words);
+      expect(findingMessage(f, SHIFT_LABELS)).not.toMatch(ISO_OR_CODE);
       expect(findingSeverityLabel(f)).toBe("مانع نهایی‌سازی");
       expect(findingCategoryLabel(f)).toBe(category);
-      expect(findingFacts(f)).toEqual([
+      expect(findingFacts(f, SHIFT_LABELS)).toEqual([
         {
           role: "نوبت",
           date: "2026-10-25",
@@ -367,8 +370,8 @@ describe("coverage findings (D102: both bounds are hard rules)", () => {
           shift: "E",
         },
       ]);
-      expect(findingResolution(f)).toContain(fix);
-      expect(findingResolution(f)).not.toMatch(ISO_OR_CODE);
+      expect(findingResolution(f, SHIFT_LABELS)).toContain(fix);
+      expect(findingResolution(f, SHIFT_LABELS)).not.toMatch(ISO_OR_CODE);
       expect(RULE_TITLES.STAFFING).toBe("پوشش نفرات");
     },
   );
@@ -385,9 +388,9 @@ describe("staffing, preferences and avatars", () => {
   });
 
   it("words preferences as wishes", () => {
-    expect(preferenceLabel("N")).toBe("ترجیح: شب");
-    expect(preferenceLabel("ME")).toBe("ترجیح: طولانی");
-    expect(preferenceLabel("OFF")).toBe("ترجیح: استراحت");
+    expect(preferenceLabel("N", SHIFT_LABELS)).toBe("ترجیح: شب");
+    expect(preferenceLabel("ME", SHIFT_LABELS)).toBe("ترجیح: طولانی");
+    expect(preferenceLabel("OFF", SHIFT_LABELS)).toBe("ترجیح: استراحت");
   });
 
   it("builds initials for the avatar fallback", () => {

@@ -13,6 +13,7 @@ import {
   ApplyPreview,
   DepartmentCoverageRulesView,
 } from "@/features/staffing-rules/department-view";
+import { loadShiftLabels } from "@/features/shifts/labels";
 
 export const metadata: Metadata = { title: "قوانین پوشش بخش" };
 
@@ -27,6 +28,7 @@ export default async function DepartmentCoverageRulesPage({
 }: PageProps<"/departments/[code]/coverage-rules">) {
   const department = await requireDepartmentPage(params, "staffingRules.view");
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const { schedule, target, applied } = await searchParams;
   const orNotFound = (error: unknown): never => {
     if (error instanceof NotFoundError) notFound();
@@ -66,6 +68,7 @@ export default async function DepartmentCoverageRulesPage({
         departmentName={department.name}
         pageHref={pageHref}
         selectedScheduleId={preview?.scheduleId ?? null}
+        shiftLabels={shiftLabels}
         preview={
           preview && (
             <ApplyPreview
@@ -73,6 +76,7 @@ export default async function DepartmentCoverageRulesPage({
               departmentName={department.name}
               departmentCode={department.code}
               closeHref={pageHref}
+              shiftLabels={shiftLabels}
             />
           )
         }

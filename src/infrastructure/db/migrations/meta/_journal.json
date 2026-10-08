@@ -85,6 +85,13 @@
       "when": 1791291354768,
       "tag": "0011_staffing_rule_sets",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791463286825,
+      "tag": "0012_shift_type_long_label",
+      "breakpoints": true
     }
   ]
 }

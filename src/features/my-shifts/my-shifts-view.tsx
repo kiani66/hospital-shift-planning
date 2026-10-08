@@ -41,8 +41,9 @@ import {
 } from "@/features/schedule-review/month-calendar";
 import { ShiftLegend } from "@/features/shell/shift-legend";
 import {
-  ASSIGNMENT_PRESENTATION,
+  shiftFullName,
   shiftHoursLabel,
+  type ShiftLabels,
 } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
@@ -243,12 +244,18 @@ function PublicationNotices({
 }
 
 /** The month's figures: shifts, scheduled hours, nights, and each shift type's count. */
-function MonthTotals({ totals }: { totals: MyShiftsMonth["totals"] }) {
+function MonthTotals({
+  totals,
+  shiftLabels,
+}: {
+  totals: MyShiftsMonth["totals"];
+  shiftLabels: ShiftLabels;
+}) {
   const tiles = [
     ["شیفت‌ها", `${faNumber(totals.shiftCount)}`],
     ["ساعات برنامه‌ریزی‌شده", formatHours(totals.minutes)],
-    ["شیفت شب", `${faNumber(totals.nightCount)}`],
-    ["روزهای استراحت", `${faNumber(totals.offCount)}`],
+    [`شیفت ${shiftLabels.N}`, `${faNumber(totals.nightCount)}`],
+    [`روزهای ${shiftLabels.OFF}`, `${faNumber(totals.offCount)}`],
   ] as const;
   return (
     <section aria-labelledby="month-totals" className="flex flex-col gap-2">
@@ -278,9 +285,7 @@ function MonthTotals({ totals }: { totals: MyShiftsMonth["totals"] }) {
           {SHIFT_CODES.map((code) => (
             <li key={code} className="inline-flex items-center gap-1.5">
               <ShiftChip code={code} size="xs" variant="soft" />
-              <span className="sr-only">
-                {ASSIGNMENT_PRESENTATION[code].name}:
-              </span>
+              <span className="sr-only">{shiftLabels[code]}:</span>
               <span className="tabular-nums">
                 {faNumber(totals.byCode[code])}
               </span>
@@ -303,10 +308,12 @@ function EntryDetail({
   entry,
   schedule,
   showSchedule,
+  shiftLabels,
 }: {
   entry: MyShiftEntry;
   schedule: MyShiftSchedule | undefined;
   showSchedule: boolean;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <div
@@ -317,7 +324,7 @@ function EntryDetail({
         <ShiftChip
           code={entry.shift}
           size="md"
-          label="full"
+          label={shiftFullName(entry.shift, shiftLabels)}
           className={cn(
             "px-3",
             PUBLICATION_PRESENTATION[entry.publication].unapproved &&
@@ -328,7 +335,7 @@ function EntryDetail({
       </div>
       <MetadataList
         items={[
-          ["ساعت", shiftHoursLabel(entry.shift)],
+          ["ساعت", shiftHoursLabel(entry.shift, shiftLabels)],
           ["مدت", shiftDurationLabel(entry.shift)],
           ...(showSchedule && schedule
             ? ([["بخش", schedule.departmentName]] as const)
@@ -370,10 +377,12 @@ function DayDetail({
   day,
   today,
   schedules,
+  shiftLabels,
 }: {
   day: MyShiftDay | null;
   today: IsoDate;
   schedules: readonly MyShiftSchedule[];
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <section
@@ -399,6 +408,7 @@ function DayDetail({
                 entry={e}
                 schedule={schedules.find((s) => s.id === e.scheduleId)}
                 showSchedule={schedules.length > 1}
+                shiftLabels={shiftLabels}
               />
             ))
           ) : (
@@ -434,7 +444,13 @@ function DayDetail({
  * Every shift of the month in date order, one compact row each: the list
  * reading of the calendar (and the quickest scan on a phone).
  */
-function ShiftAgenda({ days }: { days: readonly MyShiftDay[] }) {
+function ShiftAgenda({
+  days,
+  shiftLabels,
+}: {
+  days: readonly MyShiftDay[];
+  shiftLabels: ShiftLabels;
+}) {
   const rows = days.flatMap((d) => d.entries.map((e) => ({ date: d.date, e })));
   return (
     <section aria-labelledby="month-agenda" className="flex flex-col gap-3">
@@ -462,11 +478,11 @@ function ShiftAgenda({ days }: { days: readonly MyShiftDay[] }) {
                 </span>
                 <ShiftChip
                   code={e.shift}
-                  label
+                  label={shiftLabels[e.shift]}
                   className={cn(p.unapproved && UNAPPROVED_CHIP)}
                 />
                 <span className="text-sm text-muted-foreground tabular-nums">
-                  {shiftHoursLabel(e.shift)}
+                  {shiftHoursLabel(e.shift, shiftLabels)}
                 </span>
                 <span className="ms-auto flex flex-wrap items-center gap-1.5">
                   {e.changePending && (
@@ -512,6 +528,7 @@ export function MyShiftsView({
   today,
   selected,
   dayHref,
+  shiftLabels,
 }: {
   month: MyShiftsMonth;
   label: string;
@@ -521,6 +538,8 @@ export function MyShiftsView({
   today: IsoDate;
   selected: IsoDate | null;
   dayHref: (date: IsoDate) => Route;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const selectedDay = selected
     ? (month.days.find((d) => d.date === selected) ?? null)
@@ -547,7 +566,7 @@ export function MyShiftsView({
     body = (
       <>
         <PublicationNotices schedules={month.schedules} />
-        <MonthTotals totals={month.totals} />
+        <MonthTotals totals={month.totals} shiftLabels={shiftLabels} />
         {month.totals.shiftCount + month.totals.offCount === 0 && (
           <Callout role="note" tone="info" icon={ClipboardList}>
             در این ماه شیفتی برای شما ثبت نشده است.
@@ -561,14 +580,16 @@ export function MyShiftsView({
             selected={selected}
             label={label}
             dayHref={dayHref}
+            shiftLabels={shiftLabels}
           />
           <DayDetail
             day={selectedDay}
             today={today}
             schedules={month.schedules}
+            shiftLabels={shiftLabels}
           />
         </div>
-        <ShiftAgenda days={month.days} />
+        <ShiftAgenda days={month.days} shiftLabels={shiftLabels} />
       </>
     );
 
@@ -587,7 +608,7 @@ export function MyShiftsView({
         <h2 id="legend-title" className="text-sm font-semibold">
           راهنمای شیفت‌ها
         </h2>
-        <ShiftLegend withHours />
+        <ShiftLegend withHours shiftLabels={shiftLabels} />
         {month.schedules.length > 0 && (
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
