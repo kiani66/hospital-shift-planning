@@ -5,6 +5,7 @@ import {
   getMyChangeRequests,
 } from "@/application/change-requests/queries";
 import { requireRequestContext } from "@/features/auth/guards";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import { RequestsView } from "@/features/change-requests/requests-view";
 import { PageHeader } from "@/features/shell/page-header";
 
@@ -17,6 +18,7 @@ export const metadata: Metadata = { title: "درخواست‌ها" };
  */
 export default async function RequestsPage() {
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const [options, requests] = await Promise.all([
     getChangeRequestOptions(ctx),
     getMyChangeRequests(ctx),
@@ -27,7 +29,11 @@ export default async function RequestsPage() {
         title="درخواست‌ها"
         description="درخواست تغییر شیفت پس از نهایی شدن برنامه: ثبت، پیگیری و پاسخ به درخواست جابه‌جایی همکاران."
       />
-      <RequestsView options={options} requests={requests} />
+      <RequestsView
+        shiftLabels={shiftLabels}
+        options={options}
+        requests={requests}
+      />
     </>
   );
 }

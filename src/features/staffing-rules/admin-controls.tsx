@@ -20,11 +20,11 @@ import {
   type RuleSetFormState,
 } from "./actions";
 import {
-  BUCKET_NAMES,
   RULE_SET_STATE_LABELS,
   versionLabel,
   type ContentFormValue,
 } from "./presentation";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 const IDLE: RuleSetFormState = { status: "idle" };
 
@@ -215,11 +215,13 @@ export function DraftEditor({
   revision,
   value,
   note,
+  shiftLabels,
 }: {
   versionId: string;
   revision: number;
   value: ContentFormValue;
   note: string | null;
+  shiftLabels: ShiftLabels;
 }) {
   const [state, action, pending] = useActionState(updateDraftAction, IDLE);
   // Which buckets have their own holiday rule. The checkboxes use
@@ -255,7 +257,7 @@ export function DraftEditor({
           {COVERAGE_PERIODS.map((p) => (
             <div key={p} className="flex flex-col gap-1 rounded-lg border p-2">
               <span className="text-sm font-medium">
-                {BUCKET_NAMES[p]} <span dir="ltr">({p})</span>
+                {shiftLabels[p]} <span dir="ltr">({p})</span>
               </span>
               <BoundsInputs
                 prefix="normal"
@@ -288,7 +290,7 @@ export function DraftEditor({
                   }
                   className="size-4"
                 />
-                قانون جدا برای {BUCKET_NAMES[p]}
+                قانون جدا برای {shiftLabels[p]}
               </label>
               <BoundsInputs
                 prefix="holiday"
@@ -337,7 +339,7 @@ export function DraftEditor({
                 >
                   {COVERAGE_PERIODS.map((p) => (
                     <option key={p} value={p}>
-                      {BUCKET_NAMES[p]}
+                      {shiftLabels[p]}
                     </option>
                   ))}
                 </select>

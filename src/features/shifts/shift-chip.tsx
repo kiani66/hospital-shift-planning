@@ -16,28 +16,28 @@ const ICON_SIZES = {
 } as const;
 
 /**
- * A scheduling decision as a chip. A working shift shows its code
- * (left-to-right, so "ME" never flips); the color comes from the catalog's
- * `shift-*` tokens and only reinforces it. OFF is not a working shift: it
- * reads «استراحت» on a neutral surface. `solid` fills the chip (a selected or
- * assigned decision); `soft` keeps a neutral surface with the text color, for
- * dense views where many chips would otherwise turn into a rainbow.
- * `label` adds the Persian name after a working shift's code (OFF already
- * shows it); `icon` adds the catalog's decorative glyph before it (hidden
- * from assistive technology).
+ * A scheduling decision as a chip: always its code (left-to-right, so "ME"
+ * never flips), OFF included. The color comes from the catalog's tokens and
+ * only reinforces it; OFF, not a working shift, sits on a neutral surface.
+ * `solid` fills the chip (a selected or assigned decision); `soft` keeps a
+ * neutral surface with the text color, for dense views where many chips
+ * would otherwise turn into a rainbow. `label` is the descriptive name shown
+ * after the code (from `ShiftLabels`, e.g. `labels[code]` or
+ * `shiftFullName`); `icon` adds the catalog's decorative glyph before it
+ * (hidden from assistive technology).
  */
 export function ShiftChip({
   code,
   size = "sm",
   variant = "solid",
-  label = false,
+  label,
   icon = false,
   className,
 }: {
   code: AssignmentCode;
   size?: keyof typeof SIZES;
   variant?: "solid" | "soft";
-  label?: boolean | "full";
+  label?: string;
   icon?: boolean;
   className?: string;
 }) {
@@ -57,14 +57,8 @@ export function ShiftChip({
       {icon && (
         <Icon aria-hidden="true" className={cn("shrink-0", ICON_SIZES[size])} />
       )}
-      <span dir={code === "OFF" ? undefined : "ltr"}>
-        {code === "OFF" ? shift.name : code}
-      </span>
-      {label && code !== "OFF" && (
-        <span className="font-medium">
-          {label === "full" ? shift.fullName : shift.name}
-        </span>
-      )}
+      <span dir="ltr">{code}</span>
+      {label && <span className="font-medium">{label}</span>}
     </span>
   );
 }

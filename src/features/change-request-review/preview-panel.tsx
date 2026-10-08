@@ -11,15 +11,17 @@ import {
   RULE_TITLES,
   staffingStatusLabel,
 } from "@/features/schedule-review/presentation";
-import { COVERAGE_PERIOD_NAMES } from "@/features/shifts/catalog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 
 function FindingList({
   title,
   findings,
+  shiftLabels,
 }: {
   title: string;
   findings: readonly ReviewFinding[];
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -28,7 +30,7 @@ function FindingList({
         {findings.map((f, i) => (
           <li key={`${f.code}-${i}`}>
             <span className="font-medium">{RULE_TITLES[f.code]}: </span>
-            {findingMessage(f)}
+            {findingMessage(f, shiftLabels)}
           </li>
         ))}
       </ul>
@@ -36,9 +38,15 @@ function FindingList({
   );
 }
 
-const Shift = ({ code }: { code: AssignmentCode | null }) =>
+const Shift = ({
+  code,
+  labels,
+}: {
+  code: AssignmentCode | null;
+  labels: ShiftLabels;
+}) =>
   code ? (
-    <ShiftChip code={code} size="xs" label />
+    <ShiftChip code={code} size="xs" label={labels[code]} />
   ) : (
     <span className="text-muted-foreground">تعیین‌نشده</span>
   );
@@ -50,7 +58,13 @@ const Shift = ({ code }: { code: AssignmentCode | null }) =>
  * do not), findings already there, and coverage per period with the
  * staffing status when bounds are configured.
  */
-export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
+export function PreviewPanel({
+  preview,
+  shiftLabels,
+}: {
+  preview: ChangePreviewView;
+  shiftLabels: ShiftLabels;
+}) {
   if (!preview.ok) return null;
   const configured = preview.staffing.some((d) =>
     d.periods.some((p) => p.bounds),
@@ -68,6 +82,7 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
           </p>
           <div className="mt-2">
             <FindingList
+              shiftLabels={shiftLabels}
               title="موارد مسدودکننده (نقض قانون یا مشکل پوشش)"
               findings={preview.blocking}
             />
@@ -81,6 +96,7 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
       {preview.warnings.length > 0 && (
         <Callout tone="info" icon={TriangleAlert} as="div">
           <FindingList
+            shiftLabels={shiftLabels}
             title="هشدار (مانع اعمال نیست)"
             findings={preview.warnings}
           />
@@ -89,6 +105,7 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
       {preview.persisting.length > 0 && (
         <Callout tone="muted" icon={Info} as="div">
           <FindingList
+            shiftLabels={shiftLabels}
             title="موارد موجود که بدتر نمی‌شوند"
             findings={preview.persisting}
           />
@@ -107,10 +124,10 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
               <span className="text-muted-foreground">
                 {formatJalaliDate(c.date, { weekday: true })}:
               </span>
-              <Shift code={c.before} />
+              <Shift code={c.before} labels={shiftLabels} />
               <span aria-hidden="true">←</span>
               <span className="sr-only">به</span>
-              <Shift code={c.after} />
+              <Shift code={c.after} labels={shiftLabels} />
             </li>
           ))}
         </ul>
@@ -125,7 +142,7 @@ export function PreviewPanel({ preview }: { preview: ChangePreviewView }) {
           <ul key={day.date} className="flex flex-wrap gap-x-4 gap-y-1">
             {day.periods.map((p) => (
               <li key={p.period}>
-                {COVERAGE_PERIOD_NAMES[p.period]}: {faNumber(p.before)} ←{" "}
+                {shiftLabels[p.period]}: {faNumber(p.before)} ←{" "}
                 {faNumber(p.after)}
                 {p.bounds && (
                   <span className="text-muted-foreground">

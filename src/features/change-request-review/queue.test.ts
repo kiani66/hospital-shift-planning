@@ -4,10 +4,11 @@ import { expect, it } from "vitest";
 import type { ChangeRequestQueueItem } from "@/application/change-requests/queries";
 import { isoDate } from "@/domain/shared/dates";
 import { QueueList } from "./queue";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 it.each([
   [null, "تعیین‌نشده"],
-  ["OFF", "استراحت"],
+  ["OFF", "OFF استراحت"],
 ] as const)(
   "request review distinguishes the current decision %s from rest or undecided",
   (current, label) => {
@@ -41,6 +42,7 @@ it.each([
     };
     const html = renderToStaticMarkup(
       createElement(QueueList, {
+        shiftLabels: SHIFT_LABELS,
         queue: {
           status: "PENDING",
           counts: { PENDING: 1, APPLIED: 0, REJECTED: 0, CANCELLED: 0 },

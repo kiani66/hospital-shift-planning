@@ -19,6 +19,7 @@ import {
 import type { ActionResult } from "@/application/result";
 import { requireRequestContext } from "@/features/auth/guards";
 import { parseJalaliInput } from "@/features/calendar/jalali-input";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
 import {
@@ -88,7 +89,7 @@ export async function updateDraftAction(
     expectedRevision: text(form, "expectedRevision"),
   });
   if (!parsed.success) return failure("اطلاعات فرم معتبر نیست.");
-  const content = parseContentForm(form);
+  const content = parseContentForm(form, await loadShiftLabels());
   if (!content.ok) return failure(content.message);
   const ctx = await requireRequestContext();
   return respond(

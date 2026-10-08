@@ -5,6 +5,7 @@ import type {
   NotAllowedCandidateView,
 } from "@/application/schedules/coverage-candidates";
 import { FindingItem } from "@/features/schedule-review/finding-item";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import {
   candidateDayLabel,
   candidatePreferenceLabel,
@@ -13,8 +14,10 @@ import {
 
 function Person({
   person,
+  shiftLabels,
 }: {
   person: AvailableCandidateView | NotAllowedCandidateView;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <>
@@ -25,7 +28,9 @@ function Person({
         </p>
       )}
       <p className="text-sm">{candidateDayLabel[person.dayStatus]}</p>
-      <p className="text-sm">{candidatePreferenceLabel[person.preference]}</p>
+      <p className="text-sm">
+        {candidatePreferenceLabel(person.preference, shiftLabels)}
+      </p>
     </>
   );
 }
@@ -34,12 +39,16 @@ function Person({
 export function CandidateList({
   data,
   assignControl,
+  shiftLabels,
 }: {
   data: CoverageCandidates;
   assignControl?: (person: AvailableCandidateView) => ReactNode;
+  shiftLabels: ShiftLabels;
 }) {
   if (data.status === "NO_SHORTAGE")
-    return <p role="status">{candidateCompletionMessage(data.shift)}</p>;
+    return (
+      <p role="status">{candidateCompletionMessage(data.shift, shiftLabels)}</p>
+    );
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <section aria-label="قابل انتخاب" className="flex flex-col gap-2">
@@ -53,7 +62,7 @@ export function CandidateList({
                 key={person.userId}
                 className="flex min-w-0 flex-col gap-1 rounded-lg border p-3"
               >
-                <Person person={person} />
+                <Person person={person} shiftLabels={shiftLabels} />
                 {data.canAssign && assignControl?.(person)}
               </li>
             ))}
@@ -76,10 +85,15 @@ export function CandidateList({
                 key={person.userId}
                 className="flex min-w-0 flex-col gap-2 rounded-lg border p-3"
               >
-                <Person person={person} />
+                <Person person={person} shiftLabels={shiftLabels} />
                 <ul className="flex flex-col gap-2">
                   {person.findings.map((finding, i) => (
-                    <FindingItem key={i} finding={finding} linked={false} />
+                    <FindingItem
+                      key={i}
+                      finding={finding}
+                      linked={false}
+                      shiftLabels={shiftLabels}
+                    />
                   ))}
                 </ul>
               </li>

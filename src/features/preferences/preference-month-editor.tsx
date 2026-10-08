@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import type { MyPreferenceDay } from "@/application/preferences/queries";
 import type { IsoDate } from "@/domain/shared/dates";
 import type { PreferenceValue } from "@/domain/shifts/shift-type";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { faNumber } from "@/features/calendar/jalali";
 import { cn } from "@/lib/utils";
 
@@ -35,11 +36,14 @@ export function PreferenceMonthEditor({
   scheduleId,
   groups,
   initiallyOpen,
+  shiftLabels,
 }: {
   scheduleId: string;
   /** Every day of the schedule, grouped (Jalali labels are made on the server). */
   groups: readonly DayGroup<MyPreferenceDay>[];
   initiallyOpen: IsoDate | null;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const [stored, setStored] = useState(() => storedOf(groups));
   const [source, setSource] = useState(groups);
@@ -70,6 +74,7 @@ export function PreferenceMonthEditor({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
       <PreferenceSummary
         counts={counts}
+        shiftLabels={shiftLabels}
         className="xl:sticky xl:top-20 xl:col-start-2 xl:row-start-1"
       />
       <div className="flex min-w-0 flex-col gap-2 xl:col-start-1 xl:row-start-1">
@@ -87,6 +92,7 @@ export function PreferenceMonthEditor({
                 scheduleId={scheduleId}
                 view={view}
                 onConfirmed={confirm}
+                shiftLabels={shiftLabels}
               />
             ))}
           </DayGroupSection>
@@ -162,10 +168,12 @@ function DayCard({
   scheduleId,
   view,
   onConfirmed,
+  shiftLabels,
 }: {
   scheduleId: string;
   view: DayView<MyPreferenceDay>;
   onConfirmed: (date: IsoDate, value: PreferenceChoice) => void;
+  shiftLabels: ShiftLabels;
 }) {
   const { day } = view;
   const confirm = useCallback(
@@ -194,6 +202,7 @@ function DayCard({
             value={day.value}
             dayLabel={view.fullLabel}
             onConfirmed={confirm}
+            shiftLabels={shiftLabels}
           />
         ) : (
           <div className="flex min-h-full flex-col justify-center gap-1 text-sm">
@@ -202,7 +211,7 @@ function DayCard({
                 day.value === null ? "text-muted-foreground" : "font-semibold",
               )}
             >
-              {myPreferenceText(day.value)}
+              {myPreferenceText(day.value, shiftLabels)}
             </p>
             <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
               <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />

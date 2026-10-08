@@ -22,6 +22,7 @@ import {
   REQUEST_STATUS,
   REQUEST_TYPE_LABELS,
 } from "@/features/change-requests/presentation";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 import { cn } from "@/lib/utils";
@@ -41,25 +42,37 @@ const TAB_LABELS: Record<ChangeRequestStatus, string> = {
   CANCELLED: "لغوشده",
 };
 
-const Shift = ({ code }: { code: AssignmentCode | null }) =>
+const Shift = ({
+  code,
+  labels,
+}: {
+  code: AssignmentCode | null;
+  labels: ShiftLabels;
+}) =>
   code ? (
-    <ShiftChip code={code} size="xs" label />
+    <ShiftChip code={code} size="xs" label={labels[code]} />
   ) : (
     <span className="text-xs text-muted-foreground">تعیین‌نشده</span>
   );
 
 /** What the request asks for, compactly. */
-function RequestedChange({ item }: { item: ChangeRequestQueueItem }) {
+function RequestedChange({
+  item,
+  shiftLabels,
+}: {
+  item: ChangeRequestQueueItem;
+  shiftLabels: ShiftLabels;
+}) {
   switch (item.type) {
     case "CHANGE_SHIFT":
-      return <Shift code={item.targetShift} />;
+      return <Shift code={item.targetShift} labels={shiftLabels} />;
     case "UNAVAILABLE":
-      return <Shift code="OFF" />;
+      return <Shift code="OFF" labels={shiftLabels} />;
     case "SWAP":
       return (
         <span className="flex items-center gap-1.5 text-xs">
           با {item.counterpart?.displayName} (
-          <Shift code={item.counterpartShift} />)
+          <Shift code={item.counterpartShift} labels={shiftLabels} />)
         </span>
       );
     case "OTHER":
@@ -111,9 +124,12 @@ export function QueueTabs({
 export function QueueList({
   queue,
   detailHref,
+  shiftLabels,
 }: {
   queue: ChangeRequestQueue;
   detailHref: (id: string) => Route;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   if (queue.items.length === 0)
     return (
@@ -173,15 +189,18 @@ export function QueueList({
                 </p>
                 <p className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted-foreground">شیفت:</span>
-                  <Shift code={item.requesterShift} />
+                  <Shift code={item.requesterShift} labels={shiftLabels} />
                   <span aria-hidden="true">←</span>
                   <span className="sr-only">درخواست:</span>
-                  <RequestedChange item={item} />
+                  <RequestedChange item={item} shiftLabels={shiftLabels} />
                   {changed && (
                     <span className="flex items-center gap-1 text-xs text-health-attention-foreground">
                       <TriangleAlert aria-hidden="true" className="size-3.5" />
                       شیفت فعلی:
-                      <Shift code={item.current!.requester} />
+                      <Shift
+                        code={item.current!.requester}
+                        labels={shiftLabels}
+                      />
                     </span>
                   )}
                 </p>

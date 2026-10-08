@@ -12,6 +12,7 @@ import type {
 import type { EffectiveState } from "@/domain/staffing-rules/selection";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { parseJalaliInput } from "@/features/calendar/jalali-input";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * Persian wording of staffing rule sets (D105–D110). The server decides;
@@ -63,18 +64,16 @@ export function effectiveFromText(version: {
     : "هنوز منتشر نشده";
 }
 
-export const BUCKET_NAMES: Readonly<Record<BaseShift, string>> = {
-  M: "صبح",
-  E: "عصر",
-  N: "شب",
-};
-
-/** A short line per day type, e.g. "صبح ۳ تا ۶ نفر · عصر … · شب …". */
+/**
+ * A short line per day type, e.g. "صبح ۳ تا ۶ نفر · عصر … · شب …"; bucket
+ * names are the shift labels (`shift_types.label`).
+ */
 export const dayTypeSummary = (
   bounds: Readonly<Partial<Record<BaseShift, CoverageBounds>>>,
+  labels: ShiftLabels,
 ) =>
   COVERAGE_PERIODS.filter((p) => bounds[p])
-    .map((p) => `${BUCKET_NAMES[p]} ${boundsText(bounds[p]!)}`)
+    .map((p) => `${labels[p]} ${boundsText(bounds[p]!)}`)
     .join(" · ");
 
 /** The content input the commands accept (`ruleSetContentInput`). */
@@ -111,7 +110,10 @@ const toNumber = (value: FormDataEntryValue | null): number | null => {
  * for "no maximum"), optional HOLIDAY bounds per bucket, and date exceptions
  * with Jalali dates. Ranges are checked again by the domain.
  */
-export function parseContentForm(form: FormData): ContentFormResult {
+export function parseContentForm(
+  form: FormData,
+  labels: ShiftLabels,
+): ContentFormResult {
   const bucket = (prefix: string, p: BaseShift) => {
     const min = toNumber(form.get(`${prefix}.${p}.min`));
     const max = toNumber(form.get(`${prefix}.${p}.max`));
@@ -123,7 +125,7 @@ export function parseContentForm(form: FormData): ContentFormResult {
     if (min === null || Number.isNaN(min) || Number.isNaN(max))
       return {
         ok: false,
-        message: `حداقل نفرات ${BUCKET_NAMES[p]} را با عدد وارد کنید (حداکثر را می‌توانید خالی بگذارید).`,
+        message: `حداقل نفرات ${labels[p]} را با عدد وارد کنید (حداکثر را می‌توانید خالی بگذارید).`,
       };
     normal[p] = { min, max };
   }
@@ -134,7 +136,7 @@ export function parseContentForm(form: FormData): ContentFormResult {
     if (min === null || Number.isNaN(min) || Number.isNaN(max))
       return {
         ok: false,
-        message: `حداقل نفرات ${BUCKET_NAMES[p]} در روز تعطیل را با عدد وارد کنید.`,
+        message: `حداقل نفرات ${labels[p]} در روز تعطیل را با عدد وارد کنید.`,
       };
     holiday[p] = { min, max };
   }

@@ -264,7 +264,7 @@ test.describe("Head Nurse request queue", () => {
     await expect(form).toBeVisible();
     await form
       .getByLabel("پرستار")
-      .selectOption({ label: "پرستار آزمایشی ۱ — استراحت" });
+      .selectOption({ label: "پرستار آزمایشی ۱ — استراحت (OFF)" });
     await form.getByLabel("شیفت جدید").selectOption({ label: "صبح (M)" });
     await form.getByRole("button", { name: "بررسی تغییر" }).click();
     await expect(

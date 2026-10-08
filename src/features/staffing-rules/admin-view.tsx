@@ -18,13 +18,16 @@ import {
 import { contentFormValue, scopeLabel, versionLabel } from "./presentation";
 import { RuleSetHistory } from "./history-view";
 import { RuleSetVersionCard } from "./version-card";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 function VersionActions({
   scope,
   version,
+  shiftLabels,
 }: {
   scope: RuleSetScopeView;
   version: RuleSetVersionView;
+  shiftLabels: ShiftLabels;
 }) {
   if (version.status === "DRAFT")
     return (
@@ -39,6 +42,7 @@ function VersionActions({
               revision={version.revision}
               value={contentFormValue(version.content)}
               note={version.note}
+              shiftLabels={shiftLabels}
             />
           </div>
         </details>
@@ -98,9 +102,11 @@ function VersionActions({
 function ScopeSection({
   scope,
   names,
+  shiftLabels,
 }: {
   scope: RuleSetScopeView;
   names: ReadonlyMap<string, string>;
+  shiftLabels: ShiftLabels;
 }) {
   const title = scopeLabel(scope.departmentName);
   const id = `scope-${scope.departmentCode ?? "hospital"}`;
@@ -144,7 +150,14 @@ function ScopeSection({
               key={v.id}
               version={v}
               names={names}
-              actions={<VersionActions scope={scope} version={v} />}
+              shiftLabels={shiftLabels}
+              actions={
+                <VersionActions
+                  scope={scope}
+                  version={v}
+                  shiftLabels={shiftLabels}
+                />
+              }
             />
           ))}
         </div>
@@ -160,8 +173,11 @@ function ScopeSection({
  */
 export function RuleSetAdminView({
   administration,
+  shiftLabels,
 }: {
   administration: RuleSetAdministration;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -176,6 +192,7 @@ export function RuleSetAdminView({
           key={scope.departmentId ?? "hospital"}
           scope={scope}
           names={administration.names}
+          shiftLabels={shiftLabels}
         />
       ))}
       <RuleSetHistory

@@ -19,6 +19,7 @@ import type {
   AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber } from "@/features/calendar/jalali";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import {
   NO_PREFERENCE_LABEL,
   preferenceFitLabel,
@@ -61,9 +62,12 @@ export function PreferenceContext({
   shift,
   id,
   hideMissing = false,
+  shiftLabels,
 }: {
   preference: PreferenceValue | null;
   shift: AssignmentCode | null;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
   id?: string;
   /** Read-only lists say nothing for a nurse without a preference. */
   hideMissing?: boolean;
@@ -94,7 +98,7 @@ export function PreferenceContext({
           {preference === "OFF" && (
             <Bed aria-hidden className="size-3 shrink-0" />
           )}
-          {preferenceLabel(preference)}
+          {preferenceLabel(preference, shiftLabels)}
         </span>
       )}
       {style && fitLabel && (

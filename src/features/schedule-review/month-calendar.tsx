@@ -21,7 +21,10 @@ import { COVERAGE_PERIODS } from "@/domain/shifts/shift-type";
 import type { IsoDate } from "@/domain/shared/dates";
 import { faNumber } from "@/features/calendar/jalali";
 import { monthGrid } from "@/features/calendar/month-grid";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import {
+  SHIFT_PRESENTATION,
+  type ShiftLabels,
+} from "@/features/shifts/catalog";
 import { cn } from "@/lib/utils";
 
 import { DayStateIcon } from "./day-state-icon";
@@ -402,6 +405,7 @@ export function MonthCalendar({
   dayHref,
   selected,
   filter = null,
+  shiftLabels,
 }: {
   month: ScheduleMonthReview;
   today: IsoDate;
@@ -410,6 +414,8 @@ export function MonthCalendar({
   selected?: IsoDate | null;
   /** Days this filter does not match are dimmed (never hidden). */
   filter?: DayFilter | null;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const grid = monthGrid(month.period, month.days);
   const unattributed = month.validation.unattributedRuleViolations;
@@ -526,7 +532,7 @@ export function MonthCalendar({
         </table>
       </div>
 
-      <CalendarLegend hasHoliday={hasHoliday} />
+      <CalendarLegend hasHoliday={hasHoliday} shiftLabels={shiftLabels} />
     </section>
   );
 }
@@ -536,7 +542,13 @@ export function MonthCalendar({
  * shortage / overstaffing marks. The holiday entry only when the month has
  * one (no holiday source is connected yet, D41).
  */
-function CalendarLegend({ hasHoliday }: { hasHoliday: boolean }) {
+function CalendarLegend({
+  hasHoliday,
+  shiftLabels: l,
+}: {
+  hasHoliday: boolean;
+  shiftLabels: ShiftLabels;
+}) {
   return (
     <div className="flex flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground">
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -551,8 +563,7 @@ function CalendarLegend({ hasHoliday }: { hasHoliday: boolean }) {
             </span>
           ))}
           <span>
-            تعداد نفرات در پوشش صبح، عصر و شب (شیفت طولانی در صبح و عصر شمرده
-            می‌شود؛ استراحت در پوشش شمرده نمی‌شود)
+            {`تعداد نفرات در پوشش ${l.M}، ${l.E} و ${l.N} (شیفت ${l.ME} در ${l.M} و ${l.E} شمرده می‌شود؛ ${l.OFF} در پوشش شمرده نمی‌شود)`}
           </span>
         </span>
         <span className="inline-flex items-center gap-1 max-md:hidden">

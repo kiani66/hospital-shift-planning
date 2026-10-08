@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { editorKeyCommand, SHORTCUT_HELP, type KeyLike } from "./shortcuts";
+import {
+  RENAMED_SHIFT_LABELS,
+  SHIFT_LABELS,
+} from "../../../tests/support/shift-labels";
+
+import { editorKeyCommand, shortcutHelp, type KeyLike } from "./shortcuts";
 
 const key = (code: string, modifiers: Partial<KeyLike> = {}): KeyLike => ({
   code,
@@ -80,7 +85,7 @@ describe("editorKeyCommand", () => {
   });
 
   it("documents every shortcut it handles", () => {
-    expect(SHORTCUT_HELP.map((s) => s.keys)).toEqual([
+    expect(shortcutHelp(SHIFT_LABELS).map((s) => s.keys)).toEqual([
       "M",
       "E",
       "N",
@@ -92,5 +97,19 @@ describe("editorKeyCommand", () => {
       "[ / ]",
       "Ctrl+Z",
     ]);
+  });
+
+  it("names each shift from the labels it is given", () => {
+    expect(shortcutHelp(SHIFT_LABELS).slice(0, 5)).toEqual([
+      { keys: "M", action: "شیفت صبح" },
+      { keys: "E", action: "شیفت عصر" },
+      { keys: "N", action: "شیفت شب" },
+      { keys: "O", action: "استراحت" },
+      { keys: "L", action: "شیفت طولانی (صبح + عصر)" },
+    ]);
+    expect(shortcutHelp(RENAMED_SHIFT_LABELS)[3]).toEqual({
+      keys: "O",
+      action: "مرخصی‌روز",
+    });
   });
 });

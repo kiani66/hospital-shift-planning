@@ -13,6 +13,7 @@ import {
   myShiftsHref,
   shiftDurationLabel,
 } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 const STATES: readonly ShiftPublication[] = [
   "TEMPORARY",
@@ -104,41 +105,49 @@ describe("dayCellLabel", () => {
 
   it("names the date, the shift with its code and how settled it is", () => {
     expect(
-      dayCellLabel({ date, entries: [entry()], changePending: false }),
+      dayCellLabel(
+        { date, entries: [entry()], changePending: false },
+        SHIFT_LABELS,
+      ),
     ).toBe("دوشنبه ۴ آبان ۱۴۰۵: شب (N)، موقت");
   });
 
   it("says when there is no shift, and marks the selected day", () => {
     expect(
-      dayCellLabel(
-        { date, entries: [], changePending: false },
-        { selected: true },
-      ),
+      dayCellLabel({ date, entries: [], changePending: false }, SHIFT_LABELS, {
+        selected: true,
+      }),
     ).toBe("دوشنبه ۴ آبان ۱۴۰۵: تعیین‌نشده (روز انتخاب‌شده)");
   });
 
   it("flags a pending revision change in words", () => {
     expect(
-      dayCellLabel({
-        date,
-        entries: [entry({ publication: "OFFICIAL", changePending: true })],
-        changePending: false,
-      }),
+      dayCellLabel(
+        {
+          date,
+          entries: [entry({ publication: "OFFICIAL", changePending: true })],
+          changePending: false,
+        },
+        SHIFT_LABELS,
+      ),
     ).toBe(
       `دوشنبه ۴ آبان ۱۴۰۵: شب (N)، تأییدشده (رسمی)، ${CHANGE_PENDING.label}`,
     );
-    expect(dayCellLabel({ date, entries: [], changePending: true })).toBe(
-      `دوشنبه ۴ آبان ۱۴۰۵: تعیین‌نشده؛ ${CHANGE_PENDING.label}`,
-    );
+    expect(
+      dayCellLabel({ date, entries: [], changePending: true }, SHIFT_LABELS),
+    ).toBe(`دوشنبه ۴ آبان ۱۴۰۵: تعیین‌نشده؛ ${CHANGE_PENDING.label}`);
   });
 
   it("lists one entry per schedule when two departments overlap", () => {
     expect(
-      dayCellLabel({
-        date,
-        entries: [entry({ shift: "M" }), entry({ publication: "OFFICIAL" })],
-        changePending: false,
-      }),
+      dayCellLabel(
+        {
+          date,
+          entries: [entry({ shift: "M" }), entry({ publication: "OFFICIAL" })],
+          changePending: false,
+        },
+        SHIFT_LABELS,
+      ),
     ).toBe("دوشنبه ۴ آبان ۱۴۰۵: صبح (M)، موقت؛ شب (N)، تأییدشده (رسمی)");
   });
 });
@@ -156,18 +165,24 @@ describe("rest and undecided wording", () => {
   it("OFF displays rest and zero duration with the assignment's publication state", () => {
     expect(shiftDurationLabel("OFF")).toBe("۰ ساعت");
     expect(
-      dayCellLabel({
-        date: isoDate("2026-10-26"),
-        entries: [entry({ shift: "OFF", publication: "OFFICIAL" })],
-        changePending: false,
-      }),
-    ).toContain("استراحت، تأییدشده (رسمی)");
+      dayCellLabel(
+        {
+          date: isoDate("2026-10-26"),
+          entries: [entry({ shift: "OFF", publication: "OFFICIAL" })],
+          changePending: false,
+        },
+        SHIFT_LABELS,
+      ),
+    ).toContain("استراحت (OFF)، تأییدشده (رسمی)");
     expect(
-      dayCellLabel({
-        date: isoDate("2026-10-26"),
-        entries: [],
-        changePending: false,
-      }),
+      dayCellLabel(
+        {
+          date: isoDate("2026-10-26"),
+          entries: [],
+          changePending: false,
+        },
+        SHIFT_LABELS,
+      ),
     ).toContain("تعیین‌نشده");
   });
 });

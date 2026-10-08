@@ -25,22 +25,25 @@ import {
 } from "@/features/change-requests/presentation";
 import { SCHEDULE_STATUS_LABELS } from "@/features/schedule/labels";
 import { dayList } from "@/features/schedule-workflow/presentation";
-import { ASSIGNMENT_PRESENTATION } from "@/features/shifts/catalog";
+import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 
 import { ApplyRequestButton, RejectRequestButton } from "./decision-buttons";
 import { PreviewPanel } from "./preview-panel";
 
-const Shift = ({ code }: { code: AssignmentCode | null }) =>
+const Shift = ({
+  code,
+  labels,
+}: {
+  code: AssignmentCode | null;
+  labels: ShiftLabels;
+}) =>
   code ? (
-    <ShiftChip code={code} size="xs" label />
+    <ShiftChip code={code} size="xs" label={labels[code]} />
   ) : (
     <span className="text-muted-foreground">تعیین‌نشده</span>
   );
-
-const shiftName = (code: AssignmentCode | null) =>
-  code ? `${ASSIGNMENT_PRESENTATION[code].name} (${code})` : "تعیین‌نشده";
 
 function Row({
   label,
@@ -67,9 +70,12 @@ function Row({
 export function RequestReview({
   review,
   query,
+  shiftLabels,
 }: {
   review: ChangeRequestReview;
   query: { readonly status: string; readonly requestId: string };
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const { request: r, schedule, current, stale, previewView } = review;
   const pending = r.status === "PENDING";
@@ -102,23 +108,23 @@ export function RequestReview({
               </Badge>
             )}
           </div>
-          <p className="leading-relaxed">{requestSummary(r)}</p>
+          <p className="leading-relaxed">{requestSummary(r, shiftLabels)}</p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
             <Row label="پرستار">{r.requester.displayName}</Row>
             <Row label="روز">{formatJalaliDate(r.date, { weekday: true })}</Row>
             <Row label="نوع">{REQUEST_TYPE_LABELS[r.type]}</Row>
             <Row label="شیفت هنگام درخواست">
-              <Shift code={r.requesterShift} />
+              <Shift code={r.requesterShift} labels={shiftLabels} />
             </Row>
             {r.targetShift && (
               <Row label="شیفت درخواستی">
-                <Shift code={r.targetShift} />
+                <Shift code={r.targetShift} labels={shiftLabels} />
               </Row>
             )}
             {r.counterpart && (
               <Row label="همکار جابه‌جایی">
                 {r.counterpart.displayName} ·{" "}
-                <Shift code={r.counterpartShift} />
+                <Shift code={r.counterpartShift} labels={shiftLabels} />
               </Row>
             )}
             <Row label="علت">{r.reason.label}</Row>
@@ -147,11 +153,11 @@ export function RequestReview({
           <p className="font-medium">وضعیت فعلی برنامه</p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
             <Row label={`شیفت فعلی ${r.requester.displayName}`}>
-              <Shift code={current.requester} />
+              <Shift code={current.requester} labels={shiftLabels} />
             </Row>
             {r.counterpart && (
               <Row label={`شیفت فعلی ${r.counterpart.displayName}`}>
-                <Shift code={current.counterpart} />
+                <Shift code={current.counterpart} labels={shiftLabels} />
               </Row>
             )}
             <Row label="برنامه">
@@ -196,9 +202,11 @@ export function RequestReview({
                   key={`${c.nurseId}-${c.date}`}
                   className="flex flex-wrap items-center gap-1.5"
                 >
-                  {c.displayName}: <Shift code={c.before} />{" "}
+                  {c.displayName}:{" "}
+                  <Shift code={c.before} labels={shiftLabels} />{" "}
                   <span aria-hidden="true">←</span>
-                  <span className="sr-only">به</span> <Shift code={c.after} />
+                  <span className="sr-only">به</span>{" "}
+                  <Shift code={c.after} labels={shiftLabels} />
                 </li>
               ))}
             </ul>
@@ -218,9 +226,9 @@ export function RequestReview({
         {pending && stale && (
           <Callout tone="attention" icon={TriangleAlert} role="note">
             شیفت {r.requester.displayName} پس از ثبت درخواست تغییر کرده است:
-            درخواست برای {shiftName(stale.requestedAgainst)} ثبت شده، شیفت فعلی{" "}
-            {shiftName(stale.current)} است. پیش‌نمایش و اعمال بر اساس شیفت فعلی
-            است.
+            درخواست برای {assignmentName(stale.requestedAgainst, shiftLabels)}{" "}
+            ثبت شده، شیفت فعلی {assignmentName(stale.current, shiftLabels)} است.
+            پیش‌نمایش و اعمال بر اساس شیفت فعلی است.
           </Callout>
         )}
         {pending && review.swapContextChanged && (
@@ -279,7 +287,7 @@ export function RequestReview({
                   </option>
                   {ASSIGNMENT_CODES.map((code) => (
                     <option key={code} value={code}>
-                      {shiftName(code)}
+                      {assignmentName(code, shiftLabels)}
                     </option>
                   ))}
                   <option value="UNDECIDED">تعیین‌نشده</option>
@@ -305,7 +313,9 @@ export function RequestReview({
             {requestErrorMessage("apply", previewView.error)}
           </Callout>
         )}
-        {pending && previewView?.ok && <PreviewPanel preview={previewView} />}
+        {pending && previewView?.ok && (
+          <PreviewPanel preview={previewView} shiftLabels={shiftLabels} />
+        )}
 
         {pending && (
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -316,19 +326,19 @@ export function RequestReview({
               requesterShift={otherShift}
               stale={
                 stale
-                  ? `می‌دانم شیفت فعلی ${shiftName(stale.current)} است و درخواست بر اساس شیفت فعلی اعمال می‌شود.`
+                  ? `می‌دانم شیفت فعلی ${assignmentName(stale.current, shiftLabels)} است و درخواست بر اساس شیفت فعلی اعمال می‌شود.`
                   : null
               }
               disabled={blocked}
               describedBy={blocked ? blockerId : undefined}
               consequence={
                 previewView?.ok
-                  ? `${requestSummary(r)} ${
+                  ? `${requestSummary(r, shiftLabels)} ${
                       previewView.warnings.length > 0
                         ? `${faNumber(previewView.warnings.length)} هشدار وجود دارد که مانع اعمال نیست. `
                         : ""
                     }به پرستار اطلاع داده می‌شود.`
-                  : requestSummary(r)
+                  : requestSummary(r, shiftLabels)
               }
             />
             <RejectRequestButton requestId={r.id} />

@@ -8,7 +8,7 @@ import type {
   AssignmentCode,
 } from "@/domain/shifts/shift-type";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
-import { SHIFT_PRESENTATION } from "@/features/shifts/catalog";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * Wording and visual tokens of the Head Nurse month review. Business states
@@ -255,22 +255,25 @@ const day = (date: IsoDate) => formatJalaliDate(date, { weekday: true });
  * (never the raw rule code). Exhaustive over rule codes: a new rule does not
  * compile until it has a message.
  */
-export function findingMessage(finding: ReviewFinding): string {
+export function findingMessage(
+  finding: ReviewFinding,
+  labels: ShiftLabels,
+): string {
   const name = `«${finding.nurses.map((n) => n.displayName).join("، ")}»`;
   const v = finding.violation;
   switch (v.rule) {
     case "UNDECIDED":
-      return `برای ${name} در ${day(v.date)} هنوز تصمیمی ثبت نشده است؛ شیفت کاری یا استراحت را تعیین کنید.`;
+      return `برای ${name} در ${day(v.date)} هنوز تصمیمی ثبت نشده است؛ شیفت کاری یا ${labels.OFF} را تعیین کنید.`;
     case "NIGHT_REST":
-      return `${name} در ${day(v.nightDate)} شیفت شب دارد و روز بعد (${day(v.date)}) شیفت ${SHIFT_PRESENTATION[v.shift].name} برایش ثبت شده است؛ پس از شیفت شب، روز بعد باید استراحت باشد.`;
+      return `${name} در ${day(v.nightDate)} شیفت ${labels.N} دارد و روز بعد (${day(v.date)}) شیفت ${labels[v.shift]} برایش ثبت شده است؛ پس از شیفت ${labels.N}، روز بعد باید ${labels.OFF} باشد.`;
     case "DUPLICATE_ASSIGNMENT":
       return `برای ${name} در ${day(v.date)} بیش از یک شیفت ثبت شده است؛ هر پرستار در هر روز فقط یک شیفت دارد.`;
     case "OUTSIDE_PERIOD":
       return `برای ${name} در ${day(v.date)} شیفتی ثبت شده که خارج از دوره این برنامه است.`;
     case "STAFFING":
       return v.status === "BELOW_MINIMUM"
-        ? `پوشش ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداقل ${faNumber(v.bounds.min!)} نفر لازم است (کمبود ${faNumber(v.bounds.min! - v.covered)} نفر).`
-        : `پوشش ${SHIFT_PRESENTATION[v.period].name} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداکثر ${faNumber(v.bounds.max!)} نفر مجاز است (مازاد ${faNumber(v.covered - v.bounds.max!)} نفر).`;
+        ? `پوشش ${labels[v.period]} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداقل ${faNumber(v.bounds.min!)} نفر لازم است (کمبود ${faNumber(v.bounds.min! - v.covered)} نفر).`
+        : `پوشش ${labels[v.period]} در ${day(v.date)} ${faNumber(v.covered)} نفر است؛ حداکثر ${faNumber(v.bounds.max!)} نفر مجاز است (مازاد ${faNumber(v.covered - v.bounds.max!)} نفر).`;
     default:
       return v satisfies never;
   }
@@ -304,13 +307,16 @@ export interface FindingFact {
  * (the full sentence of `findingMessage` stays available). Exhaustive over
  * rule codes.
  */
-export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
+export function findingFacts(
+  finding: ReviewFinding,
+  labels: ShiftLabels,
+): readonly FindingFact[] {
   const v = finding.violation;
   switch (v.rule) {
     case "NIGHT_REST":
       return [
         {
-          role: "شب",
+          role: labels.N,
           date: v.nightDate,
           dateLabel: day(v.nightDate),
           shift: "N",
@@ -351,21 +357,24 @@ export function findingFacts(finding: ReviewFinding): readonly FindingFact[] {
  * How the Head Nurse can resolve a finding, in operational words. Exhaustive
  * over rule codes: a new rule does not compile until it says how to fix it.
  */
-export function findingResolution(finding: ReviewFinding): string {
+export function findingResolution(
+  finding: ReviewFinding,
+  labels: ShiftLabels,
+): string {
   const v = finding.violation;
   switch (v.rule) {
     case "UNDECIDED":
-      return "برای رفع: شیفت کاری یا استراحت را تعیین کنید.";
+      return `برای رفع: شیفت کاری یا ${labels.OFF} را تعیین کنید.`;
     case "NIGHT_REST":
-      return `برای رفع: شیفت ${SHIFT_PRESENTATION[v.shift].name} روز بعد را بردارید یا شیفت شب روز قبل را تغییر دهید.`;
+      return `برای رفع: شیفت ${labels[v.shift]} روز بعد را بردارید یا شیفت ${labels.N} روز قبل را تغییر دهید.`;
     case "DUPLICATE_ASSIGNMENT":
       return "برای رفع: فقط یک شیفت برای این روز نگه دارید.";
     case "OUTSIDE_PERIOD":
       return "برای رفع: شیفت خارج از دوره را پاک کنید.";
     case "STAFFING":
       return v.status === "BELOW_MINIMUM"
-        ? `برای رفع: نفرات نوبت ${SHIFT_PRESENTATION[v.period].name} را افزایش دهید.`
-        : `برای رفع: نفرات نوبت ${SHIFT_PRESENTATION[v.period].name} را کاهش دهید.`;
+        ? `برای رفع: نفرات نوبت ${labels[v.period]} را افزایش دهید.`
+        : `برای رفع: نفرات نوبت ${labels[v.period]} را کاهش دهید.`;
     default:
       return v satisfies never;
   }
@@ -486,10 +495,11 @@ export const ALIGNMENT_ADVISORY_NOTE =
   "ترجیح‌ها الزامی نیستند؛ مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد.";
 
 /** A nurse's own wish for the day, as shown next to their name. */
-export function preferenceLabel(value: PreferenceValue): string {
-  return value === "OFF"
-    ? "ترجیح: استراحت"
-    : `ترجیح: ${SHIFT_PRESENTATION[value].name}`;
+export function preferenceLabel(
+  value: PreferenceValue,
+  labels: ShiftLabels,
+): string {
+  return `ترجیح: ${labels[value]}`;
 }
 
 /**

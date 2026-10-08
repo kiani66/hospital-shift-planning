@@ -1,4 +1,8 @@
-import type { AssignmentCode } from "@/domain/shifts/shift-type";
+import {
+  isWorkingShift,
+  type AssignmentCode,
+} from "@/domain/shifts/shift-type";
+import { shiftFullName, type ShiftLabels } from "@/features/shifts/catalog";
 
 /**
  * The day editor's keyboard model. Keys are matched by physical position
@@ -67,12 +71,15 @@ export function editorKeyCommand(event: KeyLike): EditorKeyCommand | null {
 }
 
 /** The shortcut list shown to the user (keys as printed on the keyboard). */
-export const SHORTCUT_HELP: readonly { keys: string; action: string }[] = [
-  { keys: "M", action: "شیفت صبح" },
-  { keys: "E", action: "شیفت عصر" },
-  { keys: "N", action: "شیفت شب" },
-  { keys: "O", action: "استراحت" },
-  { keys: "L", action: "شیفت طولانی (صبح + عصر)" },
+export const shortcutHelp = (
+  labels: ShiftLabels,
+): readonly { keys: string; action: string }[] => [
+  ...Object.entries(SHIFT_KEYS).map(([code, shift]) => ({
+    keys: code.slice("Key".length),
+    action: isWorkingShift(shift)
+      ? `شیفت ${shiftFullName(shift, labels)}`
+      : labels[shift],
+  })),
   { keys: "Delete / Backspace", action: "تعیین‌نشده (پاک کردن)" },
   { keys: "↑ / ↓", action: "پرستار قبلی / بعدی" },
   { keys: "← / →", action: "گزینه بعدی / قبلی همان پرستار" },

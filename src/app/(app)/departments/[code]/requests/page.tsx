@@ -13,6 +13,7 @@ import {
 import type { RequestResolution } from "@/domain/change-requests/plan-change";
 import { isAssignmentCode } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import { QueueList, QueueTabs } from "@/features/change-request-review/queue";
 import { RequestReview } from "@/features/change-request-review/request-review";
 import { RequestReviewDialog } from "@/features/change-request-review/review-dialog";
@@ -43,6 +44,7 @@ export default async function DepartmentRequestsPage({
     "changeRequest.review",
   );
   const ctx = await requireRequestContext();
+  const shiftLabels = await loadShiftLabels();
   const query = await searchParams;
   const status: ChangeRequestStatus = isStatus(query.status)
     ? query.status
@@ -87,7 +89,11 @@ export default async function DepartmentRequestsPage({
       />
       <div className="flex flex-col gap-4">
         <QueueTabs queue={queue} href={statusHref} />
-        <QueueList queue={queue} detailHref={detailHref} />
+        <QueueList
+          shiftLabels={shiftLabels}
+          queue={queue}
+          detailHref={detailHref}
+        />
       </div>
       {review && (
         <RequestReviewDialog
@@ -95,6 +101,7 @@ export default async function DepartmentRequestsPage({
           closeHref={statusHref(status)}
         >
           <RequestReview
+            shiftLabels={shiftLabels}
             review={review}
             query={{ status, requestId: review.request.id }}
           />

@@ -6,6 +6,7 @@ import {
   type ValidationCategory,
 } from "@/domain/rules/validation-summary";
 import { nurseRowId } from "@/features/schedule-editing/presentation";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 import {
@@ -47,8 +48,14 @@ export function FindingNurses({
 }
 
 /** When and which shift, as a short chain: "شب · چهارشنبه ۶ آبان ← صبح · پنجشنبه ۷ آبان". */
-export function FindingFacts({ finding }: { finding: ReviewFinding }) {
-  const facts = findingFacts(finding);
+export function FindingFacts({
+  finding,
+  shiftLabels,
+}: {
+  finding: ReviewFinding;
+  shiftLabels: ShiftLabels;
+}) {
+  const facts = findingFacts(finding, shiftLabels);
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
       {facts.map((fact, i) => (
@@ -75,9 +82,11 @@ export function FindingFacts({ finding }: { finding: ReviewFinding }) {
 export function FindingItem({
   finding,
   linked,
+  shiftLabels,
 }: {
   finding: ReviewFinding;
   linked: boolean;
+  shiftLabels: ShiftLabels;
 }) {
   return (
     <li
@@ -98,17 +107,17 @@ export function FindingItem({
       </p>
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <FindingNurses finding={finding} linked={linked} />
-        <FindingFacts finding={finding} />
+        <FindingFacts finding={finding} shiftLabels={shiftLabels} />
       </p>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {findingMessage(finding)}
+        {findingMessage(finding, shiftLabels)}
       </p>
       <p className="flex items-start gap-1.5 text-xs leading-relaxed font-medium">
         <Wrench
           aria-hidden="true"
           className="mt-0.5 size-3.5 shrink-0 text-primary"
         />
-        {findingResolution(finding)}
+        {findingResolution(finding, shiftLabels)}
       </p>
     </li>
   );

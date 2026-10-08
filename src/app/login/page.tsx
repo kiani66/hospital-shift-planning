@@ -6,6 +6,7 @@ import { IconWell } from "@/components/ui/icon-well";
 import { LoginBrandPanel } from "@/features/auth/login-brand-panel";
 import { LoginForm } from "@/features/auth/login-form";
 import { safeRedirectPath } from "@/features/auth/safe-redirect";
+import { loadShiftLabels } from "@/features/shifts/labels";
 import { PASSWORD_CHANGE_PATH } from "@/infrastructure/auth/config";
 import { getSessionState } from "@/infrastructure/auth/session";
 
@@ -23,10 +24,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (session.status === "passwordChangeRequired")
     redirect(PASSWORD_CHANGE_PATH);
   const { callbackUrl } = await searchParams;
+  const shiftLabels = await loadShiftLabels();
 
   return (
     <main className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-      <LoginBrandPanel />
+      <LoginBrandPanel shiftLabels={shiftLabels} />
       <div className="relative -mt-10 flex justify-center px-4 pb-10 lg:mt-0 lg:items-center lg:px-10 lg:py-12">
         <div className="w-full max-w-md">
           <section

@@ -47,7 +47,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   await page.goto(`${url}&day=2026-10-27`);
   await expect(row(page)).toContainText("در انتظار تخصیص");
   await controls(page)
-    .getByRole("button", { name: "استراحت", exact: true })
+    .getByRole("button", { name: "استراحت (OFF)", exact: true })
     .click();
   await saved(page);
   await expect(row(page)).toContainText("مطابق ترجیح");
@@ -59,7 +59,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   await expect(row(page)).toContainText("در انتظار تخصیص");
   expect((await abanState(d, d.nurseEmail, "2026-10-27")).shift).toBeNull();
   await controls(page)
-    .getByRole("button", { name: "استراحت", exact: true })
+    .getByRole("button", { name: "استراحت (OFF)", exact: true })
     .focus();
   await page.keyboard.press("o");
   await saved(page);
@@ -68,7 +68,9 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   const head = dialog(page).getByRole("group", {
     name: "شیفت سرپرستار آزمایشی",
   });
-  await head.getByRole("button", { name: "استراحت", exact: true }).click();
+  await head
+    .getByRole("button", { name: "استراحت (OFF)", exact: true })
+    .click();
   await saved(page);
   await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toContainText(
@@ -128,9 +130,11 @@ for (const width of [360, 390]) {
       `/departments/${d.code}/schedule?month=1405-08&day=2026-10-27`,
     );
     const off = controls(page).getByRole("button", {
-      name: "استراحت",
+      name: "استراحت (OFF)",
       exact: true,
     });
+    // A code-oriented control: it shows the code, its name stays the label.
+    await expect(off).toHaveText("OFF");
     expect((await off.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await off.click();
     await saved(page);
@@ -155,6 +159,51 @@ for (const width of [360, 390]) {
   });
 }
 
+for (const width of [360, 390, 1280]) {
+  test(`assignment codes M | E | N | ME | OFF share one row at ${width}px`, async ({
+    page,
+  }) => {
+    const d = await provisionExplicitOffDepartment();
+    await page.setViewportSize({ width, height: 800 });
+    await signInAndWait(page, d.headEmail);
+    await page.goto(
+      `/departments/${d.code}/schedule?month=1405-08&day=2026-10-27`,
+    );
+    const names = [
+      "صبح (M)",
+      "عصر (E)",
+      "شب (N)",
+      "طولانی (ME)",
+      "استراحت (OFF)",
+    ];
+    const buttons = names.map((name) =>
+      controls(page).getByRole("button", { name, exact: true }),
+    );
+    const boxes = [];
+    for (const [i, button] of buttons.entries()) {
+      await expect(button).toHaveText(["M", "E", "N", "ME", "OFF"][i]!);
+      boxes.push((await button.boundingBox())!);
+      // The code is never clipped inside its button.
+      expect(
+        await button.evaluate((el) => el.scrollWidth - el.clientWidth),
+      ).toBeLessThanOrEqual(0);
+    }
+    // One row, equal heights; phones keep 44px touch targets.
+    for (const box of boxes) {
+      expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThan(1);
+      expect(box.height).toBe(boxes[0]!.height);
+      if (width < 640) expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+  });
+}
+
 test("Head Nurse directly swaps an explicit rest and working decision without a request", async ({
   page,
 }) => {
@@ -169,7 +218,7 @@ test("Head Nurse directly swaps an explicit rest and working decision without a 
     .selectOption({ label: "سرپرستار آزمایشی — طولانی (ME)" });
   await dialog(page)
     .getByLabel("پرستار دوم", { exact: true })
-    .selectOption({ label: "پرستار آزمایشی ۱ — استراحت" });
+    .selectOption({ label: "پرستار آزمایشی ۱ — استراحت (OFF)" });
   await dialog(page)
     .getByLabel("علت", { exact: true })
     .selectOption({ label: "نیاز عملیاتی بخش" });

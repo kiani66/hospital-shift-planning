@@ -4,6 +4,11 @@ import type { ActionError } from "@/application/result";
 import { isoDate } from "@/domain/shared/dates";
 
 import {
+  RENAMED_SHIFT_LABELS,
+  SHIFT_LABELS,
+} from "../../../tests/support/shift-labels";
+
+import {
   NETWORK_FAILURE,
   NO_FILTERS,
   NO_PREFERENCE_LABEL,
@@ -80,13 +85,30 @@ describe("savedMessage", () => {
   ) => ({ nurseId: "n1", date: isoDate(date), before, after });
 
   it("words an assignment, a change and a clear (the nurse stays on the roster)", () => {
-    expect(savedMessage([change("2026-10-24", null, "M")], names, label)).toBe(
-      "صبح (M) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.",
-    );
-    expect(savedMessage([change("2026-10-24", "M", "E")], names, label)).toBe(
-      "عصر (E) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.",
-    );
-    expect(savedMessage([change("2026-10-24", "N", null)], names, label)).toBe(
+    expect(
+      savedMessage(
+        [change("2026-10-24", null, "M")],
+        names,
+        label,
+        SHIFT_LABELS,
+      ),
+    ).toBe("صبح (M) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.");
+    expect(
+      savedMessage(
+        [change("2026-10-24", "M", "E")],
+        names,
+        label,
+        SHIFT_LABELS,
+      ),
+    ).toBe("عصر (E) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.");
+    expect(
+      savedMessage(
+        [change("2026-10-24", "N", null)],
+        names,
+        label,
+        SHIFT_LABELS,
+      ),
+    ).toBe(
       "شیفت «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ پاک شد؛ در فهرست پرسنل می‌ماند.",
     );
   });
@@ -96,7 +118,7 @@ describe("savedMessage", () => {
       change("2026-10-24", null, "E"),
       change("2026-10-25", "M", "E"),
     ];
-    expect(savedMessage(range, names, label)).toBe(
+    expect(savedMessage(range, names, label, SHIFT_LABELS)).toBe(
       "عصر (E) برای «سارا نمونه» در ۲ روز ثبت شد.",
     );
     expect(
@@ -104,10 +126,13 @@ describe("savedMessage", () => {
         [change("2026-10-24", null, "E"), change("2026-10-25", "M", null)],
         names,
         label,
+        SHIFT_LABELS,
       ),
     ).toBe("۲ تغییر ثبت شد.");
-    expect(savedMessage([], names, label)).toMatch(/تغییری لازم نبود/);
-    expect(savedMessage(range, names, label, true)).toBe(
+    expect(savedMessage([], names, label, SHIFT_LABELS)).toMatch(
+      /تغییری لازم نبود/,
+    );
+    expect(savedMessage(range, names, label, SHIFT_LABELS, true)).toBe(
       "آخرین تغییر بازگردانده شد (۲ مورد).",
     );
     expect(
@@ -115,8 +140,22 @@ describe("savedMessage", () => {
         [{ ...change("2026-10-24", null, "M"), nurseId: "x" }],
         names,
         label,
+        SHIFT_LABELS,
       ),
     ).toContain("«—»");
+  });
+
+  it("names OFF like every code, and takes the names from the labels", () => {
+    const off = [change("2026-10-24", "M", null)].map((c) => ({
+      ...c,
+      after: "OFF" as const,
+    }));
+    expect(savedMessage(off, names, label, SHIFT_LABELS)).toBe(
+      "استراحت (OFF) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.",
+    );
+    expect(savedMessage(off, names, label, RENAMED_SHIFT_LABELS)).toBe(
+      "مرخصی‌روز (OFF) برای «سارا نمونه» در شنبه ۲ آبان ۱۴۰۵ ثبت شد.",
+    );
   });
 });
 

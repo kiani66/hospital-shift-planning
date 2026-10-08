@@ -1890,3 +1890,21 @@ Implemented through the approved slices: shared `domain/schedule/assess-edits.ts
 candidate ordering, application query and command, and the read/assignment UI. Concurrency
 hardening before merge protects adjacent scheduling inputs and dated membership eligibility
 through the assignment transaction; the approved business decisions above remain unchanged.
+
+### D112 · Shift labels come from `shift_types`
+
+- **Codes are domain, labels are data.** `M`, `E`, `N`, `ME` and `OFF` stay compile-time domain
+  constants (`ShiftCode`, `AssignmentCode`); every rule (coverage, night rest, candidates,
+  validation, preferences) keeps using them. Only the descriptive name of each code
+  (`shift_types.label`) is reference data.
+- **One loader.** `application/shifts/labels.ts` reads the table with one query and maps exactly
+  the five domain codes; a missing or blank label throws `ShiftReferenceDataError`, and rows with
+  other codes are ignored (a row never makes a new shift valid). UI code reaches it through the
+  per-request cached `loadShiftLabels()`; pages pass the labels down as props. No component
+  queries the table and no screen hardcodes a shift name.
+- **Code versus label.** Code-oriented controls (the day editor's buttons, shift chips) show the
+  code, OFF included. Descriptive text uses the label; a decision in running text reads
+  «label (CODE)», e.g. «صبح (M)», «استراحت (OFF)». Accessible names of the code buttons are that
+  same «label (CODE)».
+- **ME is «طولانی».** Migration 0012 aligned the stored ME label with the name the UI always
+  showed. Changing a label later changes the screens, never stored assignments.

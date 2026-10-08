@@ -17,13 +17,13 @@ import { cn } from "@/lib/utils";
 import { ApplyConfirmForm } from "./apply-confirm";
 import { RuleSetHistory } from "./history-view";
 import {
-  BUCKET_NAMES,
   applyRefusalText,
   dayTypeSummary,
   scopeLabel,
   versionLabel,
 } from "./presentation";
 import { RuleSetVersionCard } from "./version-card";
+import type { ShiftLabels } from "@/features/shifts/catalog";
 
 const focusRing =
   "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none";
@@ -116,11 +116,14 @@ export function ApplyPreview({
   departmentName,
   departmentCode,
   closeHref,
+  shiftLabels,
 }: {
   preview: RuleSetApplicationPreview;
   departmentName: string;
   departmentCode: string;
   closeHref: Route;
+  /** Descriptive shift names (`shift_types.label`). */
+  shiftLabels: ShiftLabels;
 }) {
   const current = versionName(preview.current, departmentName);
   const target = versionName(preview.target, departmentName);
@@ -161,7 +164,7 @@ export function ApplyPreview({
       </p>
       <p className="text-sm text-muted-foreground">
         روزهای عادی در نسخه انتخابی:{" "}
-        {dayTypeSummary(preview.target.content.normal)}
+        {dayTypeSummary(preview.target.content.normal, shiftLabels)}
       </p>
       <p className="text-xs text-muted-foreground">
         این پیش‌نمایش چیزی را ذخیره نمی‌کند و فقط شمار موارد را نشان می‌دهد
@@ -175,7 +178,7 @@ export function ApplyPreview({
             {introduced.slice(0, 20).map((p) => (
               <li key={`${p.date}${p.period}`}>
                 {formatJalaliDate(p.date, { weekday: true })} ·{" "}
-                {BUCKET_NAMES[p.period]}: {faNumber(p.covered)} نفر —{" "}
+                {shiftLabels[p.period]}: {faNumber(p.covered)} نفر —{" "}
                 {p.kind === "SHORTAGE"
                   ? `کمبود ${faNumber(p.amount)} نفر`
                   : `مازاد ${faNumber(p.amount)} نفر`}
@@ -232,7 +235,7 @@ export function ApplyPreview({
                 {preview.unrepairableProblems.map((p) => (
                   <li key={`${p.date}${p.period}`}>
                     {formatJalaliDate(p.date, { weekday: true })} ·{" "}
-                    {BUCKET_NAMES[p.period]}:{" "}
+                    {shiftLabels[p.period]}:{" "}
                     {p.kind === "SHORTAGE"
                       ? `کمبود نیرو ${faNumber(p.amount)} نفر`
                       : `مازاد نیرو ${faNumber(p.amount)} نفر`}
@@ -259,6 +262,7 @@ export function DepartmentCoverageRulesView({
   pageHref,
   selectedScheduleId,
   preview,
+  shiftLabels,
 }: {
   data: DepartmentCoverageRules;
   departmentName: string;
@@ -266,6 +270,8 @@ export function DepartmentCoverageRulesView({
   pageHref: Route;
   selectedScheduleId: string | null;
   preview: React.ReactNode;
+  /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
+  shiftLabels: ShiftLabels;
 }) {
   const name = (id: string) => {
     const v = data.versionNames.get(id);
@@ -382,6 +388,7 @@ export function DepartmentCoverageRulesView({
             key={v.id}
             version={v}
             names={data.names}
+            shiftLabels={shiftLabels}
             highlight={
               v.departmentId === null
                 ? scopeLabel(null)

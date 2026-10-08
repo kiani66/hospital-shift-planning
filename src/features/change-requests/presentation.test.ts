@@ -18,6 +18,7 @@ import {
   requestErrorMessage,
   requestSummary,
 } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 const PERSIAN = /^[؀-ۿ«]/;
 const RAW = /[A-Z]{3,}_|\d{4}-\d{2}-\d{2}/;
@@ -66,17 +67,22 @@ describe("requestSummary", () => {
     ],
     ["OTHER", {}, "درباره شیفت صبح؛ جزئیات در توضیح آمده است."],
   ] as const)("words %s", (type, extra, text) => {
-    expect(requestSummary({ ...base, ...extra, type })).toBe(text);
+    expect(requestSummary({ ...base, ...extra, type }, SHIFT_LABELS)).toBe(
+      text,
+    );
   });
 
   it("speaks to the swap partner from their side", () => {
     expect(
-      requestSummary({
-        ...base,
-        type: "SWAP",
-        counterpartShift: "E",
-        role: "COUNTERPART",
-      }),
+      requestSummary(
+        {
+          ...base,
+          type: "SWAP",
+          counterpartShift: "E",
+          role: "COUNTERPART",
+        },
+        SHIFT_LABELS,
+      ),
     ).toBe(
       "«سارا نمونه» می‌خواهد شیفت صبح خود را با شیفت عصر شما جابه‌جا کند.",
     );

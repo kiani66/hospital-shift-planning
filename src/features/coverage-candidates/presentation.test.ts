@@ -8,6 +8,7 @@ import { toDiagnostic } from "@/domain/rules/diagnostic";
 import { CandidateList } from "./candidate-list";
 import { ShortageCandidates } from "./shortage-candidates";
 import { candidateDayLabel, candidatePreferenceLabel } from "./presentation";
+import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
 
 vi.mock("./actions", () => ({ readCoverageCandidatesAction: vi.fn() }));
 const date = isoDate("2026-10-25");
@@ -41,8 +42,16 @@ const data: Extract<CoverageCandidates, { status: "SHORTAGE" }> = {
   available: [person],
   notAllowed: [],
 };
+const PREFERENCES = [
+  "SAME_SHIFT",
+  "NONE",
+  "DIFFERENT_SHIFT",
+  "OFF_PREFERENCE",
+] as const;
 const render = (value: CoverageCandidates) =>
-  renderToStaticMarkup(createElement(CandidateList, { data: value }));
+  renderToStaticMarkup(
+    createElement(CandidateList, { shiftLabels: SHIFT_LABELS, data: value }),
+  );
 
 describe("D111 candidate presentation", () => {
   it("keeps backend order and only two groups; shows identity without UUIDs or write controls", () => {
@@ -74,21 +83,25 @@ describe("D111 candidate presentation", () => {
       ],
     });
     expect(html).toContain(candidateDayLabel.OFF_ASSIGNMENT);
-    expect(html).toContain(candidatePreferenceLabel.OFF_PREFERENCE);
+    expect(html).toContain(
+      candidatePreferenceLabel("OFF_PREFERENCE", SHIFT_LABELS),
+    );
     expect(html).not.toContain("<button");
   });
   it("omits missing personnel numbers and describes every preference", () => {
     const html = render({
       ...data,
-      available: Object.keys(candidatePreferenceLabel).map((preference) => ({
+      available: PREFERENCES.map((preference) => ({
         ...person,
         personnelNumber: null,
         preference: preference as typeof person.preference,
       })),
     });
     expect(html).not.toContain("شماره پرسنلی");
-    for (const label of Object.values(candidatePreferenceLabel))
-      expect(html).toContain(label);
+    for (const preference of PREFERENCES)
+      expect(html).toContain(
+        candidatePreferenceLabel(preference, SHIFT_LABELS),
+      );
   });
   it("shows the existing human-readable hard-rule finding without ids or ISO dates", () => {
     const diagnostic = toDiagnostic(
@@ -159,6 +172,7 @@ describe("D111 candidate presentation", () => {
     };
     const html = renderToStaticMarkup(
       createElement(ShortageCandidates, {
+        shiftLabels: SHIFT_LABELS,
         scheduleId: id,
         date: day.date,
         coverage: day.coverage,
@@ -171,6 +185,7 @@ describe("D111 candidate presentation", () => {
     expect(
       renderToStaticMarkup(
         createElement(ShortageCandidates, {
+          shiftLabels: SHIFT_LABELS,
           scheduleId: id,
           date: day.date,
           coverage: [],

@@ -22,7 +22,7 @@ TypeScript schema.
 | Area                | Tables                                                                                                                                                                                                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | People and access   | `users` (system-level `is_hospital_admin`; `personnel_number`, optional `email`/`mobile`, `must_change_password`, `session_version`, migration 0009), `departments`, `department_memberships` (NURSE / HEAD_NURSE, ended rows kept), `supervisor_assignments`                |
-| Reference data      | `shift_types` (M, E, N, ME; inserted by migration 0002), `change_reasons` (change reasons; migration 0007)                                                                                                                                                                   |
+| Reference data      | `shift_types` (M, E, N, ME from migration 0002, OFF from 0010; `label` is the display name, D112), `change_reasons` (change reasons; migration 0007)                                                                                                                         |
 | Schedules           | `schedules` (department + `period_start`/`period_end`, status, `revision` counter, pinned `staffing_rule_set_version_id`), `schedule_roster` (snapshot of who belongs, with role)                                                                                            |
 | Staffing rules      | `staffing_rule_sets` (Hospital Default + one per Department Override), `staffing_rule_set_versions`, `staffing_rule_set_requirements`, `staffing_rule_set_date_exceptions`, `schedule_rule_set_applications` (migration 0011; see [Staffing rule sets](#staffing-rule-sets)) |
 | Preferences         | `preference_windows`, `preference_window_dates`, `preference_window_nurses`, `nurse_preferences`                                                                                                                                                                             |
@@ -77,7 +77,9 @@ with their keys, foreign keys and checks (`legacy_shift_change_requests`,
 ## Reference data
 
 Rows of `shift_types` (0002) and `change_reasons` (0007) are inserted by migrations, not by the
-seed, and survive `resetData`. A change reason is never deleted once it may be referenced: retire
+seed, and survive `resetData`. `shift_types.label` is the descriptive shift name every screen shows
+(D112; ME was aligned to «طولانی» by 0012); the codes stay the domain's constants, and a row with
+an unknown code is ignored, never treated as a shift. A change reason is never deleted once it may be referenced: retire
 it with `is_active = false` in a new migration (inactive reasons stay readable in history but
 cannot be chosen). `OTHER` always requires a note (check `change_reasons_other_note_check`).
 

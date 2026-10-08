@@ -31,6 +31,7 @@ import {
   type ContentFormValue,
 } from "../../src/features/staffing-rules/presentation";
 import { setupTestDatabase } from "./support/database";
+import { SHIFT_LABELS } from "../support/shift-labels";
 
 /**
  * The holiday part of a draft end to end below the browser: the editor's
@@ -99,7 +100,7 @@ function submit(
 
 /** Saves the form like updateDraftAction does, then reloads what the editor shows. */
 async function saveAndReload(form: FormData): Promise<ContentFormValue> {
-  const content = parseContentForm(form);
+  const content = parseContentForm(form, SHIFT_LABELS);
   if (!content.ok) throw new Error(content.message);
   const version = (await findRuleSetVersion(db, versionId))!;
   ok(
@@ -182,6 +183,6 @@ describe("holiday rules of a draft", () => {
   it("refuses a ticked rule without a minimum instead of dropping it silently", () => {
     const form = submit({ M: { min: 2, max: 4 } });
     form.set("holiday.M.min", "");
-    expect(parseContentForm(form).ok).toBe(false);
+    expect(parseContentForm(form, SHIFT_LABELS).ok).toBe(false);
   });
 });
