@@ -102,3 +102,12 @@ Vercel + Neon; see [docs/deployment.md](docs/deployment.md).
 ## License
 
 MIT
+
+Controlled pilot-data reset and Head Nurse monthly planning reset: [Phase 14 architecture,
+retention exceptions and isolated verification](docs/phase-14-reset.md).
+
+Phase 14 delivery details and exact verification counts: [implementation report](docs/phase-14-report.md).
+
+Phase 14 also previews all retained personnel/import reservations and provides controlled, admin-only
+recovery of missing standard reference data. See [the reset/recovery runbook](docs/phase-14-reset.md)
+for explicit conflict resolution, department operator steps and staffing-policy review.

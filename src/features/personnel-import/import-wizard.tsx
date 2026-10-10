@@ -79,6 +79,18 @@ function RowProblems({ row }: { row: PreviewRow }) {
   );
 }
 
+function MatchedAccounts({ row }: { row: PreviewRow }) {
+  return row.accountIds.map((id) => (
+    <p key={id}>
+      <Link className="underline" href={`/admin/personnel/${id}`}>
+        {row.action === "ADD_MEMBERSHIP" || row.action === "UNCHANGED"
+          ? "حساب موجود؛ استفاده مجدد بدون تغییر هویت و رمز"
+          : "بررسی حساب دارای تعارض"}
+      </Link>
+    </p>
+  ));
+}
+
 function PreviewTable({ rows }: { rows: readonly PreviewRow[] }) {
   return (
     <>
@@ -118,6 +130,7 @@ function PreviewTable({ rows }: { rows: readonly PreviewRow[] }) {
                 "پرستار"}
             </p>
             <RowProblems row={row} />
+            <MatchedAccounts row={row} />
           </li>
         ))}
       </ul>
@@ -173,6 +186,7 @@ function PreviewTable({ rows }: { rows: readonly PreviewRow[] }) {
                     {IMPORT_ACTION_LABELS[row.action]}
                   </Badge>
                   <RowProblems row={row} />
+                  <MatchedAccounts row={row} />
                 </td>
               </tr>
             ))}

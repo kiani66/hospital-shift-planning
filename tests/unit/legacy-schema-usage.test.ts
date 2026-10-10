@@ -9,7 +9,12 @@ import { describe, expect, it } from "vitest";
  * only their schema definition (so drizzle-kit keeps tracking them), the
  * schema index and the development/test seed reset may refer to them.
  */
+// Phase 14 explicitly permits dependency analysis and controlled pilot-reset cleanup.
 const ALLOWED = new Set([
+  "src/domain/reset/categories.ts",
+  "src/domain/reset/plan.ts",
+  "src/infrastructure/repositories/reset-inventory.ts",
+  "src/infrastructure/repositories/monthly-reset.ts",
   "src/infrastructure/db/schema/legacy-change-requests.ts",
   "src/infrastructure/db/schema/enums.ts",
   "src/infrastructure/db/schema/index.ts",

@@ -30,6 +30,7 @@ export interface PreviewRow {
   readonly action: ImportAction;
   readonly errors: readonly ImportRowError[];
   readonly conflicts: readonly ImportField[];
+  readonly accountIds: readonly string[];
   /** Normalized values when valid, else the cells as written. */
   readonly values: Partial<Record<ImportField, string>>;
 }
@@ -129,6 +130,7 @@ export async function previewImportAction(
     }
     const rows = preview.plan.rows.map((row, i): PreviewRow => ({
       line: row.line,
+      accountIds: preview.accountIdsByLine[row.line] ?? [],
       action: row.action,
       errors: row.errors,
       conflicts: row.conflicts,

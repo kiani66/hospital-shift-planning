@@ -26,6 +26,7 @@ const EXPECTED_TABLES = [
   "preference_window_dates",
   "preference_window_nurses",
   "preference_windows",
+  "reset_operations",
   "schedule_change_cells",
   "schedule_changes",
   "schedule_revision_dates",
@@ -232,8 +233,8 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0000 baseline, 0001 schema, 0002 shift types, 0003 no overlaps, 0004 login
     // throttles, 0005 legacy change requests, 0006 Phase 9 schema, 0007 reasons,
     // 0008 system-level Hospital Admin flag, 0009 personnel identity (stage 1),
-    // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label
-    expect(before).toBe(13);
+    // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label, 0013 reset records
+    expect(before).toBe(14);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

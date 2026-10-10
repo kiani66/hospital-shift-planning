@@ -1,3 +1,5 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
+import { MonthlyResetControl } from "@/features/reset/monthly-control";
 import { Info } from "lucide-react";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
@@ -61,7 +63,10 @@ import {
 } from "@/features/schedule-review/month-calendar";
 import { requireDepartmentPage } from "@/features/shell/department-page";
 import { PageHeader } from "@/features/shell/page-header";
-import { loadShiftLabels, type ShiftLabels } from "@/features/shifts/labels";
+import {
+  loadOptionalShiftLabels,
+  type ShiftLabels,
+} from "@/features/shifts/labels";
 import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
 
 export const metadata: Metadata = { title: "برنامه بخش" };
@@ -132,7 +137,8 @@ export default async function DepartmentSchedulePage({
 }: PageProps<"/departments/[code]/schedule">) {
   const department = await requireDepartmentPage(params, "department.manage");
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const { schedule, day, month, filter } = await searchParams;
   // `?filter=undecided|coverage|…` marks the days of one category (D104).
   const activeFilter = isDayFilter(filter) ? filter : null;
@@ -294,7 +300,15 @@ export default async function DepartmentSchedulePage({
             />
           </>
         }
-        secondaryAction={data.canCreate ? createDialog(false) : null}
+        secondaryAction={
+          <>
+            {(selected.status === "DRAFT" ||
+              selected.status === "PLANNING") && (
+              <MonthlyResetControl scheduleId={selected.id} />
+            )}
+            {data.canCreate ? createDialog(false) : null}
+          </>
+        }
       />
       <div className="flex flex-col gap-3">
         <HeadNurseWorkflowNotice workflow={review.workflow} dayHref={here} />

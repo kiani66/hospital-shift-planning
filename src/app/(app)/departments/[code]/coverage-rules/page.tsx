@@ -1,3 +1,4 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { CircleCheck } from "lucide-react";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
@@ -13,7 +14,7 @@ import {
   ApplyPreview,
   DepartmentCoverageRulesView,
 } from "@/features/staffing-rules/department-view";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 
 export const metadata: Metadata = { title: "قوانین پوشش بخش" };
 
@@ -28,7 +29,8 @@ export default async function DepartmentCoverageRulesPage({
 }: PageProps<"/departments/[code]/coverage-rules">) {
   const department = await requireDepartmentPage(params, "staffingRules.view");
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const { schedule, target, applied } = await searchParams;
   const orNotFound = (error: unknown): never => {
     if (error instanceof NotFoundError) notFound();

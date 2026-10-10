@@ -2,7 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 
-import { readShiftLabels } from "@/application/shifts/labels";
+import {
+  readShiftLabels,
+  ShiftReferenceDataError,
+} from "@/application/shifts/labels";
 
 export type { ShiftLabels } from "@/application/shifts/labels";
 
@@ -12,3 +15,13 @@ export type { ShiftLabels } from "@/application/shifts/labels";
  * descriptive shift name; no component queries `shift_types` itself.
  */
 export const loadShiftLabels = cache(readShiftLabels);
+
+/** Pilot resets may explicitly remove reference data. Never invent replacement labels. */
+export const loadOptionalShiftLabels = cache(async () => {
+  try {
+    return await loadShiftLabels();
+  } catch (error) {
+    if (error instanceof ShiftReferenceDataError) return null;
+    throw error;
+  }
+});

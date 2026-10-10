@@ -1908,3 +1908,51 @@ through the assignment transaction; the approved business decisions above remain
   same «label (CODE)».
 - **ME is «طولانی».** Migration 0012 aligned the stored ME label with the name the UI always
   showed. Changing a label later changes the screens, never stored assignments.
+
+## Controlled pilot reset decisions (Phase 14)
+
+### D113 · Explicit Full Reset exception to normal retention
+
+Hospital Admin may repeatedly reset selected pilot data, including approved schedules, personnel,
+local departments and selected operational history. This is a narrow explicit exception to D17,
+D22, D81 and retained legacy/change history, available only through a read-only preview and explicit
+impact confirmation. Normal commands retain their existing rules. The executing admin and at
+least one active credentialed admin survive. Master data starts unselected; global definitions
+require explicit selection. Record-level dependencies are shown; unrelated departments/global
+records are never silently included. Shared/retained references preserve personnel or block the
+plan. `reset_operations` is independent minimal administrative evidence and never a reset category.
+
+### D114 · Monthly Planning Reset
+
+Current department Head Nurse only; DRAFT and PLANNING only, with protected history refused.
+Clear working assignments (OFF/PREFILL included) and planning swaps' changes/cells/notes/reasons.
+Preserve schedule ID, period, department, status, roster, preferences/windows, staffing-rule pin
+and reference definitions. Keep PLANNING to preserve preference permissions. Use normal assignment
+locks/current membership/revision protection; empty eligible resets are no-ops. Lightweight
+count-only audit accompanies real cleanup. No mandatory reason and no Full Reset retention exception.
+
+### D115 · Preview freshness and locked Full Reset
+
+Read-only repeatable snapshot with real counts, dependencies, preserved entities and recreation
+warnings. Signed actor/scope/category-bound preview expires after 15 minutes. Execution uses the
+administration lock, EXCLUSIVE NOWAIT database table locks and a reconstructed plan/fingerprint.
+Concurrent inserts/updates/row lockers cannot bypass validation. Break known cycles only on deleted
+rows, use explicit DELETEs with FKs enabled, verify unchanged survivors/FKs/admins before commit,
+and commit independent evidence atomically. Failed attempts roll back; minimal failure evidence is
+best effort after rollback. See [Phase 14](phase-14-reset.md) for operational limits and verification.
+
+### D116 · Personnel import readiness and controlled default restoration
+
+Full Reset preview accounts for all surviving identities, including outside-scope/inactive/orphan
+accounts and retained FK reasons. Personnel number is the existing CSV import match key; reused
+accounts keep identity/credentials. Actual CSV conflicts/reuse link to existing profiles. No reset
+or import silently changes identifiers, activity or credentials.
+
+Admin-only recovery adds missing migration-defined shifts/reasons without overwrites. Only an
+empty hospital lineage can regain the original immutable migration 0011 legacy baseline, with
+its fixed compatibility identity, M/E/N min 1/no max and original effective day. Preview/confirmation
+state these historical values and clinical review requirements; existing policies are preserved.
+Purpose-bound proofs, transaction locks, stale checks, inserted counts and unchanged-survivor
+checks protect restoration. Approved department values remain a documented operator step.
+Clinical requirements, local rules and exceptions require explicit review/publication in existing
+staffing forms; no hospital-specific departments or staffing bounds are invented.

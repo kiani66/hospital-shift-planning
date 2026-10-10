@@ -180,3 +180,21 @@ Decisions D105–D110. Migration `0011_staffing_rule_sets` is additive (expand s
   from the schema. Nothing depends on it.
 - No migration publishes any other rule set. The NICU pilot override is created and published by a
   Hospital Admin through the rule-set workflow (D110; see deployment.md).
+
+## Phase 14 reset persistence
+
+Migration 0013 adds only `reset_operations`, with no operational foreign keys. It preserves minimal
+administrative evidence independently of deletable pilot audit history. The category registry and
+actual Drizzle/PostgreSQL FK inventory constrain resets; operational and master data never share
+an unrestricted truncation path. Normal immutability/retention remains, with the explicitly confirmed
+pilot reset exception in D113. Monthly cleanup preserves schedule/roster/preferences/windows and
+removes working assignments plus planning swaps' change rows/cells, never approval history.
+See [Phase 14 reset architecture and runbook](phase-14-reset.md).
+
+Phase 14 business readiness adds no further migration. The reset page provides admin-only,
+read-only preview and explicitly confirmed transactional restoration of missing migration-defined
+shift/reason defaults and the original legacy staffing baseline only for an empty hospital lineage.
+Existing rows, inactive reasons, personnel credentials and policies are never overwritten.
+See [personnel readiness and controlled recovery](phase-14-reset.md#controlled-default-recovery)
+for conflict resolution and the approved-value department operator procedure. Do not replay old
+migrations or seed demo data as a pilot recovery mechanism.
