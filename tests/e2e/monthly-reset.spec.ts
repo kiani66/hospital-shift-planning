@@ -1,3 +1,5 @@
+import { signInForReset } from "./support/reset-auth";
+import { assertResetE2eDatabase } from "../../scripts/support/reset-e2e-safety";
 import { eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { createSchedule } from "../../src/application/schedules/create-schedule";
@@ -7,10 +9,10 @@ import { departments, users } from "../../src/infrastructure/db/schema";
 import { loadActor } from "../../src/infrastructure/repositories/memberships";
 import { todayIn, APP_TIMEZONE } from "../../src/infrastructure/auth/actor";
 import { provisionDepartment } from "./support/workspace";
-import { signInAndWait } from "./support/auth";
 test("Monthly Reset previews real impact and refreshes to unassigned planning", async ({
   page,
 }) => {
+  assertResetE2eDatabase(process.env);
   const url = process.env.DATABASE_URL!;
   if (
     new URL(url).hostname !== "127.0.0.1" ||
@@ -53,7 +55,7 @@ test("Monthly Reset previews real impact and refreshes to unassigned planning", 
   } finally {
     await pool.end();
   }
-  await signInAndWait(page, fixture.headEmail);
+  await signInForReset(page, fixture.headEmail);
   await page.goto(`/departments/${fixture.code}/schedule?schedule=${id}`);
   await page.getByRole("button", { name: "بازنشانی چیدمان" }).click();
   const dialog = page.getByRole("dialog", { name: "بازنشانی چیدمان ماه؟" });

@@ -239,3 +239,29 @@ retention of the referenced entity, never silent widening. No automatic backup/r
    Verify login and admin personnel/import/staffing/profile/reset navigation with zero departments.
    Preview recovery, cancel once, confirm, and repeat as a no-op. Provision an approved fictional
    department and effective Head Nurse membership using the operator procedure, then create a month.
+
+## Isolated reset browser tests
+
+Build once with `pnpm build`, then run:
+
+```sh
+FULL_RESET_TEST_DATABASE_URL=postgresql://hsp:hsp@127.0.0.1:5432/postgres pnpm test:e2e:reset
+```
+
+Use only a disposable local PostgreSQL test service whose role may create databases.
+The runner requires `NODE_ENV=test` (set by the package script), rejects deployed
+environments, remote hosts, URL query overrides and external app servers, and never
+loads local environment files. It creates a random `hsp_phase14_e2e_test_<UUID>`
+database, applies all migrations, seeds fictional demo data, generates a temporary
+authentication secret and runs an independent production server on an unused port.
+All app, migration and fixture URLs must match the owned database. Full Reset and
+Monthly Reset browser cases retain their original guards and run with one worker,
+no retries and no server reuse across desktop Chromium, Android and iOS/WebKit.
+Ordinary `pnpm test:e2e` excludes these specs and retains its existing database setup.
+
+The database is dropped in `finally` after success, test failure or handled SIGINT/
+SIGTERM. SIGKILL or runner loss cannot execute cleanup; CI's disposable PostgreSQL
+service is removed with the job. For local hard termination, an operator may drop
+only the exact generated test database printed by the runner after checking no test
+is using it. No existing database is reset during provisioning or cleanup.
+CI runs this suite in its own PostgreSQL service/job, separate from `hsp_test`.

@@ -26,17 +26,17 @@ export default defineConfig({
     { name: "api", testMatch: /api\/.*\.spec\.ts/ },
     {
       name: "desktop-chromium",
-      testIgnore: /api\//,
+      testIgnore: /api\/|(?:full-reset|monthly-reset)\.spec\.ts$/,
       use: { ...devices["Desktop Chrome"], ...locale, ...chromiumLaunch },
     },
     {
       name: "mobile-android",
-      testIgnore: /api\//,
+      testIgnore: /api\/|(?:full-reset|monthly-reset)\.spec\.ts$/,
       use: { ...devices["Pixel 7"], ...locale, ...chromiumLaunch },
     },
     {
       name: "mobile-ios",
-      testIgnore: /api\//,
+      testIgnore: /api\/|(?:full-reset|monthly-reset)\.spec\.ts$/,
       // Multi-session workflows take longer on WebKit in the cloud runner.
       // Assertions retain the same auto-wait limits; only the whole-test budget grows.
       timeout: 60_000,

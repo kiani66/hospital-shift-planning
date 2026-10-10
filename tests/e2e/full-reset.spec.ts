@@ -1,3 +1,5 @@
+import { signInForReset } from "./support/reset-auth";
+import { assertResetE2eDatabase } from "../../scripts/support/reset-e2e-safety";
 import { eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { createSchedule } from "../../src/application/schedules/create-schedule";
@@ -17,13 +19,9 @@ import { loadActor } from "../../src/infrastructure/repositories/memberships";
 import { APP_TIMEZONE, todayIn } from "../../src/infrastructure/auth/actor";
 import { provisionPersonnel } from "./support/personnel";
 import { provisionDepartment } from "./support/workspace";
-import {
-  signInAndWait,
-  signIn,
-  signOut,
-  IDENTIFIER_LABEL,
-} from "./support/auth";
+import { signIn, signOut, IDENTIFIER_LABEL } from "./support/auth";
 function isolatedUrl() {
+  assertResetE2eDatabase(process.env);
   const url = process.env.DATABASE_URL!;
   if (
     new URL(url).hostname !== "127.0.0.1" ||
@@ -75,13 +73,13 @@ test("admin scope preview refuses stale data then deletes only its test departme
         })
       ).ok,
     ).toBe(true);
-    await signInAndWait(page, fixture.nurseEmail);
+    await signInForReset(page, fixture.nurseEmail);
     await page.goto("/admin/reset");
     await expect(
       page.getByRole("heading", { name: "بازنشانی داده آزمایشی" }),
     ).not.toBeVisible();
     await signOut(page);
-    await signInAndWait(page, fixture.headEmail);
+    await signInForReset(page, fixture.headEmail);
     await page.goto("/admin/reset");
     await page
       .getByRole("checkbox", { name: fixture.name, exact: true })
@@ -152,7 +150,7 @@ test("scoped reset exposes retained identities; explicit correction permits real
       .select()
       .from(users)
       .where(eq(users.id, outsider.id));
-    await signInAndWait(page, fixture.people.admin.email);
+    await signInForReset(page, fixture.people.admin.email);
     await page.goto("/admin/reset");
     await page
       .getByRole("checkbox", { name: fixture.own.name, exact: true })
@@ -273,7 +271,7 @@ test("confirmed master selection warns of capability loss; empty-state admin nav
       .update(users)
       .set({ isHospitalAdmin: true })
       .where(eq(users.id, head!.id));
-    await signInAndWait(page, fixture.headEmail);
+    await signInForReset(page, fixture.headEmail);
     await page.goto("/admin/reset");
     await page.getByRole("checkbox", { name: "دامنه همه سامانه" }).check();
     for (const name of [
@@ -389,7 +387,7 @@ test("confirmed master selection warns of capability loss; empty-state admin nav
     // Explicit fictional department/memberships emulate the documented operator recovery step.
     const recoveredDepartment = await provisionDepartment();
     await signOut(page);
-    await signInAndWait(page, recoveredDepartment.headEmail);
+    await signInForReset(page, recoveredDepartment.headEmail);
     await page.goto(
       `/departments/${recoveredDepartment.code}/schedule?month=1405-10`,
     );

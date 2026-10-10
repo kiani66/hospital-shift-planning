@@ -19,12 +19,13 @@ export function resetPersonnelInventory(
     name: string,
     row: (typeof tables)[number]["rows"][number],
   ) =>
-    plan.deleteKeys[name]?.includes(
+    // The plan and inventory are from the same snapshot; every table has delete keys.
+    plan.deleteKeys[name]!.includes(
       rowKey(
         tables.find((t) => t.name === name)!,
         row,
       ),
-    ) ?? false;
+    );
   const selectedDepartments =
     scope.kind === "DEPARTMENTS" ? new Set(scope.departmentIds) : null;
   const candidates = new Set<unknown>();

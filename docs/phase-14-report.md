@@ -266,8 +266,9 @@ Use isolated fictional data only. Detailed steps are in [the runbook](phase-14-r
 
 Both requested business-completion blockers are addressed in the verified local scope.
 The implementation is ready for an authorized commit and draft PR for review. Merge is
-blocked by the coverage failure and CI configuration gaps below; deployment and any
-NICU/pilot reset remain unauthorized.
+awaiting fresh remote CI after publication. The coverage and CI configuration gaps
+recorded below have been addressed locally by the follow-up verification; deployment
+and any NICU/pilot reset remain unauthorized.
 
 ### Final pre-commit verification
 
@@ -292,3 +293,53 @@ Merge/deployment, applying migration 0013 to the pilot, actual pilot reset and
 approved-value operator recovery still require explicit owner approval. Before
 clinical use, the owner must supply approved departments/personnel and review/publish
 actual staffing requirements; restoration does not invent those business values.
+
+### Follow-up CI hardening and database isolation verification
+
+The Integration AUTH_SECRET fix is preserved. Domain coverage remediation added 17
+meaningful reset unit cases and simplified proven unreachable dependency guards.
+Fresh full unit coverage now passes: 1,916 tests in 91 files, zero failures/skips;
+statements 100% (1,313/1,313), branches 100% (1,027/1,027), functions 100%
+(309/309), lines 100% (1,168/1,168). Thresholds and exclusions are unchanged.
+The full 984-test integration regression passed during the preceding coverage fix;
+it was not rerun for the test-infrastructure-only isolation change.
+
+Full Reset and Monthly Reset browser tests now use `pnpm test:e2e:reset`, a separate
+configuration and CI job/service. The runner creates a unique local database, applies
+all migrations, seeds only fictional demo data, generates temporary authentication,
+starts an independent production server, runs one worker without retries or server
+reuse, and drops its owned database in finally. Original database guards remain and
+are strengthened by explicit local maintenance, deployment, URL equality, random
+name, query-override and external-server checks. Ordinary E2E discovery excludes
+these reset specifications while retaining its existing database setup.
+
+Final isolated browser verification: **12 passed, 0 failed/skipped** across desktop,
+Android and iOS (9 Full Reset and 3 Monthly Reset cases). Selected ordinary regression:
+**72 passed, 0 failed, 2 intentional skips** across desktop and Android for login,
+personnel identity/mutations, staffing rules and schedule review. This is selected
+regression coverage, not the entire 502-test ordinary browser inventory. Fresh lint,
+typecheck, formatting and production build pass. Twenty-one isolation-guard unit
+cases pass and are included in the 1,916-test full unit result.
+
+Initial local browser attempts failed because binaries/libraries were outside the
+default cache. A subsequent run exposed an existing `networkidle` timeout during
+reset sign-in; reset-only readiness now asserts the authenticated URL and account
+menu instead. Ordinary authentication helpers remain unchanged. Final iOS verification
+used temporary runtime libraries and skipped only Playwright's ldconfig-cache check
+because that cache does not see temporary libraries; actual libraries were loaded
+and all WebKit browser assertions ran. CI installs normal browser/system dependencies
+with `--with-deps`; no validation bypass is committed. Existing Next.js stream-close
+log diagnostics remain despite passing assertions.
+
+A deliberate no-matching-test invocation returned failure and still dropped its
+generated database, confirming cleanup on test failure. SIGINT/SIGTERM are handled;
+SIGKILL/runner loss may leave a local test database requiring exact-name operator
+cleanup. CI service destruction removes its disposable databases when the job ends.
+No existing NICU/pilot data was changed. CI is configured for re-verification, but
+these follow-up changes remain uncommitted/unpushed and remote CI has not rerun.
+
+Additional files: `.github/workflows/ci.yml`, `package.json`, `playwright.config.ts`,
+`playwright.reset.config.ts`, `scripts/test-e2e-reset.ts`,
+`scripts/support/reset-e2e-safety.ts`, `tests/unit/reset-coverage.test.ts`,
+`tests/unit/reset-e2e-safety.test.ts`, and `tests/e2e/support/reset-auth.ts`, plus
+updates to existing reset browser specs and this report/runbook.

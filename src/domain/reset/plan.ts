@@ -211,9 +211,8 @@ export function buildResetPlan(
           )
             continue;
           const cat = categoryOf(child, r);
-          const explicitGlobal =
-            RESET_CATEGORIES[cat].global && selectedSet.has(cat);
-          if (!inScope(child, r) && !explicitGlobal) {
+          // Explicitly selected global rows were already marked in initial selection.
+          if (!inScope(child, r)) {
             blockers.push(`CROSS_SCOPE_DEPENDENCY:${child.name}`);
             continue;
           }
@@ -229,34 +228,25 @@ export function buildResetPlan(
             blockers.push(`EXPLICIT_MASTER_SELECTION_REQUIRED:${cat}`);
             continue;
           }
-          if (child.name === "users" && protectedIds.has(String(r.id))) {
-            blockers.push("PROTECTED_ADMIN");
-            continue;
-          }
+          // Users have no outgoing FKs in the verified schema, so personnel cannot
+          // be selected through dependency closure. Initial selection above protects admins.
           // An automatically selected category has the same scoped semantics as a manual selection.
           for (const dependentTable of tables)
             for (const dependentRow of dependentTable.rows) {
               if (
                 categoryOf(dependentTable, dependentRow) !== cat ||
-                (!inScope(dependentTable, dependentRow) && !explicitGlobal)
-              )
-                continue;
-              if (
-                dependentTable.name === "users" &&
-                (protectedIds.has(String(dependentRow.id)) ||
-                  preservedUserIds.includes(String(dependentRow.id)))
+                !inScope(dependentTable, dependentRow)
               )
                 continue;
               const keys = deleting.get(dependentTable.name)!;
-              const size = keys.size;
-              mark(dependentTable, dependentRow);
-              if (keys.size > size) changed = true;
+              keys.add(rowKey(dependentTable, dependentRow));
+              changed = true;
             }
-          if (!selectedSet.has(cat)) {
-            const reasons = automatic.get(cat) ?? new Set<string>();
-            reasons.add(`${child.name} → ${parent.name}`);
-            automatic.set(cat, reasons);
-          }
+          // A retained in-scope child cannot belong to a manually selected category:
+          // initial selection marked that entire category. Expand it exactly once.
+          const reasons = automatic.get(cat) ?? new Set<string>();
+          reasons.add(`${child.name} → ${parent.name}`);
+          automatic.set(cat, reasons);
         }
       }
   }
