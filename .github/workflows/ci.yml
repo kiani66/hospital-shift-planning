@@ -130,7 +130,14 @@ jobs:
           --health-retries 15
     env:
       FULL_RESET_TEST_DATABASE_URL: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      # Prerendering initializes the DB context before checking the session.
+      # Build-only service URL; the runner replaces all DB URLs before tests.
+      DATABASE_URL: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      DATABASE_URL_UNPOOLED: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      AUTH_TRUST_HOST: "true"
     steps:
+      # Temporary build-time session secret; the runner generates its own.
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
