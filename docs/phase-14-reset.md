@@ -40,6 +40,10 @@ selecting it, including all of its rows inside that scope. Only rows within the 
 are added. Personnel eligible in a
 department scope come from its memberships, supervisor assignments and historical rosters.
 Shared personnel or personnel referenced by retained master data/global history are preserved.
+References from rows already selected for deletion do not retain personnel, including explicitly
+selected global staffing versions in a department-scoped reset. A survivor is explained by its
+protected status, unselected personnel category, excluded scope or specific surviving FK rows;
+there is no generic retention explanation for a dependency that will be deleted.
 Unscoped notifications and unscoped audit are preserved in departmental resets. Inconsistent
 explicit department/schedule attribution also cannot be treated as department-local.
 

@@ -162,7 +162,8 @@ export function buildResetPlan(
         mark(t, r);
       }
     }
-  // Personnel cannot drag retained master data or another department into a reset.
+  // Only surviving references may retain personnel; explicitly selected global rows
+  // must not preserve their former authors. Retained master/other-department data stays protected.
   const preservedUserIds: string[] = [];
   const users = byName.get("users");
   if (users)
@@ -175,9 +176,9 @@ export function buildResetPlan(
             t.rows.some(
               (r) =>
                 references(r, fk, user) &&
+                !deleting.get(t.name)!.has(rowKey(t, r)) &&
                 (!inScope(t, r) ||
                   (RESET_CATEGORIES[categoryOf(t, r)].master &&
-                    !deleting.get(t.name)!.has(rowKey(t, r)) &&
                     !(
                       categoryOf(t, r) === "departmentStaffingRules" &&
                       selectedSet.has("departments") &&

@@ -1919,8 +1919,10 @@ D22, D81 and retained legacy/change history, available only through a read-only 
 impact confirmation. Normal commands retain their existing rules. The executing admin and at
 least one active credentialed admin survive. Master data starts unselected; global definitions
 require explicit selection. Record-level dependencies are shown; unrelated departments/global
-records are never silently included. Shared/retained references preserve personnel or block the
-plan. `reset_operations` is independent minimal administrative evidence and never a reset category.
+records are never silently included. Only references that survive the approved reset preserve
+personnel or block the plan; explicitly selected deletion of a global reference does not retain
+its former author. `reset_operations` is independent minimal administrative evidence and never a
+reset category.
 
 ### D114 · Monthly Planning Reset
 

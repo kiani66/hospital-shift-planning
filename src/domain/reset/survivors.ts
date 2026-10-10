@@ -86,7 +86,9 @@ export function resetPersonnelInventory(
         reasons.push(
           `ارجاع حفظ‌شونده: ${ref.table}.${ref.columns} [${ref.key}]${ref.department ? ` — ${ref.department}` : ""}`,
         );
-      if (!reasons.length) reasons.push("حساب در برنامه حذف قرار ندارد");
+      // The matching plan retains an account only for protection, category/scope
+      // exclusion or a surviving reference. Do not replace those causes with a
+      // generic explanation for a dependency that is itself being deleted.
     }
     return {
       id: String(user.id),

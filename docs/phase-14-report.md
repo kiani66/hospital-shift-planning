@@ -172,7 +172,7 @@ existing-row checks. Both additions and the count-only recovery audit commit tog
 failure rolls everything back. Repeated fresh confirmations are no-ops. Recovery and deletion
 proofs cannot authorize each other.
 
-## G. Automated test results
+## G. Historical implementation and hardening test results
 
 All writes used disposable PostgreSQL databases on localhost port 55414. Hardening E2E used a fresh
 `hsp_phase14_e2e_test_hardening` database, migrated and fictionally seeded once before verification.
@@ -264,13 +264,23 @@ Use isolated fictional data only. Detailed steps are in [the runbook](phase-14-r
 
 ## J. PR/merge/deployment readiness
 
-Both requested business-completion blockers are addressed in the verified local scope.
-The implementation is ready for an authorized commit and draft PR for review. Merge is
-awaiting fresh remote CI after publication. The coverage and CI configuration gaps
-recorded below have been addressed locally by the follow-up verification; deployment
-and any NICU/pilot reset remain unauthorized.
+The published feature branch is `codex/phase-14-controlled-data-reset`, Draft PR #26,
+reviewed at `fa028f549b9647fd6a564b8e138a5daedd172346`. GitHub Actions
+[CI #68](https://github.com/kiani66/hospital-shift-planning/actions/runs/38047506237)
+passed all four jobs at that commit on 2026-10-10: lint/typecheck/unit coverage, PostgreSQL
+integration, ordinary build/E2E, and isolated reset E2E.
 
-### Final pre-commit verification
+The final read-only review subsequently found a MEDIUM personnel-retention defect and
+an invalid regression fixture. The local correction and its verification are recorded
+below; CI #68 predates this correction and does not validate these uncommitted changes.
+A new authorized commit/push and fresh CI/review are required before merge. Deployment,
+applying migration 0013 to the pilot, and any NICU/pilot reset remain unauthorized.
+
+### Historical pre-commit verification
+
+This subsection describes the earlier state before the coverage, AUTH_SECRET and isolated
+E2E fixes. Its failures and configuration findings are superseded by the follow-up verification
+and successful remote CI #68 below.
 
 The fresh `pnpm check` passed lint, typecheck, formatting and all 1,878 unit tests
 (89 files; zero failures or skips). The separately executed CI command
@@ -335,11 +345,63 @@ A deliberate no-matching-test invocation returned failure and still dropped its
 generated database, confirming cleanup on test failure. SIGINT/SIGTERM are handled;
 SIGKILL/runner loss may leave a local test database requiring exact-name operator
 cleanup. CI service destruction removes its disposable databases when the job ends.
-No existing NICU/pilot data was changed. CI is configured for re-verification, but
-these follow-up changes remain uncommitted/unpushed and remote CI has not rerun.
+No existing NICU/pilot data was changed. These fixes were subsequently committed and
+pushed as `6faf5b77750ca2410f4772aeccd685dc3f45643d`. The build-environment fix
+was published as `fa028f549b9647fd6a564b8e138a5daedd172346`; CI #68 then
+passed all four jobs at that HEAD. The new personnel-retention correction below remains
+local and uncommitted.
 
 Additional files: `.github/workflows/ci.yml`, `package.json`, `playwright.config.ts`,
 `playwright.reset.config.ts`, `scripts/test-e2e-reset.ts`,
 `scripts/support/reset-e2e-safety.ts`, `tests/unit/reset-coverage.test.ts`,
 `tests/unit/reset-e2e-safety.test.ts`, and `tests/e2e/support/reset-auth.ts`, plus
 updates to existing reset browser specs and this report/runbook.
+
+### Personnel retention correction after the final review
+
+Root cause: the planner treated any out-of-department FK as a retention dependency even
+when that global record was explicitly selected for deletion. Its account survived with
+a reserved personnel number/email and a generic explanation despite having no remaining
+reference. The unit fixture for that case also removed local staffing versions still
+referenced by schedules, requirements and date exceptions.
+
+The correction excludes already-selected deletion rows from personnel-retention checks.
+Protected administrators, genuine other-department/global references and retained master
+data remain protected; scope expansion, proof validation, FK checks and transaction locks
+are unchanged. Survivor explanations use the actual protection/category/scope or remaining
+FK cause; the obsolete generic fallback is removed. The replacement unit fixture keeps
+all referenced versions and asserts that its populated FK relationships resolve.
+
+Two real PostgreSQL regressions create a hospital draft through the existing command,
+explicitly clear its global operational audit through an application-scoped test reset,
+and then perform a department-scoped reset with hospital rules selected or retained.
+They verify deletion and subsequent CSV reuse of both unique identifiers, credential-free
+new-account creation, specific retained-rule explanations, conflict refusal when a dependency
+survives, unchanged other-department memberships, and byte-for-byte protection of the executing
+administrator. Before the fix: 1 passed, 1 failed, 15 filtered skips; the failure demonstrated
+the reviewed defect against valid migrated data. After the fix: all 17 business-readiness
+integration cases passed, with no failures or skips.
+
+Verification uses a newly created disposable PostgreSQL 17 container and database
+`hsp_phase14_retention_test`, bound only to 127.0.0.1 on a dynamically allocated port.
+Tests run from a separate copy without local environment files or build artifacts, so
+integration setup cannot override the disposable URL from `.env.local`. No existing test,
+NICU, pilot or production database is used. Temporary authentication is generated per run.
+
+Full unit coverage: 1,916 passed in 91 files, zero failures/skips; statements 100%
+(1,311/1,311), branches 100% (1,025/1,025), functions 100% (309/309), lines 100%
+(1,167/1,167). Coverage thresholds/exclusions and the AUTH_SECRET/E2E isolation fixes
+are unchanged. Full integration regression passed: **986 tests in 46 files, zero failures
+or skips**, including the 17 business-readiness cases above (not additional tests to sum).
+Lint, Next.js route type generation/TypeScript typecheck, and the repository-wide Prettier
+formatting check passed.
+
+This workspace runs Node 24.19.0 / pnpm 11.19.0 rather than the repository's Node 22 /
+pnpm 10.33.0 CI toolchain. Commands used `--config.verify-deps-before-run=false` to
+prevent pnpm 11 from attempting an automatic dependency reinstall in the verification
+copy; dependencies and lockfile were not changed. The first invocation aborted before
+test execution because of that reinstall behavior. Existing pg concurrent-query
+deprecation warnings occurred without failures. Fresh CI on the declared toolchain
+is still required; no build or E2E rerun is claimed for this domain-only correction.
+No schema migration, UI authorization change, identifier rewrite, commit, push, merge or
+deployment is part of this correction. Existing operational limitations in section H remain.

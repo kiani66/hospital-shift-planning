@@ -11,6 +11,7 @@ import {
   commitPersonnelImport,
 } from "../../src/application/personnel-import/import";
 import { setUserPersonnelNumber } from "../../src/application/management/personnel-number";
+import { createRuleSetDraft } from "../../src/application/staffing-rules/commands";
 import { createSchedule } from "../../src/application/schedules/create-schedule";
 import {
   FULL_OPERATIONAL_CATEGORIES,
@@ -85,6 +86,162 @@ async function commit(p: Awaited<ReturnType<typeof importPreview>>) {
   });
 }
 describe("personnel replacement readiness", () => {
+  it.each([true, false])(
+    "uses surviving dependencies for scoped personnel retention (delete hospital rules: %s)",
+    async (deleteHospitalRules) => {
+      const person = U.icuNurse1;
+      // A former test administrator authored a real hospital draft. Its global
+      // audit history is explicitly cleared first, leaving the draft as the
+      // account's only global dependency, rather than inventing orphaned FKs.
+      await db
+        .update(users)
+        .set({ isHospitalAdmin: true })
+        .where(eq(users.id, person.id));
+      const draft = await createRuleSetDraft(await ctx(person.id), {
+        departmentId: null,
+      });
+      if (!draft.ok) throw new Error(draft.error.message);
+      await db
+        .update(users)
+        .set({ isHospitalAdmin: false })
+        .where(eq(users.id, person.id));
+      const history = await previewFullReset(await ctx(), {
+        scope: { kind: "APPLICATION" },
+        categories: ["operationalAudit"],
+      });
+      expect(history.plan.blockers).toEqual([]);
+      expect(
+        await executeFullReset(await ctx(), { ...history, confirmed: true }),
+      ).toMatchObject({ ok: true });
+
+      // This account has a genuinely surviving reference in another department.
+      await db.insert(departmentMemberships).values({
+        userId: U.icuNurse2.id,
+        departmentId: ER.id,
+        role: "NURSE",
+        startedOn: "2026-01-01",
+      });
+      const otherMemberships = await db
+        .select()
+        .from(departmentMemberships)
+        .where(eq(departmentMemberships.departmentId, ER.id));
+      const [adminBefore] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, U.icuHead.id));
+      const [personBefore] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, person.id));
+      const preview = await previewFullReset(await ctx(), {
+        ...scoped,
+        categories: [
+          ...FULL_OPERATIONAL_CATEGORIES,
+          ...(deleteHospitalRules ? ["hospitalStaffingRules" as const] : []),
+        ],
+      });
+      expect(preview.plan.blockers).toEqual([]);
+      expect(preview.plan.protectedUserIds).toContain(U.icuHead.id);
+      expect(preview.plan.preservedUserIds).toContain(U.icuNurse2.id);
+      const retainedShared = preview.preservedUsers.find(
+        (u) => u.id === U.icuNurse2.id,
+      )!;
+      expect(
+        retainedShared.reasons.some(
+          (r) =>
+            r.includes("department_memberships.user_id") && r.includes(ER.name),
+        ),
+      ).toBe(true);
+      if (deleteHospitalRules) {
+        expect(preview.users).toContainEqual(
+          expect.objectContaining({
+            id: person.id,
+            disposition: "DELETE",
+            importBehavior: "NEW_IDENTITY_AVAILABLE",
+            reasons: [],
+          }),
+        );
+        expect(preview.plan.preservedUserIds).not.toContain(person.id);
+      } else {
+        const retained = preview.preservedUsers.find(
+          (u) => u.id === person.id,
+        )!;
+        expect(
+          retained.reasons.some(
+            (r) =>
+              r.includes("staffing_rule_set_versions.created_by") &&
+              r.includes(draft.data.versionId),
+          ),
+        ).toBe(true);
+        expect(retained.reasons).not.toContain("حساب در برنامه حذف قرار ندارد");
+      }
+      expect(
+        await executeFullReset(await ctx(), { ...preview, confirmed: true }),
+      ).toMatchObject({ ok: true });
+      expect(
+        await db.select().from(users).where(eq(users.id, U.icuHead.id)),
+      ).toEqual([adminBefore]);
+      expect(
+        await db.select().from(users).where(eq(users.id, U.icuNurse2.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(departmentMemberships)
+          .where(eq(departmentMemberships.departmentId, ER.id)),
+      ).toEqual(otherMemberships);
+
+      const imported = await importPreview(
+        person.personnelNumber,
+        "کارمند واقعی نمونه",
+        person.email,
+      );
+      if (!imported.ok) throw new Error(imported.fileError);
+      if (deleteHospitalRules) {
+        expect(
+          await db.select().from(users).where(eq(users.id, person.id)),
+        ).toEqual([]);
+        expect(
+          await db
+            .select()
+            .from(staffingRuleSetVersions)
+            .where(eq(staffingRuleSetVersions.id, draft.data.versionId)),
+        ).toEqual([]);
+        expect(imported.plan.rows[0]).toMatchObject({
+          action: "CREATE",
+          errors: [],
+        });
+        expect(await commit(imported)).toMatchObject({ ok: true });
+        const [replacement] = await db
+          .select()
+          .from(users)
+          .where(eq(users.personnelNumber, person.personnelNumber));
+        expect(replacement).toMatchObject({
+          personnelNumber: person.personnelNumber,
+          email: person.email,
+          displayName: "کارمند واقعی نمونه",
+          passwordHash: null,
+        });
+        expect(replacement!.id).not.toBe(person.id);
+      } else {
+        expect(
+          await db.select().from(users).where(eq(users.id, person.id)),
+        ).toEqual([personBefore]);
+        expect(
+          await db
+            .select()
+            .from(staffingRuleSetVersions)
+            .where(eq(staffingRuleSetVersions.id, draft.data.versionId)),
+        ).toHaveLength(1);
+        expect(imported.plan.committable).toBe(false);
+        expect(imported.plan.rows[0]).toMatchObject({
+          action: "ERROR",
+          errors: ["IDENTITY_CONFLICT"],
+          userId: person.id,
+        });
+      }
+    },
+  );
   it("lists every surviving identity, including outside scope and inactive accounts, with retained reference reasons", async () => {
     await db
       .update(users)

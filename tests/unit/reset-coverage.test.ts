@@ -6,6 +6,7 @@ import {
   CATEGORY_IDS,
   FULL_OPERATIONAL_CATEGORIES,
   rowKey,
+  references,
   type ResetRow,
   type ResetTable,
 } from "../../src/domain/reset/categories";
@@ -493,29 +494,48 @@ describe("personnel survivors and import readiness", () => {
 });
 
 describe("survivor explanations after dependency closure", () => {
-  it("reports conservative personnel retention even when explicit global deletion removes the last reference", () => {
+  it("deletes personnel when explicit global deletion removes its final reference", () => {
     const data = fixture({
       staffing_rule_set_versions: [
         { id: "hv", rule_set_id: "hospital", created_by: "nurse" },
+        { id: "lv", rule_set_id: "local", created_by: "admin" },
+        { id: "bv", rule_set_id: "other", created_by: "outside" },
       ],
-      staffing_rule_set_requirements: [],
-      staffing_rule_set_date_exceptions: [],
     });
+    // Keep the local versions referenced by schedules/requirements/exceptions;
+    // every populated FK in this projected inventory must resolve.
+    for (const table of data)
+      for (const fk of table.foreignKeys)
+        for (const row of table.rows)
+          if (fk.columns.every((column) => row[column] != null))
+            expect(
+              get(data, fk.target).rows.some((parent) =>
+                references(row, fk, parent),
+              ),
+            ).toBe(true);
     const p = buildResetPlan(
       data,
       scope,
       [...FULL_OPERATIONAL_CATEGORIES, "hospitalStaffingRules"],
       "admin",
     );
-    const nurse = resetPersonnelInventory(data, p, scope, "admin").find(
-      (u) => u.id === "nurse",
-    )!;
-    expect(p.preservedUserIds).toContain("nurse");
+    const inventory = resetPersonnelInventory(data, p, scope, "admin");
+    expect(p.permitted).toBe(true);
+    expect(p.preservedUserIds).not.toContain("nurse");
+    expect(p.deleteKeys.users).toContain('["nurse"]');
     expect(p.deleteKeys.staffing_rule_set_versions).toEqual(['["hv"]']);
-    expect(nurse).toMatchObject({
-      disposition: "RETAIN",
-      reasons: ["حساب در برنامه حذف قرار ندارد"],
+    expect(p.deleteKeys.users).not.toContain('["admin"]');
+    expect(p.deleteKeys.users).not.toContain('["outside"]');
+    expect(inventory.find((u) => u.id === "nurse")).toMatchObject({
+      disposition: "DELETE",
+      reasons: [],
+      importBehavior: "NEW_IDENTITY_AVAILABLE",
     });
+    expect(
+      inventory
+        .filter((u) => u.disposition === "RETAIN")
+        .every((u) => u.reasons.length > 0),
+    ).toBe(true);
   });
   it("uses department identity when display-name projection is unavailable", () => {
     // ResetRow supports partial projections; the membership still references an existing department.
