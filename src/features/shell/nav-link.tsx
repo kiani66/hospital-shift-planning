@@ -53,8 +53,11 @@ const SIDEBAR_LINK: Record<NavSurface, { current: string; idle: string }> = {
 };
 
 /**
- * Sidebar link: on the navy sidebar (desktop) or on the page (the "more"
- * page on phones), with the blue pill for the current page on both.
+ * Sidebar link: on the navy sidebar (desktop, tablet and the phone drawer)
+ * or on the page (the "more" page on phones), with the blue pill for the
+ * current page on both. On a collapsed sidebar rail it shows the icon only:
+ * the label stays as the link's accessible name and as its tooltip
+ * (`data-tooltip`), and the unread badge sits on the icon.
  */
 export function SidebarLink({
   item,
@@ -65,20 +68,33 @@ export function SidebarLink({
 }) {
   const current = isCurrent(usePathname(), item.href);
   const tone = SIDEBAR_LINK[surface];
+  const rail = surface === "sidebar";
   return (
     <Link
       href={item.href}
       aria-current={current ? "page" : undefined}
+      data-tooltip={rail ? item.label : undefined}
       className={cn(
         "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
         "focus-visible:ring-3 focus-visible:outline-none",
         current ? tone.current : tone.idle,
+        rail &&
+          "relative sidebar-collapsed:justify-center sidebar-collapsed:px-0",
       )}
     >
       <NavIcon name={item.icon} className="size-5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className={cn("truncate", rail && "sidebar-collapsed:sr-only")}>
+        {item.label}
+      </span>
       <BadgeText count={item.badge} />
-      <Badge count={item.badge} className="ms-auto" />
+      <Badge
+        count={item.badge}
+        className={cn(
+          "ms-auto",
+          rail &&
+            "sidebar-collapsed:absolute sidebar-collapsed:end-0.5 sidebar-collapsed:top-0.5",
+        )}
+      />
     </Link>
   );
 }
