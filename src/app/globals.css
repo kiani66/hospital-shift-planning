@@ -4,6 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
+ * The tablet/desktop sidebar is a collapsed icon rail: from md to lg unless
+ * the user expanded it for this visit, from lg only when the user collapsed
+ * it (remembered). The state is on <html> (features/shell/sidebar-state.ts),
+ * set before the first paint, so the layout never jumps on load.
+ */
+@custom-variant sidebar-collapsed {
+  @media (width >= 48rem) and (width < 64rem) {
+    &:where(:root:not([data-sidebar-tablet="expanded"]) *) {
+      @slot;
+    }
+  }
+  @media (width >= 64rem) {
+    &:where(:root[data-sidebar-desktop="collapsed"] *) {
+      @slot;
+    }
+  }
+}
+
+/*
  * Design tokens (shadcn/ui base, re-tinted to the product palette, D56).
  * RTL: the document is dir="rtl". Use logical utilities only
  * (ms-/me-, ps-/pe-, start-/end-, text-start/end, border-s/e, rounded-s/e);
@@ -302,5 +321,9 @@
   }
   body {
     @apply bg-canvas font-sans text-foreground antialiased;
+  }
+  /* The page behind the open phone navigation drawer does not scroll. */
+  html:has(dialog[data-nav-drawer][open]) {
+    overflow: hidden;
   }
 }

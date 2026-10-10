@@ -1958,3 +1958,27 @@ Purpose-bound proofs, transaction locks, stale checks, inserted counts and uncha
 checks protect restoration. Approved department values remain a documented operator step.
 Clinical requirements, local rules and exceptions require explicit review/publication in existing
 staffing forms; no hospital-specific departments or staffing bounds are invented.
+
+## Shell layout decisions
+
+### D117 · Collapsible sidebar and phone navigation drawer
+
+Presentation only: no route, navigation item, label, permission or information architecture changed.
+
+- **Desktop (`lg`+).** The sidebar is expanded by default. A control at its top («جمع کردن منو» /
+  «باز کردن منو», `aria-expanded`) collapses it to a 72px icon rail and the content column takes
+  the room. The choice is remembered per browser in `localStorage` (`hsp.sidebar.desktop`).
+- **Tablet (`md` to `lg`).** The rail is the default, so schedule and calendar pages get the width;
+  expanding it lasts for the visit and does not change the desktop choice.
+- **Rail.** Icons stay visible; labels and section titles become screen-reader only (each link
+  keeps its name, the current page keeps its pill and `aria-current`), a hairline separates the
+  sections and the unread badge sits on the icon. Hovering or focusing an item shows its label in a
+  tooltip beside the rail; Escape dismisses it. The tooltip is visual only (`aria-hidden`).
+- **No layout jump.** The state is two attributes on `<html>`; an inline script in the root layout
+  applies the remembered desktop choice before the first paint, and the `sidebar-collapsed:` CSS
+  variant (globals.css) styles the rail from them. See `features/shell/sidebar-state.ts`.
+- **Phones (< `md`).** No sidebar column. The header's menu button («منوی ناوبری») opens the full
+  sidebar navigation as a modal drawer from the inline start (native `<dialog>`: focus contained,
+  page inert and not scrolled, Escape closes, focus returns to the button). Choosing a link, a click
+  outside the panel, any navigation and growing into the sidebar layout close it. The bottom bar and
+  the «بیشتر» page are unchanged.
