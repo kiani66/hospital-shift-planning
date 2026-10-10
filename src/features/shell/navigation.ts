@@ -205,7 +205,16 @@ export function buildNavigation(ctx: Capabilities): Navigation {
     sections.push({
       id: "administration",
       title: "مدیریت بیمارستان",
-      items: [ITEMS.personnel, ITEMS.staffingRules],
+      items: [
+        ITEMS.personnel,
+        ITEMS.staffingRules,
+        {
+          id: "data-reset",
+          href: "/admin/reset",
+          label: "بازنشانی داده آزمایشی",
+          icon: "personnel",
+        },
+      ],
     });
   if (supervisor)
     sections.push({

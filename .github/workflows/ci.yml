@@ -51,6 +51,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://hsp:hsp@localhost:5432/hsp_test
     steps:
+      # A throwaway session secret per run; never a committed value.
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -106,4 +108,51 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+          retention-days: 7
+
+  reset-e2e:
+    name: Isolated reset end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hsp
+          POSTGRES_PASSWORD: hsp
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hsp -d postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      FULL_RESET_TEST_DATABASE_URL: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      # Prerendering initializes the DB context before checking the session.
+      # Build-only service URL; the runner replaces all DB URLs before tests.
+      DATABASE_URL: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      DATABASE_URL_UNPOOLED: postgresql://hsp:hsp@127.0.0.1:5432/postgres
+      AUTH_TRUST_HOST: "true"
+    steps:
+      # Temporary build-time session secret; the runner generates its own.
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      # Creates/migrates/fictionally seeds a unique database, runs one worker,
+      # and drops only that database in finally (also on test failure).
+      - run: pnpm test:e2e:reset
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: reset-playwright-report
+          path: playwright-report/reset/
           retention-days: 7

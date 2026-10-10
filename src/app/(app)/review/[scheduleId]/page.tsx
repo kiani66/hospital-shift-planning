@@ -1,3 +1,4 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { ChevronRight } from "lucide-react";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
@@ -8,7 +9,7 @@ import { getSupervisorScheduleReview } from "@/application/schedules/supervisor-
 import { addDays, type IsoDate } from "@/domain/shared/dates";
 import { isInPeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 import {
   faNumber,
   formatJalaliDate,
@@ -44,7 +45,8 @@ export default async function SupervisorReviewPage({
   searchParams,
 }: PageProps<"/review/[scheduleId]">) {
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const { scheduleId } = await params;
   const { day } = await searchParams;
   const review = await getSupervisorScheduleReview(ctx, {

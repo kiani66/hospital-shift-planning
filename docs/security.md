@@ -212,3 +212,21 @@ stale checks. No secrets, bootstrap/recovery adapter or extra audit metadata are
   user id, sessions and throttle state are unaffected.
 - Roster additions are Head Nurse use cases (`schedule.editRoster`) with server-side membership,
   account, status and revision checks; no assignment is created.
+
+## Phase 14 reset authorization
+
+`dataReset.manage` is Hospital Admin only, with stored authority rechecked under the existing
+administration lock. The executing and last usable admins are protected. Signed read-only previews
+bind actor, scope, categories and fingerprint; execution revalidates dependencies under database
+locks and requires explicit confirmation. Password hashes/proofs and personal snapshots never enter
+independent reset evidence. `schedule.resetPlanning` is only the current Head Nurse of the same
+department, rechecked under account/membership locks; DRAFT/PLANNING status gates do not inherit any
+Full Reset exception. See [reset safety and retention](phase-14-reset.md).
+
+Phase 14 business readiness adds no further migration. The reset page provides admin-only,
+read-only preview and explicitly confirmed transactional restoration of missing migration-defined
+shift/reason defaults and the original legacy staffing baseline only for an empty hospital lineage.
+Existing rows, inactive reasons, personnel credentials and policies are never overwritten.
+See [personnel readiness and controlled recovery](phase-14-reset.md#controlled-default-recovery)
+for conflict resolution and the approved-value department operator procedure. Do not replay old
+migrations or seed demo data as a pilot recovery mechanism.

@@ -1,3 +1,4 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import type { Metadata } from "next";
 
 import {
@@ -5,7 +6,7 @@ import {
   type PreferenceMonthCalendar,
 } from "@/application/preferences/queries";
 import { requireRequestContext } from "@/features/auth/guards";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 import {
   adjacentJalaliMonth,
   jalaliMonthLabel,
@@ -41,7 +42,8 @@ export default async function PreferencesPage({
   searchParams,
 }: PageProps<"/preferences">) {
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const params = await searchParams;
   const scheduleId =
     typeof params.schedule === "string" ? params.schedule : undefined;

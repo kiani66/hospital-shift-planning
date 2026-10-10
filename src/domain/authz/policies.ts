@@ -9,6 +9,7 @@ const HEAD_NURSE_ACTIONS = [
   /** The department workspace (schedule planning and history pages). */
   "department.manage",
   "schedule.create",
+  "schedule.resetPlanning",
   "schedule.openPreferences",
   "schedule.closePreferences",
   "schedule.startPlanning",
@@ -31,6 +32,7 @@ const HEAD_NURSE_ACTIONS = [
 
 /** Administrative writes are system-scoped, never inferred from department.manage. */
 export const HOSPITAL_ADMIN_ACTIONS = [
+  "dataReset.manage",
   "user.list",
   "user.create",
   "user.updateProfile",

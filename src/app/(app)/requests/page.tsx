@@ -1,3 +1,4 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import type { Metadata } from "next";
 
 import {
@@ -5,7 +6,7 @@ import {
   getMyChangeRequests,
 } from "@/application/change-requests/queries";
 import { requireRequestContext } from "@/features/auth/guards";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 import { RequestsView } from "@/features/change-requests/requests-view";
 import { PageHeader } from "@/features/shell/page-header";
 
@@ -18,7 +19,8 @@ export const metadata: Metadata = { title: "درخواست‌ها" };
  */
 export default async function RequestsPage() {
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const [options, requests] = await Promise.all([
     getChangeRequestOptions(ctx),
     getMyChangeRequests(ctx),

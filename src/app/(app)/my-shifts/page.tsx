@@ -1,10 +1,11 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import type { Metadata } from "next";
 
 import { getMyShiftsMonth } from "@/application/my-shifts/queries";
 import { isIsoDate } from "@/domain/shared/dates";
 import { isInPeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 import {
   adjacentJalaliMonth,
   jalaliMonthLabel,
@@ -32,7 +33,8 @@ export default async function MyShiftsPage({
   searchParams,
 }: PageProps<"/my-shifts">) {
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const params = await searchParams;
   // "Today" is Tehran's calendar day, not the server's (UTC) one.
   const today = todayIn(APP_TIMEZONE);

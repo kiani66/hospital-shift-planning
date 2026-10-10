@@ -1,3 +1,4 @@
+import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
 
@@ -13,7 +14,7 @@ import {
 import type { RequestResolution } from "@/domain/change-requests/plan-change";
 import { isAssignmentCode } from "@/domain/shifts/shift-type";
 import { requireRequestContext } from "@/features/auth/guards";
-import { loadShiftLabels } from "@/features/shifts/labels";
+import { loadOptionalShiftLabels } from "@/features/shifts/labels";
 import { QueueList, QueueTabs } from "@/features/change-request-review/queue";
 import { RequestReview } from "@/features/change-request-review/request-review";
 import { RequestReviewDialog } from "@/features/change-request-review/review-dialog";
@@ -44,7 +45,8 @@ export default async function DepartmentRequestsPage({
     "changeRequest.review",
   );
   const ctx = await requireRequestContext();
-  const shiftLabels = await loadShiftLabels();
+  const shiftLabels = await loadOptionalShiftLabels();
+  if (!shiftLabels) return <MissingShiftReference />;
   const query = await searchParams;
   const status: ChangeRequestStatus = isStatus(query.status)
     ? query.status

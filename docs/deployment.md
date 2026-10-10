@@ -242,3 +242,20 @@ the previous application. The old app has no management UI; it does not undo com
 or relation changes, including deactivations. Do not drop the column while Phase 10 servers are
 running, or clear admin flags as a rollback shortcut. There is no automatic down migration or
 general recovery command; any data correction needs a separately reviewed operator procedure.
+
+## Phase 14 delivery boundary
+
+Migration `0013_reset_operations.sql` is additive and contains no pilot-data deletion. Existing
+`AUTH_SECRET` also signs reset previews; secret rotation expires pending confirmations. Code,
+preview generation and isolated tests do not authorize a reset of current NICU/pilot data. Apply
+migrations, push/merge/deploy and execute any existing-pilot reset only after explicit owner approval.
+Review [Phase 14 runbook](phase-14-reset.md), including conservative freshness checks, brief write
+locks and explicit recreation requirements when optional master data/departments are removed.
+
+Phase 14 business readiness adds no further migration. The reset page provides admin-only,
+read-only preview and explicitly confirmed transactional restoration of missing migration-defined
+shift/reason defaults and the original legacy staffing baseline only for an empty hospital lineage.
+Existing rows, inactive reasons, personnel credentials and policies are never overwritten.
+See [personnel readiness and controlled recovery](phase-14-reset.md#controlled-default-recovery)
+for conflict resolution and the approved-value department operator procedure. Do not replay old
+migrations or seed demo data as a pilot recovery mechanism.

@@ -37,7 +37,7 @@ export function LoginBrandPanel({
   shiftLabels,
 }: {
   /** Descriptive shift names (`shift_types.label`). */
-  shiftLabels: ShiftLabels;
+  shiftLabels: ShiftLabels | null;
 }) {
   return (
     <div className="relative isolate overflow-hidden text-sidebar-foreground bg-brand-panel">
@@ -102,26 +102,27 @@ export function LoginBrandPanel({
             شیفت‌ها همه‌جا با کد و رنگ خود نمایش داده می‌شوند
           </p>
           <ul aria-label="انواع شیفت" className="flex flex-wrap gap-2">
-            {SHIFT_CODES.map((code) => {
-              const shift = SHIFT_PRESENTATION[code];
-              return (
-                <li
-                  key={code}
-                  className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/60 py-1 ps-1 pe-3 text-xs"
-                >
-                  <span
-                    dir="ltr"
-                    className={cn(
-                      "inline-flex h-6 min-w-8 items-center justify-center rounded-full px-1.5 font-bold",
-                      shift.tokenClass,
-                    )}
+            {shiftLabels &&
+              SHIFT_CODES.map((code) => {
+                const shift = SHIFT_PRESENTATION[code];
+                return (
+                  <li
+                    key={code}
+                    className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/60 py-1 ps-1 pe-3 text-xs"
                   >
-                    {code}
-                  </span>
-                  {shiftLabels[code]}
-                </li>
-              );
-            })}
+                    <span
+                      dir="ltr"
+                      className={cn(
+                        "inline-flex h-6 min-w-8 items-center justify-center rounded-full px-1.5 font-bold",
+                        shift.tokenClass,
+                      )}
+                    >
+                      {code}
+                    </span>
+                    {shiftLabels[code]}
+                  </li>
+                );
+              })}
           </ul>
         </div>
       </div>

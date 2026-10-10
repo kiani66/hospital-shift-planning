@@ -115,6 +115,7 @@ export type ImportPreview =
       readonly raw: readonly Partial<Record<string, string>>[];
       readonly ignoredColumns: readonly string[];
       readonly fingerprint: string;
+      readonly accountIdsByLine: Readonly<Record<number, readonly string[]>>;
     };
 
 /**
@@ -160,7 +161,24 @@ export async function previewPersonnelImport(
     department.id,
     input.data.startedOn,
   );
+  const emailOwners = await findEmailOwners(
+    ctx.db,
+    plan.rows.flatMap((r) => (r.person?.email ? [r.person.email] : [])),
+  );
   return {
+    accountIdsByLine: Object.fromEntries(
+      plan.rows.map((r) => [
+        r.line,
+        [
+          ...new Set(
+            [
+              r.userId,
+              r.person?.email ? emailOwners.get(r.person.email) : null,
+            ].filter((id): id is string => !!id),
+          ),
+        ],
+      ]),
+    ),
     ok: true,
     department: {
       id: department.id,
