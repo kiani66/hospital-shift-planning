@@ -60,9 +60,9 @@ export function RosterAdditions({
           variant="outline"
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
-          className="w-full sm:w-auto"
+          className="w-full py-2 whitespace-normal sm:w-auto"
         >
-          <UserPlus aria-hidden="true" className="size-5" />
+          <UserPlus aria-hidden="true" className="size-5 shrink-0" />
           افزودن پرسنل به برنامه ({faNumber(candidates.length)} نفر واجد شرایط)
         </Button>
       )}

@@ -156,7 +156,7 @@ function RosterSection({
       />
       <MetadataList
         items={[
-          ["تعداد پرسنل برنامه", `${faNumber(roster.total)} نفر`],
+          ["پرسنل ثبت‌شده در این برنامه", `${faNumber(roster.total)} نفر`],
           [
             "ترکیب",
             `${faNumber(roster.nurses)} ${ROLE_LABELS.NURSE}، ${faNumber(roster.headNurses)} ${ROLE_LABELS.HEAD_NURSE}`,

@@ -54,6 +54,7 @@ test.describe("approval workflow", () => {
     await expect(blockers).toContainText("۱ نقض قانون");
     await expect(blockers).not.toContainText("مغایرت");
 
+    await blockers.getByText("مشاهده موانع و روزهای مرتبط").click();
     // Fix it from the blocker's day link: nurse 1 gets no shift on 4 Aban.
     await blockers.getByRole("link", { name: "۴ آبان" }).click();
     const day = page.getByRole("dialog");

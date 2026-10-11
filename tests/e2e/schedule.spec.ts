@@ -77,7 +77,9 @@ test.describe("Head Nurse schedule management", () => {
     await expect(heading).toContainText(department.name);
     await expect(main(page).getByText("پیش‌نویس")).toBeVisible();
     // The Head Nurse is part of the roster, counted with everyone.
-    await expect(fact(roster(page), "تعداد پرسنل برنامه")).toHaveText("۴ نفر");
+    await expect(fact(roster(page), "پرسنل ثبت‌شده در این برنامه")).toHaveText(
+      "۴ نفر",
+    );
     await expect(fact(roster(page), "ترکیب")).toHaveText(
       "۳ پرستار، ۱ سرپرستار",
     );

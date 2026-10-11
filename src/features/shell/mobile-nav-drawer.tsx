@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -15,7 +15,7 @@ import { SIDEBAR_MEDIA } from "./sidebar-state";
 
 const iconButton = cn(
   "inline-flex size-11 shrink-0 items-center justify-center rounded-md",
-  "hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none",
+  "text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none active:bg-sidebar-accent/80 active:text-sidebar-foreground",
 );
 
 /**
@@ -71,18 +71,21 @@ export function MobileNavDrawer({
       setOpen(false);
   }
 
+  const toggleLabel = open ? "جمع کردن منو" : "باز کردن منو";
+
   return (
     <>
       <button
         type="button"
-        aria-label="منوی ناوبری"
+        aria-label={toggleLabel}
+        title={toggleLabel}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={drawerId}
         onClick={() => setOpen(true)}
         className={cn(iconButton, "-ms-2 md:hidden")}
       >
-        <Menu aria-hidden="true" className="size-6" />
+        <PanelLeftOpen aria-hidden="true" className="size-5 rtl:-scale-x-100" />
       </button>
       <dialog
         ref={ref}
@@ -115,11 +118,15 @@ export function MobileNavDrawer({
               </Link>
               <button
                 type="button"
-                aria-label="بستن منو"
+                aria-label="جمع کردن منو"
+                title="جمع کردن منو"
                 onClick={() => setOpen(false)}
                 className={iconButton}
               >
-                <X aria-hidden="true" className="size-5" />
+                <PanelLeftClose
+                  aria-hidden="true"
+                  className="size-5 rtl:-scale-x-100"
+                />
               </button>
             </div>
             <nav aria-label="ناوبری اصلی" className="flex-1 px-3 py-5">

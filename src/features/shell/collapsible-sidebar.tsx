@@ -4,12 +4,12 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useState,
   useSyncExternalStore,
   type FocusEvent,
-  type KeyboardEvent,
   type PointerEvent,
 } from "react";
 
@@ -86,7 +86,7 @@ const isDesktopMedia = () => matchMedia(DESKTOP_MEDIA).matches;
 type Tooltip = { label: string; top: number; insetStart: number };
 
 /**
- * The tablet/desktop sidebar (md+): brand row, the collapse control, then
+ * The tablet/desktop sidebar (md+): brand and collapse control in the header, then
  * the navigation. Collapsed, it is a 72px icon rail: labels and section
  * titles stay in the accessibility tree (screen-reader only), and hovering
  * or focusing an item shows its label as a tooltip beside the rail (Escape
@@ -123,6 +123,16 @@ export function CollapsibleSidebar({
   });
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
 
+  // Hover tooltips must also dismiss when keyboard focus is outside the rail.
+  useEffect(() => {
+    if (!tooltip) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTooltip(null);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [tooltip]);
+
   // In development, Strict Mode's remount resets `<html>` to the attributes
   // React renders, dropping the one the pre-paint script set. Re-apply it
   // from storage before paint (a no-op in production).
@@ -148,7 +158,8 @@ export function CollapsibleSidebar({
       target instanceof Element
         ? target.closest<HTMLElement>("[data-tooltip]")
         : null;
-    if (!collapsed || !item) return setTooltip(null);
+    if (!item || (!collapsed && item.tagName !== "BUTTON"))
+      return setTooltip(null);
     const box = item.getBoundingClientRect();
     setTooltip({
       label: item.dataset.tooltip ?? "",
@@ -178,36 +189,28 @@ export function CollapsibleSidebar({
       }
       onBlur={hideTooltip}
       onScroll={hideTooltip}
-      onKeyDown={(event: KeyboardEvent) => {
-        if (event.key === "Escape" && tooltip) {
-          event.preventDefault();
-          hideTooltip();
-        }
-      }}
     >
-      <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-3">
+      <div className="flex h-16 shrink-0 items-center justify-between gap-1 border-b border-sidebar-border px-3 sidebar-collapsed:h-auto sidebar-collapsed:flex-col sidebar-collapsed:py-2">
         <Link
           href={home}
           data-tooltip={PRODUCT_NAME}
-          className="flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-2 font-bold focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none sidebar-collapsed:w-full sidebar-collapsed:justify-center sidebar-collapsed:px-0"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 font-bold focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none sidebar-collapsed:w-full sidebar-collapsed:justify-center sidebar-collapsed:px-0"
         >
           <BrandMark className="size-9" />
           <span className="truncate sidebar-collapsed:sr-only">
             {PRODUCT_NAME}
           </span>
         </Link>
-      </div>
-      <div className="px-3 pt-3">
         <button
           type="button"
+          aria-label={toggleLabel}
           aria-expanded={!collapsed}
           aria-controls={navId}
           data-tooltip={toggleLabel}
           onClick={toggle}
           className={cn(
-            "flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-sidebar-muted-foreground transition-colors",
-            "hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none",
-            "sidebar-collapsed:justify-center sidebar-collapsed:px-0",
+            "inline-flex size-11 shrink-0 items-center justify-center rounded-md text-sidebar-muted-foreground transition-colors",
+            "hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-sidebar-ring focus-visible:outline-none active:bg-sidebar-accent/80 active:text-sidebar-foreground",
           )}
         >
           {/* Both icons are rendered and CSS picks one, so the control is right before hydration. */}
@@ -219,9 +222,6 @@ export function CollapsibleSidebar({
             aria-hidden="true"
             className="hidden size-5 shrink-0 rtl:-scale-x-100 sidebar-collapsed:block"
           />
-          <span className="truncate sidebar-collapsed:sr-only">
-            {toggleLabel}
-          </span>
         </button>
       </div>
       <nav
@@ -231,7 +231,7 @@ export function CollapsibleSidebar({
       >
         <NavSections sections={sections} />
       </nav>
-      {collapsed && tooltip && (
+      {tooltip && (
         // Visual only: every item's accessible name already holds its label.
         <span
           aria-hidden="true"

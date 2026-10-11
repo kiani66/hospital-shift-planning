@@ -186,6 +186,22 @@ test.describe("collapsible sidebar", () => {
 
     await expect(collapseButton(page)).toHaveAttribute("aria-expanded", "true");
     expect(await width(aside(page))).toBeCloseTo(EXPANDED_DESKTOP, 0);
+    const toggle = collapseButton(page);
+    await expect(toggle).toHaveText("");
+    const toggleBox = (await toggle.boundingBox())!;
+    expect(toggleBox.width).toBe(44);
+    expect(toggleBox.height).toBe(44);
+    // The compact control shares the brand header and sits at its inline end.
+    const brand = aside(page).getByRole("link", { name: "شیفت پرستاران" });
+    const brandBox = (await brand.boundingBox())!;
+    expect(toggleBox.y).toBe(brandBox.y);
+    expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(brandBox.x);
+    await toggle.hover();
+    await expect(page.getByTestId("sidebar-tooltip")).toHaveText(
+      "جمع کردن منو",
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("sidebar-tooltip")).toBeHidden();
     const mainBefore = await width(main);
 
     await collapseButton(page).click();
@@ -198,6 +214,13 @@ test.describe("collapsible sidebar", () => {
     );
     expect(await pageOverflow(page)).toBe(0);
     expect(await storedPreference(page)).toBe("collapsed");
+
+    await expandButton(page).hover();
+    await expect(page.getByTestId("sidebar-tooltip")).toHaveText(
+      "باز کردن منو",
+    );
+    await expect(expandButton(page)).toHaveText("");
+    expect(await width(expandButton(page))).toBe(44);
 
     // Icons only, but every link keeps its name; the current one is still marked.
     const schedule = sidebarNav(page).getByRole("link", {
@@ -250,6 +273,9 @@ test.describe("collapsible sidebar", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/home");
     await collapseButton(page).focus();
+    await expect(page.getByTestId("sidebar-tooltip")).toHaveText(
+      "جمع کردن منو",
+    );
     await page.keyboard.press("Enter");
     await expect(expandButton(page)).toBeFocused();
     await expect(expandButton(page)).toHaveAttribute("aria-expanded", "false");
@@ -311,14 +337,24 @@ test.describe("collapsible sidebar", () => {
 
     const menu = page
       .getByRole("banner")
-      .getByRole("button", { name: "منوی ناوبری" });
+      .locator('button[aria-haspopup="dialog"]');
     const drawer = page.getByRole("dialog", { name: "منوی ناوبری" });
     await expect(drawer).toBeHidden();
+
+    await expect(menu).toHaveAttribute("title", "باز کردن منو");
+    await expect(menu).toHaveText("");
+    const menuBox = (await menu.boundingBox())!;
+    expect(menuBox.width).toBeGreaterThanOrEqual(44);
+    expect(menuBox.height).toBeGreaterThanOrEqual(44);
 
     // Opens from the inline start (right in RTL) with focus inside.
     await menu.click();
     await expect(drawer).toBeVisible();
     await expect(menu).toHaveAttribute("aria-expanded", "true");
+    await expect(menu).toHaveAttribute("aria-label", "جمع کردن منو");
+    await expect(menu).toHaveAttribute("title", "جمع کردن منو");
+    const close = drawer.getByRole("button", { name: "جمع کردن منو" });
+    await expect(close).toHaveAttribute("title", "جمع کردن منو");
     // Let the slide-in finish before measuring.
     await drawer.evaluate((el) =>
       Promise.all(el.getAnimations().map((a) => a.finished)),
@@ -339,6 +375,12 @@ test.describe("collapsible sidebar", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(menu).toBeFocused();
+
+    await menu.click();
+    await close.click();
+    await expect(drawer).toBeHidden();
+    await expect(menu).toHaveAttribute("aria-label", "باز کردن منو");
+    await expect(menu).toHaveAttribute("title", "باز کردن منو");
 
     // A click outside the panel closes it.
     await menu.click();

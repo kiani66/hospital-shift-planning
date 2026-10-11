@@ -13,7 +13,7 @@ export interface DayLink {
 }
 
 const base =
-  "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-input focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none md:size-9 pointer-coarse:size-11";
+  "inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-md border border-input px-2 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none md:min-h-9 pointer-coarse:min-h-11";
 
 function Pending({ icon: Icon }: { icon: typeof ChevronLeft }) {
   const { pending } = useLinkStatus();
@@ -46,6 +46,7 @@ function DayNavLink({
         className={cn(base, "cursor-not-allowed opacity-40")}
       >
         <Icon aria-hidden="true" className="size-5" />
+        <span className="text-xs font-medium">{text}</span>
       </button>
     );
   return (
@@ -55,13 +56,14 @@ function DayNavLink({
       scroll={false}
       prefetch={false}
       aria-label={`${text}: ${target.label}`}
-      title={target.label}
+      title={`${text}: ${target.label}`}
       className={cn(
         base,
         "bg-background shadow-xs transition-colors hover:border-primary/40 hover:bg-accent hover:text-accent-foreground",
       )}
     >
       <Pending icon={Icon} />
+      <span className="text-xs font-medium">{text}</span>
     </Link>
   );
 }

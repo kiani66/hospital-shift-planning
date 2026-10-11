@@ -9,6 +9,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import type { Route } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 import type {
@@ -19,7 +20,7 @@ import type {
 import type { DayState } from "@/domain/rules/validation-summary";
 import { COVERAGE_PERIODS } from "@/domain/shifts/shift-type";
 import type { IsoDate } from "@/domain/shared/dates";
-import { faNumber } from "@/features/calendar/jalali";
+import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { monthGrid } from "@/features/calendar/month-grid";
 import {
   SHIFT_PRESENTATION,
@@ -37,6 +38,7 @@ import {
   HOLIDAY_LABEL,
   dayCellLabel,
   dayCount,
+  dayCountsLabel,
   matchesDayFilter,
   validationSummaryText,
   type DayFilter,
@@ -115,8 +117,14 @@ export function MonthSummary({
   filter = null,
   filterHref,
   ruleSetHref,
+  workflowNotice,
+  emptyNotice,
+  dayHref,
 }: {
   month: ScheduleMonthReview;
+  workflowNotice?: ReactNode;
+  emptyNotice?: ReactNode;
+  dayHref?: (date: IsoDate) => Route;
   /** The active calendar filter, if any. */
   filter?: DayFilter | null;
   /** Where a filter chip leads (null clears the filter); none: no chips. */
@@ -182,6 +190,38 @@ export function MonthSummary({
           </li>
         ))}
       </ul>
+      {workflowNotice}
+      {emptyNotice && (
+        <p role="note" className="text-sm text-muted-foreground">
+          {emptyNotice}
+        </p>
+      )}
+      {dayHref && !v.ready && (
+        <details className="border-t pt-2">
+          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium text-primary focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+            مشاهده روزهای نیازمند اقدام
+          </summary>
+          <ul className="space-y-2 text-sm">
+            {month.days
+              .filter((day) => day.state !== "READY")
+              .map((day) => (
+                <li
+                  key={day.date}
+                  className="flex flex-wrap items-baseline gap-x-2"
+                >
+                  <Link
+                    href={dayHref(day.date)}
+                    scroll={false}
+                    className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+                  >
+                    {formatJalaliDate(day.date)}
+                  </Link>
+                  <span>{dayCountsLabel(day)}</span>
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
       {filterHref && chips.length > 0 && (
         <nav
           aria-label="نمایش روزها بر اساس دسته"

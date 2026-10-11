@@ -1,13 +1,11 @@
 import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { MonthlyResetControl } from "@/features/reset/monthly-control";
-import { Info } from "lucide-react";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
 import { getRosterCandidates } from "@/application/schedules/roster";
-import { Callout } from "@/components/ui/callout";
 import {
   getScheduleReview,
   type DayReview,
@@ -311,22 +309,30 @@ export default async function DepartmentSchedulePage({
         }
       />
       <div className="flex flex-col gap-3">
-        <HeadNurseWorkflowNotice workflow={review.workflow} dayHref={here} />
         <MonthSummary
           month={review.month}
+          dayHref={selected.status === "DRAFT" ? here : undefined}
+          workflowNotice={
+            <HeadNurseWorkflowNotice
+              workflow={review.workflow}
+              dayHref={here}
+            />
+          }
+          emptyNotice={
+            noAssignments ? (
+              <>
+                هنوز تصمیمی در این برنامه ثبت نشده است؛ همه روزها شروع‌نشده‌اند.
+                {review.month.editable &&
+                  " برای چیدن شیفت‌ها، روزی را در تقویم انتخاب کنید."}
+              </>
+            ) : undefined
+          }
           filter={activeFilter}
           filterHref={filterHref}
           ruleSetHref={
             `/departments/${department.code}/coverage-rules` as Route
           }
         />
-        {noAssignments && (
-          <Callout role="note" tone="info" icon={Info}>
-            هنوز تصمیمی در این برنامه ثبت نشده است؛ همه روزها شروع‌نشده‌اند.
-            {review.month.editable &&
-              " برای چیدن شیفت‌ها، روزی را در تقویم انتخاب کنید."}
-          </Callout>
-        )}
         <MonthCalendar
           month={review.month}
           today={today}

@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { requireRequestContext } from "@/features/auth/guards";
+import { HeadNurseOverview } from "@/features/schedule/head-nurse-overview";
+import { APP_TIMEZONE, todayIn } from "@/infrastructure/auth/actor";
+
 import { IconWell } from "@/components/ui/icon-well";
 
 import { describeRoles } from "@/features/shell/app-shell";
@@ -21,6 +25,13 @@ export default async function HomePage() {
       <PageHeader
         title={`${context.user.displayName}، خوش آمدید`}
         description={describeRoles(context).join("، ")}
+      />
+      <HeadNurseOverview
+        ctx={await requireRequestContext()}
+        departments={context.memberships
+          .filter((m) => m.role === "HEAD_NURSE")
+          .map((m) => m.department)}
+        today={todayIn(APP_TIMEZONE)}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {sections
