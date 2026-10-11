@@ -62,6 +62,18 @@ For scopes 1–5, the before screenshots use the original committed implementati
 
 ## Limitations
 
-- Chromium desktop and Android emulation were available; WebKit/iOS and physical-device testing were not performed.
+- Initial verification used Chromium desktop and Android emulation. WebKit was added for the CI follow-up below; physical-device testing remains unperformed.
 - This environment runs Node 24 / pnpm 11 rather than the repository's declared Node 22 / pnpm 10. The package manager reported the expected version warning; checks and build succeeded with existing dependencies. No lockfile or package version changes were made.
 - The specific historical production count difference remains unaudited, as described above.
+
+## CI follow-up
+
+[CI run 38137089416](https://github.com/kiani66/hospital-shift-planning/actions/runs/38137089416/job/114468404504) completed the build, lint/type/unit, integration, and isolated-reset jobs successfully, but its full E2E suite reported 14 failures (473 passed, 42 skipped). Three existing E2E files omitted from the initial targeted run still assumed the old presentation:
+
+- Coverage assertions tried to read a region inside closed details. They now open the coverage details and retain the same staffing/revision assertions.
+- Mobile control tests required five codes on one row. They now verify the consistent M/E/N and ME/OFF/clear rows, a full-width range action, unclipped labels, and 44px mobile targets. The original desktop single-row assertion remains. A 320px case was added.
+- The 768px layout test expected preference diagnostics above the list. It now verifies the editor-first layout below the desktop side-column breakpoint; the wide-screen RTL side-column assertion remains.
+
+No application behavior or CI configuration was changed in this follow-up. Chromium reruns of these three files passed all 51 executable cases (7 intentional skips) across the broad run and final 8/8 grid rerun.
+
+WebKit/iOS emulation rerun of the same three files passed **24 tests with 5 intentional skips**. The locally downloaded browser uses extracted Debian shared libraries in its browser cache; no application dependency or CI configuration was modified. Physical devices remain untested. Final `pnpm check` passed again, including all 1,928 unit tests.

@@ -159,8 +159,8 @@ for (const width of [360, 390]) {
   });
 }
 
-for (const width of [360, 390, 1280]) {
-  test(`assignment codes M | E | N | ME | OFF share one row at ${width}px`, async ({
+for (const width of [320, 360, 390, 1280]) {
+  test(`assignment codes keep a predictable grid and touch targets at ${width}px`, async ({
     page,
   }) => {
     const d = await provisionExplicitOffDepartment();
@@ -188,11 +188,31 @@ for (const width of [360, 390, 1280]) {
         await button.evaluate((el) => el.scrollWidth - el.clientWidth),
       ).toBeLessThanOrEqual(0);
     }
-    // One row, equal heights; phones keep 44px touch targets.
-    for (const box of boxes) {
-      expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThan(1);
+    // Desktop retains one row; mobile consistently groups M/E/N then ME/OFF/clear.
+    for (const [i, box] of boxes.entries()) {
+      const rowStart = width < 640 && i >= 3 ? boxes[3]! : boxes[0]!;
+      expect(Math.abs(box.y - rowStart.y)).toBeLessThan(1);
       expect(box.height).toBe(boxes[0]!.height);
-      if (width < 640) expect(box.height).toBeGreaterThanOrEqual(44);
+      if (width < 640) {
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(44);
+      }
+    }
+    if (width < 640) {
+      expect(boxes[3]!.y).toBeGreaterThanOrEqual(
+        boxes[0]!.y + boxes[0]!.height,
+      );
+      const clear = (await controls(page)
+        .getByRole("button", { name: "تعیین‌نشده", exact: true })
+        .boundingBox())!;
+      expect(Math.abs(clear.y - boxes[3]!.y)).toBeLessThan(1);
+      const range = (await controls(page)
+        .getByRole("button", { name: /^چند روز/ })
+        .boundingBox())!;
+      expect(range.y).toBeGreaterThanOrEqual(clear.y + clear.height);
+      const group = (await controls(page).boundingBox())!;
+      expect(Math.abs(range.width - group.width)).toBeLessThan(1);
+      expect(range.height).toBeGreaterThanOrEqual(44);
     }
     expect(
       await page.evaluate(
