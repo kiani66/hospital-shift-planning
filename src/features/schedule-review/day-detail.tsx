@@ -76,7 +76,9 @@ export function DayBadges({ day }: { day: DayReview }) {
   ];
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <DayStateBadge state={v.state} />
+      {(v.state === "READY" || v.state === "NOT_STARTED") && (
+        <DayStateBadge state={v.state} />
+      )}
       {categories
         .filter(([n]) => n > 0)
         .map(([n, label, tone]) => (
@@ -515,7 +517,12 @@ export function DayDetail({
   const flagged = flaggedNurses(day);
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
-      <div className="flex min-w-0 flex-col gap-3">
+      <div
+        className={cn(
+          "flex min-w-0 flex-col gap-3",
+          editor && "order-2 lg:order-1",
+        )}
+      >
         {!day.edit.allowed && (
           <Callout tone="muted" icon={Lock}>
             {editDenialLabel(day.edit.reason)}
@@ -529,14 +536,25 @@ export function DayDetail({
           linked={!!editor}
           shiftLabels={shiftLabels}
         />
-        <CoverageSummary day={day} shiftLabels={shiftLabels} />
+        {editor ? (
+          <details className="rounded-lg border bg-card">
+            <summary className="min-h-11 cursor-pointer rounded-md px-3 py-2 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+              جزئیات پوشش نفرات
+            </summary>
+            <div className="border-t p-3">
+              <CoverageSummary day={day} shiftLabels={shiftLabels} />
+            </div>
+          </details>
+        ) : (
+          <CoverageSummary day={day} shiftLabels={shiftLabels} />
+        )}
         {candidates}
         <PreferenceAlignmentSummary
           alignment={summarizePreferenceAlignment(day.roster)}
         />
       </div>
 
-      <div className="min-w-0">
+      <div className={cn("min-w-0", editor && "order-1 lg:order-2")}>
         {editor ?? (
           <div className="flex flex-col gap-3">
             <div className="grid gap-3 xl:grid-cols-2">

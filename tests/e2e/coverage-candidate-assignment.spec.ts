@@ -156,6 +156,10 @@ test("sequential assignments use refreshed revisions, retain the panel and compl
     content.getByText(head!.displayName, { exact: true }),
   ).toHaveCount(0);
   expect((await snapshot(d)).revision).toBe(before.revision + 1);
+  await page
+    .getByRole("dialog")
+    .getByText("جزئیات پوشش نفرات", { exact: true })
+    .click();
   const coverage = page
     .getByRole("dialog")
     .getByRole("region", { name: "پوشش نفرات" });

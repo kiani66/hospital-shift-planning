@@ -26,6 +26,7 @@ export function Dialog({
   closeLabel,
   headerActions,
   stickyHeader = false,
+  wrapHeader = false,
   focusTitle = false,
   preventClose = false,
   children,
@@ -38,6 +39,7 @@ export function Dialog({
   closeLabel?: string;
   headerActions?: ReactNode;
   stickyHeader?: boolean;
+  wrapHeader?: boolean;
   focusTitle?: boolean;
   /** Keep an in-flight write's confirmation visible until the server responds. */
   preventClose?: boolean;
@@ -88,6 +90,7 @@ export function Dialog({
         <div
           className={cn(
             "flex items-start gap-3",
+            wrapHeader && "flex-wrap",
             stickyHeader &&
               "sticky top-0 z-10 -mx-5 -mt-5 border-b bg-background px-5 pt-5 pb-3",
           )}

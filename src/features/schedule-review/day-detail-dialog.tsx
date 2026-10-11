@@ -41,7 +41,10 @@ export function DayDetailDialog({
       title={title}
       description={description}
       closeLabel="بستن جزئیات روز"
-      headerActions={navigation}
+      headerActions={
+        <div className="max-sm:order-3 max-sm:basis-full">{navigation}</div>
+      }
+      wrapHeader
       stickyHeader
       focusTitle
       className="max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 sm:w-[min(calc(100vw-4rem),76rem)]"

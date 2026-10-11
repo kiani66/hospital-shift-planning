@@ -240,6 +240,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
     await expect(nurse2).toContainText("ترجیح: شب");
     await expect(nurse2).toContainText("مغایر ترجیح");
     // ME counts toward Morning coverage; staffing numbers are not invented.
+    await dialog.getByText("جزئیات پوشش نفرات", { exact: true }).click();
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
     await expect(coverage.locator('[data-period="M"]')).toHaveText(
       /پوشش صبح\s*۲\s*نفر\s*۱ نفر از شیفت طولانی/,
@@ -399,6 +400,10 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       region.getByRole("list", { name: "خلاصه اعتبارسنجی برنامه" }),
     ).toContainText("۰ روز از ۳۰ روز آماده");
     await expect(region.locator("tbody a")).toHaveCount(30);
+    await region.getByText("مشاهده روزهای نیازمند اقدام").click();
+    await expect(
+      region.getByRole("link", { name: "۱ دی ۱۴۰۵", exact: true }),
+    ).toBeVisible();
     // A schedule with no assignment yet says so, and how to start.
     await expect(region.getByRole("note")).toContainText(
       "هنوز تصمیمی در این برنامه ثبت نشده است",

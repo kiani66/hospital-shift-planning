@@ -125,6 +125,7 @@ test.describe("preference alignment summary and rows", () => {
     ).toHaveAccessibleDescription(/ترجیح: شب\s*مغایر ترجیح/);
 
     // The legacy baseline (min 1, no max) is the pin: within bounds, never green.
+    await dialog.getByText("جزئیات پوشش نفرات", { exact: true }).click();
     const coverage = dialog.getByRole("region", { name: "پوشش نفرات" });
     await expect(coverage).toContainText("حداقل ۱");
     await expect(coverage.locator('[data-staffing="WITHIN"]')).toHaveCount(3);
@@ -272,6 +273,7 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     await expect(count(dialog, "pending")).toHaveText(/۱\s*نفر/);
     await expect(count(dialog, "unassigned")).toContainText("۱ نفر");
     // N moved from nurse 3 to nurse 2: Night coverage stays one.
+    await dialog.getByText("جزئیات پوشش نفرات", { exact: true }).click();
     await expect(
       dialog
         .getByRole("region", { name: "پوشش نفرات" })
@@ -411,7 +413,7 @@ test.describe("responsive layout", () => {
   }
 
   for (const width of [768, 1280, 1440]) {
-    test(`${width}px: no sideways scrolling; summary beside or above the list`, async ({
+    test(`${width}px: no sideways scrolling; summary beside the desktop list or below the mobile editor`, async ({
       page,
     }) => {
       test.skip(!isDesktop(page), "desktop project");
@@ -426,7 +428,7 @@ test.describe("responsive layout", () => {
       if (width >= 1024)
         // Side column (inline start = right in RTL) next to the list.
         expect(summary.x).toBeGreaterThan(list.x + list.width - 1);
-      else expect(summary.y).toBeLessThan(list.y);
+      else expect(summary.y).toBeGreaterThan(list.y + list.height);
       await snapshot(page, `desktop-${width}`);
     });
   }

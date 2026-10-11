@@ -230,62 +230,69 @@ function Blockers({
   const state = workflow.actions[action]!;
   const v = workflow.validation;
   return (
-    <Callout
-      as="div"
-      tone="attention"
-      icon={OctagonAlert}
+    <div
       id={WORKFLOW_BLOCKERS_ID}
       data-workflow="blocked"
+      className="border-t pt-2 text-sm"
     >
-      <p className="font-semibold">
+      <p className="flex items-start gap-2 font-semibold">
+        <OctagonAlert
+          aria-hidden="true"
+          className="mt-0.5 size-4 shrink-0 text-destructive"
+        />
         {action === "finalize"
           ? "نهایی‌سازی فعلاً ممکن نیست، چون:"
           : "ارسال برای تأیید فعلاً ممکن نیست، چون:"}
       </p>
-      <ul className="mt-1 list-disc ps-5">
-        {state.blockers.includes("VALIDATION") &&
-          VALIDATION_ROWS.map(({ key, label, dates }) => {
-            const line = label(v);
-            if (!line) return null;
-            const days = dates(v);
-            return (
-              <li key={key} data-blocker={key}>
-                {line}
-                {days.length > 0 && (
-                  <span className="ms-1 inline-flex flex-wrap items-center gap-x-1.5">
-                    —
-                    {days.slice(0, 6).map((date) => (
-                      <Link
-                        key={date}
-                        href={dayHref(date)}
-                        scroll={false}
-                        className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
-                      >
-                        {shortJalaliDay(date)}
-                      </Link>
-                    ))}
-                    {days.length > 6 && (
-                      <span>و {faNumber(days.length - 6)} روز دیگر</span>
+      {state.blockers
+        .filter((b) => b !== "VALIDATION")
+        .map((b) => (
+          <p key={b} className="mt-1">
+            {blockerLabel(b, v)}
+          </p>
+        ))}
+      {state.blockers.includes("VALIDATION") && (
+        <details className="mt-1">
+          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-primary focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+            مشاهده موانع و روزهای مرتبط
+          </summary>
+          <ul className="list-disc space-y-2 ps-5">
+            {state.blockers.includes("VALIDATION") &&
+              VALIDATION_ROWS.map(({ key, label, dates }) => {
+                const line = label(v);
+                if (!line) return null;
+                const days = dates(v);
+                return (
+                  <li key={key} data-blocker={key}>
+                    {line}
+                    {days.length > 0 && (
+                      <span className="ms-1 inline-flex flex-wrap items-center gap-x-1.5">
+                        —
+                        {days.map((date) => (
+                          <Link
+                            key={date}
+                            href={dayHref(date)}
+                            scroll={false}
+                            className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
+                          >
+                            {shortJalaliDay(date)}
+                          </Link>
+                        ))}
+                      </span>
                     )}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        {state.blockers
-          .filter((b) => b !== "VALIDATION")
-          .map((b) => (
-            <li key={b}>{blockerLabel(b, v)}</li>
-          ))}
-      </ul>
+                  </li>
+                );
+              })}
+          </ul>
+        </details>
+      )}
       {state.blockers.includes("VALIDATION") && (
         <p className="mt-2 text-xs">
-          {faNumber(v.readyDays)} روز از {faNumber(v.totalDays)} روز آماده است.
           ذخیره برنامه ناقص همچنان ممکن است؛ این موارد فقط مانع نهایی‌سازی و
           ارسال‌اند.
         </p>
       )}
-    </Callout>
+    </div>
   );
 }
 

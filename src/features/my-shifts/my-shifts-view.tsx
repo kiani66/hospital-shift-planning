@@ -471,35 +471,40 @@ function ShiftAgenda({
             return (
               <li
                 key={`${date}-${e.scheduleId}`}
-                className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-2 sm:grid-cols-[6rem_8rem_minmax(0,1fr)_auto]"
               >
-                <span className="w-24 shrink-0 text-sm font-medium tabular-nums">
+                <span className="min-w-0 text-sm font-medium tabular-nums">
                   {jalaliWeekday(date)} {faDigits(toJalali(date).day)}
                 </span>
                 <ShiftChip
                   code={e.shift}
                   label={shiftLabels[e.shift]}
-                  className={cn(p.unapproved && UNAPPROVED_CHIP)}
+                  className={cn(
+                    "justify-self-end sm:justify-self-start",
+                    p.unapproved && UNAPPROVED_CHIP,
+                  )}
                 />
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  {shiftHoursLabel(e.shift, shiftLabels)}
-                </span>
-                <span className="ms-auto flex flex-wrap items-center gap-1.5">
-                  {e.changePending && (
-                    <Badge
-                      tone="attention"
-                      size="sm"
-                      icon={CHANGE_PENDING.icon}
-                    >
-                      {CHANGE_PENDING.label}
-                    </Badge>
-                  )}
-                  {p.unapproved && (
-                    <Badge tone={p.tone} size="sm" icon={p.icon}>
-                      {p.label}
-                    </Badge>
-                  )}
-                </span>
+                <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 sm:contents">
+                  <span className="min-w-0 text-sm text-muted-foreground tabular-nums">
+                    {shiftHoursLabel(e.shift, shiftLabels)}
+                  </span>
+                  <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    {e.changePending && (
+                      <Badge
+                        tone="attention"
+                        size="sm"
+                        icon={CHANGE_PENDING.icon}
+                      >
+                        {CHANGE_PENDING.label}
+                      </Badge>
+                    )}
+                    {p.unapproved && (
+                      <Badge tone={p.tone} size="sm" icon={p.icon}>
+                        {p.label}
+                      </Badge>
+                    )}
+                  </span>
+                </div>
               </li>
             );
           })}

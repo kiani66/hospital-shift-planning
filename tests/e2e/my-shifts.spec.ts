@@ -104,6 +104,55 @@ test.describe("my shifts", () => {
     await expect(calendar(page).locator('[data-shifts~="N"]')).toHaveCount(0);
   });
 
+  test("mobile agenda aligns long and short shifts at narrow widths", async ({
+    page,
+  }) => {
+    const department = await provisionApprovalDepartment("planning");
+    await signInAndWait(page, department.headEmail);
+    await page.goto(ABAN);
+    const agenda = page.getByRole("region", { name: "فهرست شیفت‌های ماه" });
+    const rows = agenda.getByRole("listitem");
+    await expect(rows).toHaveCount(30);
+    await expect(agenda).toContainText("ME");
+    await expect(agenda).toContainText("M");
+    for (const width of [320, 375, 390, 430]) {
+      await page.setViewportSize({ width, height: 844 });
+      const layout = await rows.evaluateAll((items) =>
+        items.map((item) => {
+          const date = item.children[0]!;
+          const shift = item.children[1]!;
+          const details = item.children[2]!;
+          const hours = details.firstElementChild!;
+          const status = details.lastElementChild!;
+          return {
+            height:
+              item.getBoundingClientRect().height -
+              parseFloat(getComputedStyle(item).borderBottomWidth) -
+              parseFloat(getComputedStyle(item).borderTopWidth),
+            dateEnd: date.getBoundingClientRect().right,
+            shiftEnd: shift.getBoundingClientRect().left,
+            hoursEnd: hours.getBoundingClientRect().right,
+            statusEnd: status.getBoundingClientRect().left,
+            firstLine: date.getBoundingClientRect().top,
+            secondLine: hours.getBoundingClientRect().top,
+          };
+        }),
+      );
+      expect(
+        new Set(layout.map((row) => row.height)).size,
+        `${width}px row heights`,
+      ).toBe(1);
+      for (const row of layout) {
+        expect(row.dateEnd).toBe(layout[0]!.dateEnd);
+        expect(row.shiftEnd).toBeLessThan(row.dateEnd);
+        expect(row.hoursEnd).toBe(layout[0]!.hoursEnd);
+        expect(row.statusEnd).toBe(layout[0]!.statusEnd);
+        expect(row.secondLine).toBeGreaterThan(row.firstLine);
+      }
+      await expectNoHorizontalScroll(page);
+    }
+  });
+
   test("finalized: shown as not yet sent, with no approval pending", async ({
     page,
   }) => {

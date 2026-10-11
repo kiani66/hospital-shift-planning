@@ -15,6 +15,7 @@ import {
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -251,7 +252,7 @@ export function DayEditor({
           setStatus({
             kind: "error",
             failure: result.kind,
-            message: result.message,
+            message: `${result.message} پرسنل: ${[...new Set(edits.map((e) => names.get(e.nurseId) ?? "پرسنل انتخاب‌شده"))].join("، ")}. روز: ${dayLabels.get(edits[0]!.date) ?? edits[0]!.date}.`,
             skipped: 0,
           });
         }
@@ -280,6 +281,59 @@ export function DayEditor({
   const [query, setQuery] = useState("");
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
   const [rangeFor, setRangeFor] = useState<string | null>(null);
+  const [navigationNotice, setNavigationNotice] = useState<string | null>(null);
+  const canLeave = useCallback(() => {
+    if (pending) {
+      setNavigationNotice("تا پایان ثبت تغییرات، در همین روز بمانید.");
+      return false;
+    }
+    return (
+      rangeFor === null ||
+      window.confirm(
+        "فرم چند روز هنوز اعمال نشده است. بدون ثبت آن خارج می‌شوید؟",
+      )
+    );
+  }, [pending, rangeFor]);
+
+  // Single-cell edits autosave; range forms are local drafts until applied.
+  // Protect the existing day links, close/Escape, and a full-page departure.
+  useEffect(() => {
+    const dialog = root.current?.closest("dialog");
+    if (!dialog) return;
+    const onClick = (event: MouseEvent) => {
+      const target =
+        event.target instanceof Element
+          ? event.target.closest("a, button")
+          : null;
+      const href = target?.getAttribute("href");
+      const leaving =
+        (href && !href.startsWith("#")) ||
+        target?.getAttribute("aria-label") === "بستن جزئیات روز" ||
+        event.target === dialog;
+      if (leaving && !canLeave()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const onCancel = (event: Event) => {
+      if (!canLeave()) event.preventDefault();
+    };
+    const onUnload = (event: BeforeUnloadEvent) => {
+      if (pending || rangeFor !== null) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    dialog.addEventListener("click", onClick, true);
+    dialog.addEventListener("cancel", onCancel);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      dialog.removeEventListener("click", onClick, true);
+      dialog.removeEventListener("cancel", onCancel);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, [canLeave, pending, rangeFor]);
+
   const [shownDate, setShownDate] = useState(date);
   if (shownDate !== date) {
     // Another day: forget per-day UI state (the filter and search stay).
@@ -363,6 +417,7 @@ export function DayEditor({
       const href = command.direction === "next" ? nextDayHref : previousDayHref;
       if (href) {
         event.preventDefault();
+        if (!canLeave()) return;
         restoreFocus.current = active ?? tabStop;
         router.replace(href, { scroll: false });
       }
@@ -467,6 +522,15 @@ export function DayEditor({
         </details>
       </div>
 
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        با انتخاب شیفت، تغییر همان لحظه ثبت می‌شود. برای «چند روز»، پس از انتخاب
+        بازه دکمه اعمال را بزنید.
+      </p>
+      {pending && navigationNotice && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {navigationNotice}
+        </p>
+      )}
       <LiveCoverage
         coverage={coverage}
         covered={live}
@@ -804,7 +868,7 @@ function NurseRow({
         <div
           role="group"
           aria-label={`شیفت ${nurse.displayName}`}
-          className="flex flex-wrap items-center gap-1 max-sm:w-full"
+          className="flex flex-wrap items-center gap-1 max-sm:grid max-sm:w-full max-sm:grid-cols-3"
         >
           {ASSIGNMENT_CODES.map((code, col) => {
             const selected = shift === code;
@@ -858,11 +922,12 @@ function NurseRow({
             onClick={onToggleRange}
             className={cn(
               control,
-              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted",
+              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted max-sm:col-span-3 max-sm:ms-0",
               rangeOpen && "border-primary bg-brand-soft text-primary",
             )}
           >
             <CalendarRange aria-hidden="true" className="size-4" />
+            <span className="ms-1 text-xs font-medium sm:hidden">چند روز</span>
           </button>
         </div>
       </div>

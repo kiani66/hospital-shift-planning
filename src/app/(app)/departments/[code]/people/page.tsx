@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,7 +38,7 @@ export default async function DepartmentPeoplePage({
     <>
       <PageHeader
         title={`افراد بخش ${data.department.name}`}
-        description="افراد دارای رابطه جاری با این بخش؛ فقط خواندنی. حساب‌های غیرفعال نیز با وضعیت حساب نمایش داده می‌شوند."
+        description={`عضویت‌های مؤثر در ${formatJalaliDate(data.today)}؛ روابط آینده و پایان‌یافته در این فهرست نیستند. حساب‌های غیرفعال با وضعیت حساب نمایش داده می‌شوند. فهرست پرسنل هر برنامه هنگام ایجاد برای بازه آن ثبت می‌شود و ممکن است با اعضای فعلی بخش متفاوت باشد.`}
       />
       <div className="space-y-6">
         {groups.map((group) => (
@@ -49,6 +50,7 @@ export default async function DepartmentPeoplePage({
             <SectionHeader
               id={group.id}
               title={group.title}
+              meta={`${faNumber(group.people.length)} نفر`}
               icon={<Users aria-hidden="true" />}
             />
             {group.people.length === 0 ? (
