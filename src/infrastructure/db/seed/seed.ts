@@ -183,6 +183,7 @@ export async function seedDemoData(db: Database): Promise<SeedSummary> {
           isNight: false,
           sortOrder: 5,
         },
+        { code: "H", label: "مرخصی", covers: [], isNight: false, sortOrder: 6 },
       ])
       .onConflictDoNothing();
 

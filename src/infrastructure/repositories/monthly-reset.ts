@@ -1,8 +1,12 @@
 import { sql } from "drizzle-orm";
+import { LEAVE_CODE } from "../../domain/shifts/shift-type";
 import type { DbExecutor, Transaction } from "../db/database";
 
 export interface MonthlyPlanningCounts {
+  /** Every working-copy decision (M, E, N, ME, OFF and H). */
   assignments: number;
+  /** Recorded leave days (H, D118): part of `assignments`, deleted with them. */
+  leaveDays: number;
   changes: number;
   changeCells: number;
   preferences: number;
@@ -14,6 +18,7 @@ export async function readMonthlyPlanningCounts(
 ): Promise<MonthlyPlanningCounts> {
   const result = await db.execute(sql`select
     (select count(*)::int from shift_assignments where schedule_id = ${id}) as assignments,
+    (select count(*)::int from shift_assignments where schedule_id = ${id} and shift_code = ${LEAVE_CODE}) as "leaveDays",
     (select count(*)::int from schedule_changes where schedule_id = ${id}) as changes,
     (select count(*)::int from schedule_change_cells c join schedule_changes s on s.id = c.change_id where s.schedule_id = ${id}) as "changeCells",
     (select count(*)::int from nurse_preferences where schedule_id = ${id}) as preferences,

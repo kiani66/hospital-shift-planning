@@ -4,6 +4,7 @@ import { useActionState, useId } from "react";
 import type { ReasonView } from "@/application/change-requests/queries";
 import type { ReviewRosterNurse } from "@/application/schedules/review";
 import { Button } from "@/components/ui/button";
+import { isLeave } from "@/domain/shifts/shift-type";
 import type { RequestFormState } from "@/features/change-requests/actions";
 import { assignmentName, type ShiftLabels } from "@/features/shifts/catalog";
 import { directSwapAction } from "./actions";
@@ -30,7 +31,8 @@ export function DirectSwapForm({
     status: "idle",
   } as RequestFormState);
   const id = useId();
-  const decided = nurses.filter((n) => n.shift !== null);
+  // Leave is never swapped (D118): only working and OFF decisions are offered.
+  const decided = nurses.filter((n) => n.shift !== null && !isLeave(n.shift));
   return (
     <details className="rounded-xl border bg-card p-3">
       <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">

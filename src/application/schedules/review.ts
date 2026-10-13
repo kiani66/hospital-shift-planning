@@ -32,6 +32,7 @@ import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import {
   COVERAGE_PERIODS,
   SHIFT_CODES,
+  isLeave,
   type AssignmentCode,
   type BaseShift,
   type PreferenceValue,
@@ -186,6 +187,8 @@ export interface DayReview {
   /** Rostered nurses without an assignment that day. */
   readonly unassigned: readonly ReviewNurse[];
   readonly off: readonly ReviewNurse[];
+  /** Rostered nurses on recorded leave (H, D118): apart from OFF and undecided. */
+  readonly leave: readonly ReviewNurse[];
   /** Everyone on the roster (sorted by name), assigned or not: the editing list. */
   readonly roster: readonly ReviewRosterNurse[];
   /** Whether the actor may edit this day's assignments, and why not. */
@@ -368,6 +371,9 @@ export async function getScheduleReview(
         .filter((d) => d.date !== date && d.dates.includes(date))
         .map(withNames),
       off: roster.filter((r) => shiftOf.get(r.userId) === "OFF").map(nurse),
+      leave: roster
+        .filter((r) => isLeave(shiftOf.get(r.userId) ?? null))
+        .map(nurse),
       unassigned: roster.filter((r) => !shiftOf.has(r.userId)).map(nurse),
       roster: roster.map((r) => ({
         ...nurse(r),

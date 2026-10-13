@@ -43,13 +43,13 @@ const render = (shift: AssignmentCode | null, labels = SHIFT_LABELS) =>
     }),
   );
 
-/** The nurse's assignment group: one button per code, in domain order. */
+/** The nurse's assignment group: one button per code (six, H included), in domain order. */
 const assignmentButtons = (html: string) => {
   const group = html.slice(html.indexOf('aria-label="شیفت سارا نمونه"'));
   return [
     ...group.matchAll(/<button[^>]*aria-label="([^"]*)"[^>]*>(.*?)<\/button>/g),
   ]
-    .slice(0, 5)
+    .slice(0, 6)
     .map(([, name, content]) => ({
       name,
       text: content!.replace(/<[^>]+>/g, ""),
@@ -57,10 +57,18 @@ const assignmentButtons = (html: string) => {
 };
 
 describe("DayEditor assignment control", () => {
-  it("shows the five codes M | E | N | ME | OFF; OFF reads «OFF», not its label", () => {
+  it("shows the six codes M | E | N | ME | OFF | H; OFF and H read their codes, not their labels", () => {
     const buttons = assignmentButtons(render(null));
-    expect(buttons.map((b) => b.text)).toEqual(["M", "E", "N", "ME", "OFF"]);
+    expect(buttons.map((b) => b.text)).toEqual([
+      "M",
+      "E",
+      "N",
+      "ME",
+      "OFF",
+      "H",
+    ]);
     expect(buttons.map((b) => b.text)).not.toContain("استراحت");
+    expect(buttons.map((b) => b.text)).not.toContain("مرخصی");
   });
 
   it("names every button «label (CODE)» from the shift_types labels", () => {
@@ -70,33 +78,49 @@ describe("DayEditor assignment control", () => {
       "شب (N)",
       "طولانی (ME)",
       "استراحت (OFF)",
+      "مرخصی (H)",
     ]);
   });
 
   it("follows changed labels in the names without changing the codes", () => {
     const buttons = assignmentButtons(render("OFF", RENAMED_SHIFT_LABELS));
-    expect(buttons.map((b) => b.text)).toEqual(["M", "E", "N", "ME", "OFF"]);
+    expect(buttons.map((b) => b.text)).toEqual([
+      "M",
+      "E",
+      "N",
+      "ME",
+      "OFF",
+      "H",
+    ]);
     expect(buttons.map((b) => b.name)).toEqual([
       "بامداد (M)",
       "پسین (E)",
       "شبانه (N)",
       "لانگ (ME)",
       "مرخصی‌روز (OFF)",
+      "غیبت مجاز (H)",
     ]);
   });
 
-  it("lays OFF out like every code: same classes, left-to-right code text, no special case", () => {
-    const html = render("OFF");
-    const group = html.slice(html.indexOf('aria-label="شیفت سارا نمونه"'));
-    const buttons = [...group.matchAll(/<button[^>]*>.*?<\/button>/g)]
-      .slice(0, 5)
-      .map(([b]) => b);
-    expect(buttons).toHaveLength(5);
-    for (const b of buttons) expect(b).toContain('<span dir="ltr">');
-    // The selected OFF button is marked pressed; the others are not.
-    expect(buttons[4]).toContain('aria-pressed="true"');
-    expect(buttons.slice(0, 4).join("")).not.toContain('aria-pressed="true"');
-    // The shared sizing class (phones: flex-1, 44px minimum) applies to all five.
-    for (const b of buttons) expect(b).toMatch(/max-sm:flex-1/);
-  });
+  it.each([
+    ["OFF", 4],
+    ["H", 5],
+  ] as const)(
+    "lays %s out like every code: same classes, left-to-right code text, no special case",
+    (code, index) => {
+      const html = render(code);
+      const group = html.slice(html.indexOf('aria-label="شیفت سارا نمونه"'));
+      const buttons = [...group.matchAll(/<button[^>]*>.*?<\/button>/g)]
+        .slice(0, 6)
+        .map(([b]) => b);
+      expect(buttons).toHaveLength(6);
+      for (const b of buttons) expect(b).toContain('<span dir="ltr">');
+      // Only the selected decision is marked pressed.
+      buttons.forEach((b, i) =>
+        expect(b.includes('aria-pressed="true"')).toBe(i === index),
+      );
+      // The shared sizing class (phones: flex-1, 44px minimum) applies to all six.
+      for (const b of buttons) expect(b).toMatch(/max-sm:flex-1/);
+    },
+  );
 });

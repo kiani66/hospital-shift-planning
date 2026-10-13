@@ -35,7 +35,10 @@ import {
   preferenceLabel,
   staffingStatusLabel,
 } from "./presentation";
-import { SHIFT_LABELS } from "../../../tests/support/shift-labels";
+import {
+  RENAMED_SHIFT_LABELS,
+  SHIFT_LABELS,
+} from "../../../tests/support/shift-labels";
 
 const period = { start: isoDate("2026-10-23"), end: isoDate("2026-11-21") };
 const ISO_OR_CODE =
@@ -63,6 +66,7 @@ const reviewDay = (overrides: Partial<ReviewDay> = {}): ReviewDay => ({
   ready: true,
   shifts: { M: 1, E: 0, N: 0, ME: 0 },
   coverage: { M: 1, E: 0, N: 0 },
+  leave: 0,
   buckets: [],
   holiday: null,
   ...overrides,
@@ -127,7 +131,9 @@ describe("day state presentation (D103)", () => {
   });
 
   it("names a day cell with its date, state, every category and holiday", () => {
-    expect(dayCellLabel(reviewDay())).toBe("یکشنبه ۳ آبان ۱۴۰۵، آماده");
+    expect(dayCellLabel(reviewDay(), SHIFT_LABELS)).toBe(
+      "یکشنبه ۳ آبان ۱۴۰۵، آماده",
+    );
     expect(
       dayCellLabel(
         reviewDay({
@@ -139,10 +145,21 @@ describe("day state presentation (D103)", () => {
           ruleViolations: 1,
           holiday: { date: isoDate("2026-10-25"), name: "تعطیل نمونه" },
         }),
+        SHIFT_LABELS,
       ),
     ).toBe(
       "یکشنبه ۳ آبان ۱۴۰۵، نقض قانون (۱ نقض قانون، ۱ کمبود نیرو، ۱ مازاد نیرو، ۲ تصمیم تعیین‌نشده)، تعطیل رسمی: تعطیل نمونه",
     );
+  });
+
+  it("names the day's nurses on leave (H, D118) as information, never a category", () => {
+    expect(dayCellLabel(reviewDay({ leave: 2 }), SHIFT_LABELS)).toBe(
+      "یکشنبه ۳ آبان ۱۴۰۵، آماده، ۲ نفر مرخصی (H)",
+    );
+    expect(dayCellLabel(reviewDay({ leave: 1 }), RENAMED_SHIFT_LABELS)).toBe(
+      "یکشنبه ۳ آبان ۱۴۰۵، آماده، ۱ نفر غیبت مجاز (H)",
+    );
+    expect(dayCountsLabel(reviewDay({ leave: 3 }))).toBe("");
   });
 
   it("lists only the non-zero categories", () => {

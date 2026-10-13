@@ -303,8 +303,8 @@ test.describe("«فقط مغایر ترجیح» filter", () => {
     await page.goto(dayUrl(department, "2026-10-24"));
     const dialog = dayDialog(page);
 
-    // Reach the toggle with Tab from the last shift chip.
-    await chip(dialog, /^استراحت/).focus();
+    // Reach the toggle with Tab from the last shift chip (leave, D118).
+    await chip(dialog, /^مرخصی/).focus();
     await page.keyboard.press("Tab");
     await expect(conflictsOnly(dialog)).toBeFocused();
     expect(

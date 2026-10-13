@@ -126,6 +126,7 @@ export const resetMonthlyPlanning = defineCommand({
       scheduleId: schedule.id,
       data: {
         assignmentsRemoved: counts.assignments,
+        leaveDaysRemoved: counts.leaveDays,
         changesRemoved: counts.changes,
         changeCellsRemoved: counts.changeCells,
         status: schedule.status,

@@ -90,6 +90,10 @@
   --shift-me-foreground: oklch(0.43 0.12 335);
   --shift-off: oklch(0.96 0.005 256);
   --shift-off-foreground: oklch(0.45 0.02 260);
+  /* Leave (H, D118): not work, so outside the cool shift family; a muted sand
+     that borrows neither the attention amber nor the valid/success greens. */
+  --shift-leave: oklch(0.94 0.045 105);
+  --shift-leave-foreground: oklch(0.43 0.085 108);
 
   /* Schedule rule violations (e.g. night-rest). */
   --violation: oklch(0.56 0.21 25);
@@ -169,6 +173,8 @@
   --shift-me-foreground: oklch(0.9 0.05 330);
   --shift-off: oklch(0.27 0.02 262);
   --shift-off-foreground: oklch(0.75 0.02 258);
+  --shift-leave: oklch(0.33 0.05 105);
+  --shift-leave-foreground: oklch(0.9 0.07 102);
 
   --violation: oklch(0.7 0.19 22);
 
@@ -230,6 +236,8 @@
   --color-shift-me-foreground: var(--shift-me-foreground);
   --color-shift-off: var(--shift-off);
   --color-shift-off-foreground: var(--shift-off-foreground);
+  --color-shift-leave: var(--shift-leave);
+  --color-shift-leave-foreground: var(--shift-leave-foreground);
   --color-violation: var(--violation);
   --color-health-valid: var(--health-valid);
   --color-health-valid-foreground: var(--health-valid-foreground);

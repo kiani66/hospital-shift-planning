@@ -402,7 +402,7 @@ describe("controlled master-data recovery", () => {
     const p = await previewMasterRecovery(admin);
     expect(await readResetInventory(db)).toEqual(before);
     expect(p.plan.counts).toEqual({
-      shiftTypes: 5,
+      shiftTypes: 6,
       changeReasons: 7,
       staffingRuleSets: 1,
       staffingRuleSetVersions: 1,
@@ -415,7 +415,7 @@ describe("controlled master-data recovery", () => {
       ok: true,
       data: { counts: p.plan.counts, changed: true },
     });
-    expect(await db.select().from(shiftTypes)).toHaveLength(5);
+    expect(await db.select().from(shiftTypes)).toHaveLength(6);
     expect(await db.select().from(changeReasons)).toHaveLength(7);
     expect(await db.select().from(departments)).toHaveLength(0);
     expect((await db.select().from(staffingRuleSetVersions))[0]).toMatchObject({
@@ -617,7 +617,7 @@ describe("controlled master-data recovery", () => {
       executeMasterRecovery(admin, { ...p, confirmed: true }),
     ]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect(await db.select().from(shiftTypes)).toHaveLength(5);
+    expect(await db.select().from(shiftTypes)).toHaveLength(6);
     expect(await db.select().from(staffingRuleSetVersions)).toHaveLength(1);
   });
 });

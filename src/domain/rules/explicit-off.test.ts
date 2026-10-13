@@ -13,6 +13,7 @@ import type { Assignment } from "../shifts/assignment";
 import { countByShift, coverageOf } from "../shifts/coverage";
 import {
   ASSIGNMENT_CODES,
+  PREFERENCE_VALUES,
   SHIFT_CODES,
   isAssignmentCode,
   isWorkingShift,
@@ -63,7 +64,7 @@ const validate = (
   });
 
 describe("explicit scheduling decisions", () => {
-  it.each(ASSIGNMENT_CODES)(
+  it.each(PREFERENCE_VALUES)(
     "preference %s uses the complete alignment matrix",
     (preference) => {
       expect(preferenceFit(preference, null)).toBe("PENDING");
@@ -112,6 +113,7 @@ describe("explicit scheduling decisions", () => {
     expect(summarizeShifts(["OFF", "OFF", null])).toEqual({
       shiftCount: 0,
       offCount: 2,
+      leaveCount: 0,
       minutes: 0,
       nightCount: 0,
       byCode: { M: 0, E: 0, N: 0, ME: 0 },

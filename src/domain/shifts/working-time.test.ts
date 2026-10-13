@@ -8,6 +8,7 @@ describe("summarizeShifts", () => {
     expect(summarizeShifts([])).toEqual({
       shiftCount: 0,
       offCount: 0,
+      leaveCount: 0,
       minutes: 0,
       nightCount: 0,
       byCode: { M: 0, E: 0, N: 0, ME: 0 },
@@ -19,6 +20,7 @@ describe("summarizeShifts", () => {
     expect(summarizeShifts(["M", "E", "N", "ME", "N"])).toEqual({
       shiftCount: 5,
       offCount: 0,
+      leaveCount: 0,
       minutes: (7 + 5 + 12 + 12 + 12) * 60,
       nightCount: 2,
       byCode: { M: 1, E: 1, N: 2, ME: 1 },

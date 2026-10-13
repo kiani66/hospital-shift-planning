@@ -8,6 +8,7 @@ export * from "./shifts/shift-type";
 export * from "./shifts/assignment";
 export * from "./shifts/coverage";
 export * from "./shifts/working-time";
+export * from "./shifts/spreadsheet-codes";
 export * from "./rules/violation";
 export * from "./rules/night-rest";
 export * from "./rules/validate-schedule";

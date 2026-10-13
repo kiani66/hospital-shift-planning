@@ -39,6 +39,8 @@ const SHIFT_KEYS: Readonly<Record<string, AssignmentCode>> = {
   KeyO: "OFF",
   // L for "long" (طولانی): ME is one assignment, not M then E.
   KeyL: "ME",
+  // H for leave (مرخصی, D118): the code itself, as in the Excel schedules.
+  KeyH: "H",
 };
 
 export function editorKeyCommand(event: KeyLike): EditorKeyCommand | null {

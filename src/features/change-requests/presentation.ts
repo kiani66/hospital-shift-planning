@@ -7,6 +7,7 @@ import type {
   SwapConsentStatus,
 } from "@/domain/change-requests/model";
 import {
+  isLeave,
   isWorkingShift,
   type AssignmentCode,
   type ShiftCode,
@@ -59,6 +60,29 @@ export const REJECTION_LABELS: Record<ChangeRequestRejection, string> = {
   HEAD_NURSE: "سرپرستار درخواست را رد کرد.",
   COUNTERPART_DECLINED: "همکار با جابه‌جایی موافقت نکرد.",
 };
+
+/**
+ * The request types a nurse may choose for a day with this decision, as the
+ * domain validates them: UNAVAILABLE needs a working shift, and a leave day
+ * (H, D118) is never swapped. The server decides again.
+ */
+export const offersRequestType = (
+  type: ChangeRequestType,
+  shift: AssignmentCode,
+): boolean =>
+  type === "UNAVAILABLE"
+    ? isWorkingShift(shift)
+    : type === "SWAP"
+      ? !isLeave(shift)
+      : true;
+
+/** The preselected type: unavailability for a shift, a swap for OFF, a change for leave. */
+export const defaultRequestType = (shift: AssignmentCode): ChangeRequestType =>
+  isWorkingShift(shift)
+    ? "UNAVAILABLE"
+    : isLeave(shift)
+      ? "CHANGE_SHIFT"
+      : "SWAP";
 
 /**
  * A decision inside a sentence: "شیفت صبح" for a working shift, the bare
@@ -174,14 +198,15 @@ export const FIELD_MESSAGES: Record<string, string> = {
   type: "نوع درخواست را انتخاب کنید.",
   targetShift: "شیفتی متفاوت با شیفت فعلی خود انتخاب کنید.",
   counterpartId:
-    "همکاری از همین برنامه انتخاب کنید که در این روز شیفت متفاوتی دارد.",
+    "همکاری از همین برنامه انتخاب کنید که در این روز شیفت متفاوتی دارد. روز مرخصی قابل جابه‌جایی نیست.",
   reasonCode: "علت را از فهرست انتخاب کنید.",
   note: "برای این علت توضیح لازم است (حداکثر ۵۰۰ نویسه).",
   requesterId: "شما در فهرست افراد این برنامه نیستید.",
   replacementNurseId:
-    "جانشین باید از افراد همین برنامه باشد و در این روز شیفت نداشته باشد.",
+    "جانشین باید از افراد همین برنامه باشد و در این روز شیفت یا مرخصی نداشته باشد.",
   requesterShift: "شیفت نهایی درخواست‌دهنده را انتخاب کنید.",
-  changes: "این تغییر چیزی را عوض نمی‌کند یا پرستار در فهرست این برنامه نیست.",
+  changes:
+    "این تغییر چیزی را عوض نمی‌کند، پرستار در فهرست این برنامه نیست، یا روز مرخصی در جابه‌جایی است (مرخصی قابل جابه‌جایی نیست).",
   request: "برنامه هم‌اکنون همین وضعیت را دارد؛ اعمال، چیزی را تغییر نمی‌دهد.",
   nurseId: "پرستار باید از افراد همین برنامه باشد.",
 };

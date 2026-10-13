@@ -4,6 +4,7 @@ import { InvalidStateError, ValidationError } from "../shared/errors";
 import { isInPeriod, type DatePeriod } from "../shared/period";
 import { err, ok, type Result } from "../shared/result";
 import {
+  isLeave,
   isWorkingShift,
   type AssignmentCode,
   type ShiftCode,
@@ -64,6 +65,10 @@ export interface NewChangeRequest {
 
 const invalid = (message: string, field: string) =>
   err(new ValidationError(message, field));
+
+/** Leave (H, D118) belongs to its nurse: a swap would hand it to someone else. */
+export const LEAVE_NOT_SWAPPABLE =
+  "A leave day cannot be swapped; it belongs to its nurse";
 
 /**
  * Validates a nurse's new request against the schedule as they see it.
@@ -131,6 +136,8 @@ export function validateNewChangeRequest(
         "The other nurse has the same shift; a swap would change nothing",
         "counterpartId",
       );
+    if (isLeave(requesterShift) || isLeave(counterpart.shift))
+      return invalid(LEAVE_NOT_SWAPPABLE, "counterpartId");
   } else if (counterpart)
     return invalid("Only a swap names another nurse", "counterpartId");
 
@@ -314,6 +321,8 @@ export function refreshSwap(
       "Both nurses now have the same shift; a swap would change nothing",
       "counterpartId",
     );
+  if (isLeave(current.requester) || isLeave(current.counterpart))
+    return invalid(LEAVE_NOT_SWAPPABLE, "counterpartId");
   return ok({
     requesterShift: current.requester,
     counterpartShift: current.counterpart,

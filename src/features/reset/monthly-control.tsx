@@ -1,7 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
-import { RotateCcw } from "lucide-react";
+import { Luggage, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Dialog } from "@/components/ui/dialog";
 import { faNumber } from "@/features/calendar/jalali";
 import { SCHEDULE_STATUS_LABELS } from "@/features/schedule/labels";
@@ -9,11 +10,23 @@ import {
   previewMonthlyResetAction,
   resetMonthlyPlanningAction,
 } from "./monthly-actions";
+import {
+  monthlyResetDeletedLine,
+  monthlyResetDescription,
+  monthlyResetLeaveWarning,
+} from "./monthly-presentation";
 type Preview = Extract<
   Awaited<ReturnType<typeof previewMonthlyResetAction>>,
   { ok: true }
 >["data"];
-export function MonthlyResetControl({ scheduleId }: { scheduleId: string }) {
+export function MonthlyResetControl({
+  scheduleId,
+  leaveLabel,
+}: {
+  scheduleId: string;
+  /** `shift_types.label` of H (D112), for the leave warning (D118). */
+  leaveLabel: string;
+}) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -50,7 +63,7 @@ export function MonthlyResetControl({ scheduleId }: { scheduleId: string }) {
           if (!pending) setPreview(null);
         }}
         title="بازنشانی چیدمان ماه؟"
-        description="همه شیفت‌ها و تغییرات چیدمان پاک می‌شوند. این کار قابل بازگردانی نیست."
+        description={monthlyResetDescription(leaveLabel)}
       >
         {preview && (
           <div className="flex flex-col gap-4">
@@ -58,11 +71,15 @@ export function MonthlyResetControl({ scheduleId }: { scheduleId: string }) {
               {preview.department} · {preview.month} ·{" "}
               {SCHEDULE_STATUS_LABELS[preview.status]}
             </p>
-            <p>
-              {faNumber(preview.counts.assignments)} شیفت،{" "}
-              {faNumber(preview.counts.changes)} تغییر و{" "}
-              {faNumber(preview.counts.changeCells)} سلول وابسته حذف می‌شود.
-            </p>
+            <p>{monthlyResetDeletedLine(preview.counts)}</p>
+            <Callout
+              tone="attention"
+              icon={Luggage}
+              role="note"
+              data-workflow="reset-leave-warning"
+            >
+              {monthlyResetLeaveWarning(preview.counts.leaveDays, leaveLabel)}
+            </Callout>
             <p>
               {faNumber(preview.counts.preferences)} ترجیح پرستاران باقی
               می‌ماند. برنامه، شناسه، فهرست پرسنل، پنجره‌های ترجیحات و قوانین

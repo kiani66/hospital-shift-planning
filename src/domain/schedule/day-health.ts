@@ -13,7 +13,7 @@ import {
   type ShiftCounts,
 } from "../shifts/coverage";
 import type { Assignment } from "../shifts/assignment";
-import type { AssignmentCode } from "../shifts/shift-type";
+import { isLeave, type AssignmentCode } from "../shifts/shift-type";
 
 /**
  * What a month overview needs for one day (D47, D103): its validation
@@ -25,6 +25,8 @@ export interface ScheduleDaySummary extends DayValidation {
   readonly shifts: ShiftCounts;
   /** Operational coverage per period (ME counts toward M and E, OFF toward none). */
   readonly coverage: CoverageCounts;
+  /** Nurses on recorded leave (H, D118): shown apart, never coverage. */
+  readonly leave: number;
 }
 
 export interface ScheduleDaysSummary {
@@ -46,8 +48,10 @@ export function summarizeScheduleDays(input: {
     shiftsByDay.set(a.date, [...(shiftsByDay.get(a.date) ?? []), a.shift]);
   }
   const days = validation.days.map((day): ScheduleDaySummary => {
-    const shifts = countByShift(shiftsByDay.get(day.date) ?? []);
-    return { ...day, shifts, coverage: coverageOf(shifts) };
+    const codes = shiftsByDay.get(day.date) ?? [];
+    const shifts = countByShift(codes);
+    const leave = codes.filter(isLeave).length;
+    return { ...day, shifts, coverage: coverageOf(shifts), leave };
   });
   return { days, validation };
 }

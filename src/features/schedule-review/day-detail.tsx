@@ -583,6 +583,26 @@ export function DayDetail({
                 ))}
               </ul>
             </details>
+            <details
+              className="rounded-xl border bg-card shadow-xs"
+              data-testid="day-leave"
+            >
+              <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
+                <ShiftChip code="H" size="xs" />
+                {shiftLabels.H} ({faNumber(day.leave.length)} نفر)
+              </summary>
+              <ul className="divide-y border-t px-3">
+                {day.leave.map((n) => (
+                  <ReadOnlyNurseRow
+                    key={n.userId}
+                    nurse={n}
+                    shift="H"
+                    flagged={flagged.has(n.userId)}
+                    shiftLabels={shiftLabels}
+                  />
+                ))}
+              </ul>
+            </details>
             <details className="rounded-xl border bg-card shadow-xs">
               <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none">
                 <Users

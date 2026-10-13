@@ -15,6 +15,8 @@ import {
   REQUEST_STATUS,
   REQUEST_TYPE_DESCRIPTIONS,
   REQUEST_TYPE_LABELS,
+  defaultRequestType,
+  offersRequestType,
   requestErrorMessage,
   requestSummary,
 } from "./presentation";
@@ -205,5 +207,26 @@ describe("Head Nurse wording (Slice D)", () => {
       /نسخه تأییدشده دست نمی‌خورد/,
     );
     expect(CHANGE_MODE_LABELS.EXTEND_REVISION).toMatch(/بازنگری/);
+  });
+});
+
+describe("request types offered per decision (D118)", () => {
+  const offered = (shift: Parameters<typeof offersRequestType>[1]) =>
+    CHANGE_REQUEST_TYPES.filter((t) => offersRequestType(t, shift));
+
+  it("a working shift offers every type, OFF everything but unavailability", () => {
+    expect(offered("M")).toEqual([...CHANGE_REQUEST_TYPES]);
+    expect(offered("OFF")).not.toContain("UNAVAILABLE");
+    expect(offered("OFF")).toContain("SWAP");
+    expect(defaultRequestType("N")).toBe("UNAVAILABLE");
+    expect(defaultRequestType("OFF")).toBe("SWAP");
+  });
+
+  it("a leave day is never swapped nor reported unavailable", () => {
+    expect(offered("H")).not.toContain("SWAP");
+    expect(offered("H")).not.toContain("UNAVAILABLE");
+    expect(offered("H")).toContain("CHANGE_SHIFT");
+    expect(defaultRequestType("H")).toBe("CHANGE_SHIFT");
+    expect(offersRequestType(defaultRequestType("H"), "H")).toBe(true);
   });
 });

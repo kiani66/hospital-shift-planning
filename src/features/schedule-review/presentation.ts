@@ -110,16 +110,29 @@ export function dayCountsLabel(day: {
     .join("، ");
 }
 
-/** Accessible name of a month cell: date, state, every category's count and holiday. */
-export function dayCellLabel(day: ReviewDay): string {
+/**
+ * Accessible name of a month cell: date, state, every category's count,
+ * nurses on leave (H, D118: information, never a category) and holiday.
+ */
+export function dayCellLabel(
+  day: ReviewDay,
+  labels: Pick<ShiftLabels, "H">,
+): string {
   const counts = dayCountsLabel(day);
   const parts = [
     formatJalaliDate(day.date, { weekday: true }),
     DAY_STATE_PRESENTATION[day.state].label + (counts ? ` (${counts})` : ""),
   ];
+  if (day.leave > 0) parts.push(leaveCountLabel(day.leave, labels));
   if (day.holiday) parts.push(`${HOLIDAY_LABEL}: ${day.holiday.name}`);
   return parts.join("، ");
 }
+
+/** "۲ نفر مرخصی (H)": the day's nurses on leave, from the stored label. */
+export const leaveCountLabel = (
+  count: number,
+  labels: Pick<ShiftLabels, "H">,
+): string => `${faNumber(count)} نفر ${labels.H} (H)`;
 
 /** "۱۲ روز" etc. for the month totals. */
 export const dayCount = (n: number) => `${faNumber(n)} روز`;
