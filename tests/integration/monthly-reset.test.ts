@@ -25,6 +25,7 @@ import {
   DEMO_SCHEDULE as S,
   DEMO_USERS as U,
 } from "../../src/infrastructure/db/seed/demo-data";
+import { listAuditEventsForSchedule } from "../../src/infrastructure/repositories/audit";
 import { loadActor } from "../../src/infrastructure/repositories/memberships";
 import { setupTestDatabase } from "./support/database";
 const { db } = setupTestDatabase();
@@ -39,6 +40,31 @@ beforeEach(async () => {
 const reset = (revision: number) =>
   resetMonthlyPlanning(ctx, { scheduleId: S.id, expectedRevision: revision });
 describe("monthly planning reset", () => {
+  it("previews recorded leave days (H) apart, deletes them with the layout and audits the count", async () => {
+    const edited = await setAssignments(ctx, {
+      scheduleId: S.id,
+      expectedRevision: 0,
+      changes: [
+        { nurseId: U.icuNurse1.id, date: "2026-10-24", shift: "H" },
+        { nurseId: U.icuNurse1.id, date: "2026-10-25", shift: "H" },
+        { nurseId: U.icuNurse2.id, date: "2026-10-24", shift: "M" },
+        { nurseId: U.icuNurse3.id, date: "2026-10-24", shift: "OFF" },
+      ],
+    });
+    if (!edited.ok) throw new Error(edited.error.message);
+    const preview = await previewMonthlyReset(ctx, S.id);
+    expect(preview.counts).toMatchObject({ assignments: 4, leaveDays: 2 });
+    expect((await reset(preview.revision)).ok).toBe(true);
+    // The reset itself is unchanged: the whole working copy goes, leave included.
+    expect(await db.select().from(shiftAssignments)).toHaveLength(0);
+    const audit = (await listAuditEventsForSchedule(db, S.id)).find(
+      (e) => e.action === "schedule.planningReset",
+    );
+    expect(audit?.data).toMatchObject({
+      assignmentsRemoved: 4,
+      leaveDaysRemoved: 2,
+    });
+  });
   it("preserves another month and rolls back cleanup on audit failure", async () => {
     const made = await createSchedule(ctx, {
       departmentId: S.departmentId,

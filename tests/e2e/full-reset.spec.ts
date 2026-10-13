@@ -20,6 +20,30 @@ import { APP_TIMEZONE, todayIn } from "../../src/infrastructure/auth/actor";
 import { provisionPersonnel } from "./support/personnel";
 import { provisionDepartment } from "./support/workspace";
 import { signIn, signOut, IDENTIFIER_LABEL } from "./support/auth";
+/**
+ * The complete shift catalog the migrations define: M, E, N, ME, OFF (0010)
+ * and H, leave (0014, D118). Used where the reset must leave it intact and
+ * where recovery must restore it exactly.
+ */
+async function expectCompleteShiftCatalog(
+  db: ReturnType<typeof createDatabase>["db"],
+) {
+  const rows = await db.select().from(shiftTypes);
+  expect(rows).toHaveLength(6);
+  expect(rows.map((r) => r.code).sort()).toEqual([
+    "E",
+    "H",
+    "M",
+    "ME",
+    "N",
+    "OFF",
+  ]);
+  expect(rows.find((r) => r.code === "H")).toMatchObject({
+    label: "مرخصی",
+    covers: [],
+    isNight: false,
+  });
+}
 function isolatedUrl() {
   assertResetE2eDatabase(process.env);
   const url = process.env.DATABASE_URL!;
@@ -301,7 +325,7 @@ test("confirmed master selection warns of capability loss; empty-state admin nav
     await resetDialog
       .getByRole("button", { name: "انصراف", exact: true })
       .click();
-    expect(await db.select().from(shiftTypes)).toHaveLength(5);
+    await expectCompleteShiftCatalog(db);
     await page.getByRole("button", { name: "تأیید و اجرای بازنشانی" }).click();
     await resetDialog
       .getByRole("button", { name: "حذف داده‌های انتخاب‌شده" })
@@ -364,7 +388,7 @@ test("confirmed master selection warns of capability loss; empty-state admin nav
     await expect(
       page.getByRole("status").filter({ hasText: "بازیابی انجام شد" }),
     ).toBeVisible();
-    expect(await db.select().from(shiftTypes)).toHaveLength(5);
+    await expectCompleteShiftCatalog(db);
     expect(await db.select().from(changeReasons)).toHaveLength(7);
     expect(await db.select().from(staffingRuleSetVersions)).toEqual([
       expect.objectContaining({

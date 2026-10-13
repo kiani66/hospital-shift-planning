@@ -12,6 +12,7 @@ import {
   type ChangeRequestState,
   type NewChangeRequestInput,
 } from "../change-requests/request";
+import { summarizePreferenceAlignment } from "../preferences/preference-alignment";
 import { preferenceFit } from "../preferences/preference-fit";
 import {
   assignmentKey,
@@ -469,6 +470,23 @@ describe("leave is never moved or overwritten by someone else's action", () => {
 });
 
 describe("preferences are unchanged by leave", () => {
+  it("an OFF wish against H is an advisory mismatch: never a finding, never blocking", () => {
+    expect(
+      summarizePreferenceAlignment([
+        { preference: "OFF", shift: "H" },
+        { preference: "OFF", shift: "OFF" },
+      ]),
+    ).toMatchObject({ rostered: 2, matches: 1, differs: 1, pending: 0 });
+    // Validation never reads preferences: the staffed day stays READY.
+    const assignments = [a("a", "ME"), a("b", "N"), a("c", "H"), a("d", "OFF")];
+    const violations = validate(assignments);
+    expect(violations).toEqual([]);
+    expect(hasBlockingViolations(violations)).toBe(false);
+    expect(
+      summarizeScheduleDays({ period, assignments, violations }).days[0]!.state,
+    ).toBe("READY");
+  });
+
   it("an OFF wish is not converted to leave and differs from an H decision", () => {
     // Exact-code comparison (D100) stays: a difference is a neutral note.
     expect(preferenceFit("OFF", "H")).toBe("DIFFERS");

@@ -254,6 +254,12 @@ describe("PreferenceContext", () => {
     expect(text(ctx("N", "M"))).toBe("ترجیح: شب مغایر ترجیح");
     expect(ctx("N", "M")).toContain("lucide-equal-not");
     expect(text(ctx("OFF", "E"))).toBe("ترجیح: استراحت مغایر ترجیح");
+    // An OFF wish against recorded leave (H, D118): the same neutral note,
+    // never the validation word «مغایرت» and never a finding marker.
+    const leave = ctx("OFF", "H");
+    expect(text(leave)).toBe("ترجیح: استراحت مغایر ترجیح");
+    expect(leave).toContain("lucide-equal-not");
+    expect(text(leave)).not.toContain("مغایرت");
     expect(text(ctx("E", null))).toBe("ترجیح: عصر در انتظار تخصیص");
     expect(ctx("E", null)).toContain("lucide-circle-dashed");
   });

@@ -48,7 +48,11 @@ test("Monthly Reset previews real impact and refreshes to unassigned planning", 
         await setAssignments(ctx, {
           scheduleId: id,
           expectedRevision: 0,
-          changes: [{ nurseId: head!.id, date: "2026-10-24", shift: "M" }],
+          changes: [
+            { nurseId: head!.id, date: "2026-10-24", shift: "M" },
+            // Recorded leave (D118) is part of the layout the reset clears.
+            { nurseId: head!.id, date: "2026-10-25", shift: "H" },
+          ],
         })
       ).ok,
     ).toBe(true);
@@ -59,7 +63,15 @@ test("Monthly Reset previews real impact and refreshes to unassigned planning", 
   await page.goto(`/departments/${fixture.code}/schedule?schedule=${id}`);
   await page.getByRole("button", { name: "بازنشانی چیدمان" }).click();
   const dialog = page.getByRole("dialog", { name: "بازنشانی چیدمان ماه؟" });
-  await expect(dialog).toContainText("۱ شیفت");
+  await expect(dialog).toContainText(
+    "همه شیفت‌ها، روزهای مرخصی ثبت‌شده و تغییرات چیدمان پاک می‌شوند",
+  );
+  await expect(dialog).toContainText("۱ شیفت، ۰ تغییر");
+  await expect(
+    dialog.locator('[data-workflow="reset-leave-warning"]'),
+  ).toHaveText(
+    "۱ روز مرخصی ثبت‌شده (H) نیز حذف می‌شود و بازگردانده نمی‌شود؛ پس از بازنشانی باید دوباره ثبت شود.",
+  );
   await expect(dialog).toContainText(
     "پنجره‌های ترجیحات و قوانین تغییر نمی‌کنند",
   );

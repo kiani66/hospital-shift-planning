@@ -302,7 +302,10 @@ export default async function DepartmentSchedulePage({
           <>
             {(selected.status === "DRAFT" ||
               selected.status === "PLANNING") && (
-              <MonthlyResetControl scheduleId={selected.id} />
+              <MonthlyResetControl
+                scheduleId={selected.id}
+                leaveLabel={shiftLabels.H}
+              />
             )}
             {data.canCreate ? createDialog(false) : null}
           </>

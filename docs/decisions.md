@@ -1934,6 +1934,8 @@ reset category.
 
 ### D114 · Monthly Planning Reset
 
+> Extended by D118: the confirmation explicitly warns that recorded leave days (H) are deleted too.
+
 Current department Head Nurse only; DRAFT and PLANNING only, with protected history refused.
 Clear working assignments (OFF/PREFILL included) and planning swaps' changes/cells/notes/reasons.
 Preserve schedule ID, period, department, status, roster, preferences/windows, staffing-rule pin
@@ -2040,6 +2042,11 @@ schedule as `H`, next to M, E, N, ME and OFF. Paths are relative to `src/`.
   M/E/N, ME/OFF/H, then clear beside the range control. The month cell shows `H n` from `sm` up and
   its accessible name says «n نفر مرخصی (H)» (information, never a validation category); the
   read-only day lists «مرخصی» apart from rest and undecided.
+- **Monthly Planning Reset (D114).** The reset is unchanged: it clears the whole DRAFT / PLANNING
+  working copy, recorded leave included, and nothing restores it. Its preview counts leave days
+  apart (`leaveDays`), and the confirmation always warns that recorded H days are deleted too
+  (with their count, or that none is recorded); the `schedule.planningReset` audit adds
+  `leaveDaysRemoved`.
 - **Excel.** `domain/shifts/spreadsheet-codes.ts` maps spreadsheet day codes M, E, N, ME, OFF and H
   (case and surrounding spaces ignored) to decisions; an empty cell is UNDECIDED and any other code
   is reported, never guessed. Nothing imports schedules yet; the October 1405 spreadsheet is not
