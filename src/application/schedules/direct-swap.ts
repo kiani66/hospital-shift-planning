@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 import { checkReason } from "../../domain/change-requests/reason";
+import { LEAVE_NOT_SWAPPABLE } from "../../domain/change-requests/request";
 import { isIsoDate, type IsoDate } from "../../domain/shared/dates";
 import { ValidationError } from "../../domain/shared/errors";
 import { unwrap } from "../../domain/shared/result";
+import { isLeave } from "../../domain/shifts/shift-type";
 import { listAssignmentsFor } from "../../infrastructure/repositories/assignments";
 import { findChangeReason } from "../../infrastructure/repositories/change-reasons";
 import { ConflictError } from "../errors";
@@ -27,7 +29,7 @@ export const directSwapInput = z.object({
   note: z.string().max(2000).nullish(),
 });
 
-/** Atomic, audited exchange of two explicit decisions, including OFF. */
+/** Atomic, audited exchange of two explicit decisions, including OFF (never H, D118). */
 export const directSwap = defineCommand({
   name: "schedule.directSwap",
   input: directSwapInput,
@@ -52,6 +54,9 @@ export const directSwap = defineCommand({
         "A swap needs two different explicit decisions",
         "changes",
       );
+    // Leave belongs to its nurse (D118): a swap would hand it to someone else.
+    if (isLeave(first) || isLeave(second))
+      throw new ValidationError(LEAVE_NOT_SWAPPABLE, "changes");
     const reason = unwrap(
       checkReason({
         reason: await findChangeReason(uow.tx, input.reasonCode),

@@ -175,20 +175,22 @@ for (const width of [320, 360, 390, 1280]) {
       "شب (N)",
       "طولانی (ME)",
       "استراحت (OFF)",
+      "مرخصی (H)",
     ];
     const buttons = names.map((name) =>
       controls(page).getByRole("button", { name, exact: true }),
     );
     const boxes = [];
     for (const [i, button] of buttons.entries()) {
-      await expect(button).toHaveText(["M", "E", "N", "ME", "OFF"][i]!);
+      await expect(button).toHaveText(["M", "E", "N", "ME", "OFF", "H"][i]!);
       boxes.push((await button.boundingBox())!);
       // The code is never clipped inside its button.
       expect(
         await button.evaluate((el) => el.scrollWidth - el.clientWidth),
       ).toBeLessThanOrEqual(0);
     }
-    // Desktop retains one row; mobile consistently groups M/E/N then ME/OFF/clear.
+    // Desktop retains one row; mobile consistently groups M/E/N, ME/OFF/H,
+    // then clear beside the range control (D118).
     for (const [i, box] of boxes.entries()) {
       const rowStart = width < 640 && i >= 3 ? boxes[3]! : boxes[0]!;
       expect(Math.abs(box.y - rowStart.y)).toBeLessThan(1);
@@ -205,13 +207,16 @@ for (const width of [320, 360, 390, 1280]) {
       const clear = (await controls(page)
         .getByRole("button", { name: "تعیین‌نشده", exact: true })
         .boundingBox())!;
-      expect(Math.abs(clear.y - boxes[3]!.y)).toBeLessThan(1);
+      expect(clear.y).toBeGreaterThanOrEqual(boxes[3]!.y + boxes[3]!.height);
+      expect(clear.width).toBeGreaterThanOrEqual(44);
       const range = (await controls(page)
         .getByRole("button", { name: /^چند روز/ })
         .boundingBox())!;
-      expect(range.y).toBeGreaterThanOrEqual(clear.y + clear.height);
+      expect(Math.abs(range.y - clear.y)).toBeLessThan(1);
       const group = (await controls(page).boundingBox())!;
-      expect(Math.abs(range.width - group.width)).toBeLessThan(1);
+      // Clear and range together fill the last row.
+      expect(range.width + clear.width).toBeLessThanOrEqual(group.width + 1);
+      expect(range.width).toBeGreaterThan(clear.width);
       expect(range.height).toBeGreaterThanOrEqual(44);
     }
     expect(

@@ -256,13 +256,15 @@ function MonthTotals({
     ["ساعات برنامه‌ریزی‌شده", formatHours(totals.minutes)],
     [`شیفت ${shiftLabels.N}`, `${faNumber(totals.nightCount)}`],
     [`روزهای ${shiftLabels.OFF}`, `${faNumber(totals.offCount)}`],
+    // Leave (H, D118) is counted apart: never shifts, hours or nights.
+    [`روزهای ${shiftLabels.H}`, `${faNumber(totals.leaveCount)}`],
   ] as const;
   return (
     <section aria-labelledby="month-totals" className="flex flex-col gap-2">
       <h2 id="month-totals" className="sr-only">
         جمع ماه
       </h2>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {tiles.map(([term, value]) => (
           <div
             key={term}
@@ -293,7 +295,7 @@ function MonthTotals({
           ))}
         </ul>
         {totals.includesUnapproved &&
-          totals.shiftCount + totals.offCount > 0 && (
+          totals.shiftCount + totals.offCount + totals.leaveCount > 0 && (
             <p className="text-xs text-muted-foreground">
               شامل شیفت‌های تأییدنشده؛ با تغییر برنامه، این ارقام هم تغییر
               می‌کند.
@@ -572,7 +574,10 @@ export function MyShiftsView({
       <>
         <PublicationNotices schedules={month.schedules} />
         <MonthTotals totals={month.totals} shiftLabels={shiftLabels} />
-        {month.totals.shiftCount + month.totals.offCount === 0 && (
+        {month.totals.shiftCount +
+          month.totals.offCount +
+          month.totals.leaveCount ===
+          0 && (
           <Callout role="note" tone="info" icon={ClipboardList}>
             در این ماه شیفتی برای شما ثبت نشده است.
           </Callout>

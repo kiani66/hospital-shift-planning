@@ -1,4 +1,12 @@
-import { Bed, Moon, Sun, Sunset, Timer, type LucideIcon } from "lucide-react";
+import {
+  Bed,
+  Luggage,
+  Moon,
+  Sun,
+  Sunset,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { ShiftLabels } from "@/application/shifts/labels";
 import {
@@ -95,7 +103,7 @@ export const faClock = (time: string) =>
 
 /**
  * "۰۷:۰۰ تا ۱۴:۰۰", or "۱۹:۰۰ تا ۰۷:۰۰ روز بعد" for a shift that crosses
- * midnight. A decision without hours (OFF) reads as its label.
+ * midnight. A decision without hours (OFF, H) reads as its label.
  */
 export function shiftHoursLabel(
   code: AssignmentCode,
@@ -123,16 +131,30 @@ export const OFF_PRESENTATION: ShiftPresentation<"OFF"> = {
 };
 
 /**
+ * Leave (H, D118) is a recorded non-working day, distinct from OFF (a rest
+ * decision): no hours, no coverage. It has its own `shift-leave` tokens,
+ * outside the cool working-shift family, and its code `H` is always shown.
+ */
+export const LEAVE_PRESENTATION: ShiftPresentation<"H"> = {
+  code: "H",
+  tokenClass: "bg-shift-leave text-shift-leave-foreground",
+  accentClass: "text-shift-leave-foreground",
+  dotClass: "bg-shift-leave-foreground",
+  softClass: "bg-shift-leave/60",
+  icon: Luggage,
+};
+
+/**
  * The one visual identity of every explicit scheduling decision (code,
- * icon, color): the working shifts plus OFF. A missing assignment is
+ * icon, color): the working shifts plus OFF and H. A missing assignment is
  * UNDECIDED and has no entry (see `assignmentName`). Preference values are
  * the same codes (a wish, not a decision), so they share these entries.
  */
 export const ASSIGNMENT_PRESENTATION: Readonly<{
   [C in AssignmentCode]: ShiftPresentation<C>;
-}> = { ...SHIFT_PRESENTATION, OFF: OFF_PRESENTATION };
+}> = { ...SHIFT_PRESENTATION, OFF: OFF_PRESENTATION, H: LEAVE_PRESENTATION };
 
-/** "صبح (M)", "استراحت (OFF)", or "تعیین‌نشده" for a missing decision. */
+/** "صبح (M)", "استراحت (OFF)", "مرخصی (H)", or "تعیین‌نشده" for a missing decision. */
 export const assignmentName = (
   code: AssignmentCode | null,
   labels: ShiftLabels,

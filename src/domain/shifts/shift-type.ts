@@ -75,19 +75,51 @@ export const isShiftCode = (value: unknown): value is ShiftCode =>
   typeof value === "string" &&
   (SHIFT_CODES as readonly string[]).includes(value);
 
+/**
+ * Explicit non-working day statuses (D100, D118). Neither is a shift: they add
+ * no coverage, working time or night, and never satisfy a staffing minimum.
+ *
+ * - OFF: the Head Nurse's explicit rest decision («استراحت»).
+ * - H: a recorded leave day («مرخصی»). Personal to the nurse: never swapped,
+ *   never overwritten by a coverage candidate or a replacement.
+ */
+export const NON_WORKING_CODES = ["OFF", "H"] as const;
+export type NonWorkingCode = (typeof NON_WORKING_CODES)[number];
+
+/** The leave day status (D118). */
+export const LEAVE_CODE = "H" satisfies NonWorkingCode;
+
 /** Explicit scheduling decisions; absence of a row is UNDECIDED. */
-export const ASSIGNMENT_CODES = [...SHIFT_CODES, "OFF"] as const;
+export const ASSIGNMENT_CODES = [...SHIFT_CODES, ...NON_WORKING_CODES] as const;
 export type AssignmentCode = (typeof ASSIGNMENT_CODES)[number];
 export const isWorkingShift = isShiftCode;
 export const isAssignmentCode = (value: unknown): value is AssignmentCode =>
-  value === "OFF" || isWorkingShift(value);
+  typeof value === "string" &&
+  (ASSIGNMENT_CODES as readonly string[]).includes(value);
+
+/** A recorded leave day (H). */
+export const isLeave = (code: AssignmentCode | null): code is "H" =>
+  code === LEAVE_CODE;
+
+/**
+ * Whether the nurse is free to be given a working shift by someone else's
+ * action (a coverage candidate, an UNAVAILABLE replacement): undecided or
+ * an explicit OFF. Working nurses and nurses on leave are not.
+ */
+export const isFreeToCover = (code: AssignmentCode | null): boolean =>
+  !isWorkingShift(code) && !isLeave(code);
 
 export const isNightShift = (code: AssignmentCode): boolean =>
   isWorkingShift(code) && SHIFT_TYPES[code].isNight;
 
+/**
+ * Preference values are unchanged by D118: a nurse never wishes for H. Leave
+ * is recorded by the Head Nurse (and, later, by an approved leave request),
+ * never inferred from an OFF wish.
+ */
 export const PREFERENCE_VALUES = [...SHIFT_CODES, "OFF"] as const;
 
-/** A nurse's wish for one day: a shift, or OFF (leave / unavailable). */
+/** A nurse's wish for one day: a shift, or OFF (rest / unavailable). */
 export type PreferenceValue = (typeof PREFERENCE_VALUES)[number];
 
 export const isPreferenceValue = (value: unknown): value is PreferenceValue =>

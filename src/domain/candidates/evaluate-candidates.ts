@@ -9,7 +9,7 @@ import { err, ok, type Result } from "../shared/result";
 import type { Assignment } from "../shifts/assignment";
 import {
   COVERAGE_PERIODS,
-  isWorkingShift,
+  isFreeToCover,
   type AssignmentCode,
   type BaseShift,
   type PreferenceValue,
@@ -47,12 +47,14 @@ export type CandidatePreference = (typeof CANDIDATE_PREFERENCES)[number];
 /**
  * The target-day status of a nurse, or null when they already work that day
  * (M, E, N or ME): such a nurse is no candidate at all, V1 never reshuffles.
+ * A nurse on recorded leave (H, D118) is no candidate either: leave is never
+ * replaced to fill a shortage.
  */
 export function candidateDayStatus(
   current: AssignmentCode | null,
 ): CandidateDayStatus | null {
   if (current === null) return "UNASSIGNED";
-  return isWorkingShift(current) ? null : "OFF_ASSIGNMENT";
+  return isFreeToCover(current) ? "OFF_ASSIGNMENT" : null;
 }
 
 /**

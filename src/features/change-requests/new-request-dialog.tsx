@@ -17,7 +17,6 @@ import { CHANGE_NOTE_MAX_LENGTH } from "@/domain/change-requests/reason";
 import type { IsoDate } from "@/domain/shared/dates";
 import {
   SHIFT_CODES,
-  isWorkingShift,
   type AssignmentCode,
   type ShiftCode,
 } from "@/domain/shifts/shift-type";
@@ -31,6 +30,8 @@ import {
   REQUEST_TYPE_DESCRIPTIONS,
   REQUEST_TYPE_LABELS,
   decisionPhrase,
+  defaultRequestType,
+  offersRequestType,
 } from "./presentation";
 
 const FIELD_CLASS =
@@ -72,7 +73,7 @@ export function NewRequestDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<ChangeRequestType>(
-    isWorkingShift(shift) ? "UNAVAILABLE" : "SWAP",
+    defaultRequestType(shift),
   );
   // Every field is controlled: React resets uncontrolled fields after a form
   // action, which would lose the nurse's choices when the server refuses.
@@ -93,7 +94,7 @@ export function NewRequestDialog({
       const next = await createChangeRequestAction(previous, formData);
       if (next.status === "success") {
         setOpen(false);
-        setType(isWorkingShift(shift) ? "UNAVAILABLE" : "SWAP");
+        setType(defaultRequestType(shift));
         setTargetShift("");
         setCounterpartId("");
         setReasonCode("");
@@ -153,8 +154,8 @@ export function NewRequestDialog({
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-sm font-medium">نوع درخواست</legend>
-            {CHANGE_REQUEST_TYPES.filter(
-              (v) => v !== "UNAVAILABLE" || isWorkingShift(shift),
+            {CHANGE_REQUEST_TYPES.filter((v) =>
+              offersRequestType(v, shift),
             ).map((value) => (
               <label
                 key={value}

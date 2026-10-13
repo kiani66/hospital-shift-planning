@@ -1,6 +1,7 @@
 import {
   SHIFT_CODES,
   SHIFT_TYPES,
+  isLeave,
   isNightShift,
   isWorkingShift,
   type AssignmentCode,
@@ -18,6 +19,8 @@ import {
 export interface ShiftTotals {
   readonly shiftCount: number;
   readonly offCount: number;
+  /** Leave days (H, D118): counted apart, never in shifts, minutes or nights. */
+  readonly leaveCount: number;
   readonly minutes: number;
   readonly nightCount: number;
   readonly byCode: Readonly<Record<ShiftCode, number>>;
@@ -32,15 +35,17 @@ export function summarizeShifts(
   >;
   let shiftCount = 0;
   let offCount = 0;
+  let leaveCount = 0;
   let minutes = 0;
   let nightCount = 0;
   for (const code of codes) {
     if (code === "OFF") offCount++;
+    if (isLeave(code)) leaveCount++;
     if (!isWorkingShift(code)) continue;
     shiftCount++;
     byCode[code]++;
     minutes += shiftDurationMinutes(SHIFT_TYPES[code]);
     if (isNightShift(code)) nightCount++;
   }
-  return { shiftCount, offCount, minutes, nightCount, byCode };
+  return { shiftCount, offCount, leaveCount, minutes, nightCount, byCode };
 }

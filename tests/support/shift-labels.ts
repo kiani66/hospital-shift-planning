@@ -10,6 +10,7 @@ export const SHIFT_LABELS: ShiftLabels = {
   N: "شب",
   ME: "طولانی",
   OFF: "استراحت",
+  H: "مرخصی",
 };
 
 /** Different labels, to prove a screen reads names from the data, not from code. */
@@ -19,4 +20,5 @@ export const RENAMED_SHIFT_LABELS: ShiftLabels = {
   N: "شبانه",
   ME: "لانگ",
   OFF: "مرخصی‌روز",
+  H: "غیبت مجاز",
 };

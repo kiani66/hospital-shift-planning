@@ -12,7 +12,7 @@ import {
 } from "../db/schema";
 import { COVERAGE_PERIODS } from "../../domain/shifts/shift-type";
 
-/** Exact migration 0002/0010/0012 defaults; existing labels/definitions are never replaced. */
+/** Exact migration 0002/0010/0012/0014 defaults; existing labels/definitions are never replaced. */
 export const RECOVERY_SHIFTS = [
   { code: "M", label: "صبح", covers: ["M"], isNight: false, sortOrder: 1 },
   { code: "E", label: "عصر", covers: ["E"], isNight: false, sortOrder: 2 },
@@ -25,6 +25,7 @@ export const RECOVERY_SHIFTS = [
     sortOrder: 4,
   },
   { code: "OFF", label: "استراحت", covers: [], isNight: false, sortOrder: 5 },
+  { code: "H", label: "مرخصی", covers: [], isNight: false, sortOrder: 6 },
 ];
 /** Exact migration 0007 defaults. Inactive/custom existing reasons are left alone. */
 export const RECOVERY_REASONS: (typeof changeReasons.$inferInsert)[] = [

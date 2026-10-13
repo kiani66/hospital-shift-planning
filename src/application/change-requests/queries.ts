@@ -21,7 +21,8 @@ import { compareIsoDates, type IsoDate } from "../../domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
 import {
-  isWorkingShift,
+  isFreeToCover,
+  isLeave,
   type AssignmentCode,
   type ShiftCode,
 } from "../../domain/shifts/shift-type";
@@ -439,14 +440,17 @@ export async function getChangeRequestOptions(
             .filter((a) => a.date === mineOnDay.date)
             .map((a) => [a.nurseId, a.shift]),
         );
-        swapCandidates[mineOnDay.date] = roster
-          .filter((r) => r.userId !== actor.userId)
-          .map((r) => ({
-            userId: r.userId,
-            displayName: r.displayName,
-            shift: shiftOf.get(r.userId) ?? null,
-          }))
-          .filter((c) => c.shift !== mineOnDay.shift);
+        // Leave is never swapped (D118): no partners for, or on, a leave day.
+        swapCandidates[mineOnDay.date] = isLeave(mineOnDay.shift)
+          ? []
+          : roster
+              .filter((r) => r.userId !== actor.userId)
+              .map((r) => ({
+                userId: r.userId,
+                displayName: r.displayName,
+                shift: shiftOf.get(r.userId) ?? null,
+              }))
+              .filter((c) => c.shift !== mineOnDay.shift && !isLeave(c.shift));
       }
       return {
         scheduleId: s.id,
@@ -722,7 +726,7 @@ export async function getChangeRequestReview(
             .filter(
               (r) =>
                 r.userId !== record.requesterId &&
-                !isWorkingShift(cells.shiftOf(r.userId)),
+                isFreeToCover(cells.shiftOf(r.userId)),
             )
             .map((r) => ({ userId: r.userId, displayName: r.displayName }))
         : [],

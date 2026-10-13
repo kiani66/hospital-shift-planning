@@ -2,7 +2,11 @@ import type { AssignmentEdit } from "../schedule/assignment-editing";
 import type { IsoDate } from "../shared/dates";
 import { InvalidStateError, ValidationError } from "../shared/errors";
 import { err, ok, type Result } from "../shared/result";
-import { isWorkingShift, type AssignmentCode } from "../shifts/shift-type";
+import {
+  isFreeToCover,
+  isWorkingShift,
+  type AssignmentCode,
+} from "../shifts/shift-type";
 import { CHANGE_REQUEST_REFUSALS } from "./model";
 import { checkSwapContext, type ChangeRequestState } from "./request";
 
@@ -113,6 +117,11 @@ export function planRequestChange(input: {
         if (isWorkingShift(current.replacement))
           return invalid(
             "The replacement already works that day",
+            "replacementNurseId",
+          );
+        if (!isFreeToCover(current.replacement))
+          return invalid(
+            "The replacement is on leave that day",
             "replacementNurseId",
           );
         if (!isWorkingShift(current.requester))

@@ -23,6 +23,7 @@ import type { IsoDate } from "@/domain/shared/dates";
 import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { monthGrid } from "@/features/calendar/month-grid";
 import {
+  LEAVE_PRESENTATION,
   SHIFT_PRESENTATION,
   type ShiftLabels,
 } from "@/features/shifts/catalog";
@@ -335,6 +336,18 @@ function CellTop({
             <span className="sm:hidden">ت</span>
           </span>
         )}
+        {day.leave > 0 && (
+          <span
+            data-leave={day.leave}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-0.5 rounded px-1 text-[0.6875rem] leading-5 font-bold max-sm:hidden",
+              LEAVE_PRESENTATION.tokenClass,
+            )}
+          >
+            <span dir="ltr">H</span>
+            <span className="tabular-nums">{faNumber(day.leave)}</span>
+          </span>
+        )}
       </span>
       {day.state === "READY" || day.state === "NOT_STARTED" ? (
         <DayStateIcon
@@ -519,7 +532,7 @@ export function MonthCalendar({
                           scroll={false}
                           prefetch={false}
                           aria-label={
-                            dayCellLabel(cell.data) +
+                            dayCellLabel(cell.data, shiftLabels) +
                             (dimmed ? "، خارج از فیلتر" : "")
                           }
                           aria-current={
@@ -603,8 +616,20 @@ function CalendarLegend({
             </span>
           ))}
           <span>
-            {`تعداد نفرات در پوشش ${l.M}، ${l.E} و ${l.N} (شیفت ${l.ME} در ${l.M} و ${l.E} شمرده می‌شود؛ ${l.OFF} در پوشش شمرده نمی‌شود)`}
+            {`تعداد نفرات در پوشش ${l.M}، ${l.E} و ${l.N} (شیفت ${l.ME} در ${l.M} و ${l.E} شمرده می‌شود؛ ${l.OFF} و ${l.H} در پوشش شمرده نمی‌شوند)`}
           </span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 max-sm:hidden">
+          <span
+            dir="ltr"
+            className={cn(
+              "rounded px-1 leading-5 font-bold",
+              LEAVE_PRESENTATION.tokenClass,
+            )}
+          >
+            H
+          </span>
+          {`تعداد نفرات در ${l.H}`}
         </span>
         <span className="inline-flex items-center gap-1 max-md:hidden">
           <ArrowDown aria-hidden="true" className="size-3.5" />

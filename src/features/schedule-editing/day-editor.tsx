@@ -922,7 +922,7 @@ function NurseRow({
             onClick={onToggleRange}
             className={cn(
               control,
-              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted max-sm:col-span-3 max-sm:ms-0",
+              "ms-1 border-input bg-background text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-accent-foreground disabled:border-dashed disabled:bg-muted disabled:opacity-60 disabled:hover:bg-muted max-sm:col-span-2 max-sm:ms-0",
               rangeOpen && "border-primary bg-brand-soft text-primary",
             )}
           >

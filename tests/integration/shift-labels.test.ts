@@ -35,7 +35,7 @@ async function inRolledBackTransaction(
 }
 
 describe("shift labels from shift_types", () => {
-  it("loads the migrated labels: ME reads «طولانی» (0012), OFF keeps «استراحت»", async () => {
+  it("loads the migrated labels: ME reads «طولانی» (0012), OFF keeps «استراحت», H reads «مرخصی» (0014)", async () => {
     expect(await getShiftLabels(db)).toEqual(SHIFT_LABELS);
     const { rows } = await db.execute<{ code: string; label: string }>(
       sql`select code, label from shift_types order by sort_order`,
@@ -46,6 +46,7 @@ describe("shift labels from shift_types", () => {
       { code: "N", label: "شب" },
       { code: "ME", label: "طولانی" },
       { code: "OFF", label: "استراحت" },
+      { code: "H", label: "مرخصی" },
     ]);
   });
 
@@ -73,7 +74,7 @@ describe("shift labels from shift_types", () => {
     await inRolledBackTransaction(async (tx) => {
       await tx.execute(
         sql`insert into shift_types (code, label, covers, is_night, sort_order)
-            values ('H', 'تعطیل', ARRAY[]::text[], false, 6)`,
+            values ('X', 'تعطیل', ARRAY[]::text[], false, 7)`,
       );
       expect(Object.keys(await getShiftLabels(tx))).toEqual([
         "M",
@@ -81,6 +82,7 @@ describe("shift labels from shift_types", () => {
         "N",
         "ME",
         "OFF",
+        "H",
       ]);
     });
   });

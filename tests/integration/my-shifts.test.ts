@@ -232,6 +232,7 @@ describe("getMyShiftsMonth: what a nurse sees (D11 as amended, D98)", () => {
     expect(m.totals).toEqual({
       shiftCount: 3,
       offCount: 27,
+      leaveCount: 0,
       minutes: 31 * 60,
       nightCount: 1,
       byCode: { M: 1, E: 0, N: 1, ME: 1 },

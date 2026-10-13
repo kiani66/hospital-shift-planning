@@ -29,6 +29,18 @@ describe("editorKeyCommand", () => {
     expect(editorKeyCommand(key("KeyL"))).toEqual({ type: "SET", shift: "ME" });
   });
 
+  it("maps H to leave (D118) by key position, even where the layout types «ا»", () => {
+    expect(editorKeyCommand({ ...key("KeyH"), key: "ا" })).toEqual({
+      type: "SET",
+      shift: "H",
+    });
+    expect(editorKeyCommand(key("KeyH", { shiftKey: true }))).toBeNull();
+    expect(shortcutHelp(SHIFT_LABELS)).toContainEqual({
+      keys: "H",
+      action: "مرخصی",
+    });
+  });
+
   it("clears with Delete or Backspace", () => {
     expect(editorKeyCommand(key("Delete"))).toEqual({ type: "CLEAR" });
     expect(editorKeyCommand(key("Backspace"))).toEqual({ type: "CLEAR" });
@@ -91,6 +103,7 @@ describe("editorKeyCommand", () => {
       "N",
       "O",
       "L",
+      "H",
       "Delete / Backspace",
       "↑ / ↓",
       "← / →",

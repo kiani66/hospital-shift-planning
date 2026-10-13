@@ -22,7 +22,7 @@ export class ShiftReferenceDataError extends Error {
 }
 
 /**
- * Maps exactly the domain's codes (M, E, N, ME, OFF). A missing or blank
+ * Maps exactly the domain's codes (M, E, N, ME, OFF, H). A missing or blank
  * label for one of them throws; rows with any other code are ignored, so a
  * row in the table never becomes a valid shift or assignment code.
  */

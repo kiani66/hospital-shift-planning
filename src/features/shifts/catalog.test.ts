@@ -13,6 +13,7 @@ import {
 
 import {
   ASSIGNMENT_PRESENTATION,
+  LEAVE_PRESENTATION,
   OFF_PRESENTATION,
   SHIFT_PRESENTATION,
   assignmentName,
@@ -78,8 +79,11 @@ describe("assignment presentation (code, icon, color)", () => {
       ASSIGNMENT_CODES.map((c) => ASSIGNMENT_PRESENTATION[c].icon),
     );
     expect(icons.size).toBe(ASSIGNMENT_CODES.length);
-    // Preferences are the same codes (wishes, not decisions).
-    expect([...PREFERENCE_VALUES]).toEqual([...ASSIGNMENT_CODES]);
+    // Preferences are the same codes (wishes, not decisions), except leave:
+    // nobody wishes for H; it is recorded (D118).
+    expect([...PREFERENCE_VALUES]).toEqual(
+      ASSIGNMENT_CODES.filter((c) => c !== "H"),
+    );
   });
 
   it("reuses the working-shift entries", () => {
@@ -97,10 +101,41 @@ describe("assignment presentation (code, icon, color)", () => {
   it("names every decision as «label (CODE)», OFF included, from the labels given", () => {
     expect(
       ASSIGNMENT_CODES.map((c) => assignmentName(c, SHIFT_LABELS)),
-    ).toEqual(["صبح (M)", "عصر (E)", "شب (N)", "طولانی (ME)", "استراحت (OFF)"]);
+    ).toEqual([
+      "صبح (M)",
+      "عصر (E)",
+      "شب (N)",
+      "طولانی (ME)",
+      "استراحت (OFF)",
+      "مرخصی (H)",
+    ]);
     expect(assignmentName(null, SHIFT_LABELS)).toBe("تعیین‌نشده");
     // A different label changes the name, never the code.
     expect(assignmentName("OFF", RENAMED_SHIFT_LABELS)).toBe("مرخصی‌روز (OFF)");
     expect(assignmentName("N", RENAMED_SHIFT_LABELS)).toBe("شبانه (N)");
+  });
+});
+
+describe("leave presentation (H, D118)", () => {
+  it("has its own shift-leave tokens: neither a working shift's nor OFF's", () => {
+    expect(ASSIGNMENT_PRESENTATION.H).toBe(LEAVE_PRESENTATION);
+    expect(LEAVE_PRESENTATION.code).toBe("H");
+    expect(LEAVE_PRESENTATION.tokenClass).toBe(
+      "bg-shift-leave text-shift-leave-foreground",
+    );
+    const others = [...SHIFT_CODES, "OFF" as const].map(
+      (c) => ASSIGNMENT_PRESENTATION[c],
+    );
+    for (const other of others) {
+      expect(LEAVE_PRESENTATION.tokenClass).not.toBe(other.tokenClass);
+      expect(LEAVE_PRESENTATION.icon).not.toBe(other.icon);
+    }
+  });
+
+  it("names leave from the stored label and has no hours", () => {
+    expect(assignmentName("H", SHIFT_LABELS)).toBe("مرخصی (H)");
+    expect(assignmentName("H", RENAMED_SHIFT_LABELS)).toBe("غیبت مجاز (H)");
+    expect(shiftHoursLabel("H", SHIFT_LABELS)).toBe("مرخصی");
+    expect(shiftFullName("H", SHIFT_LABELS)).toBe("مرخصی");
   });
 });

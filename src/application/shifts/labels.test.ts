@@ -8,6 +8,7 @@ const ROWS = [
   { code: "N", label: "شب" },
   { code: "ME", label: "طولانی" },
   { code: "OFF", label: "استراحت" },
+  { code: "H", label: "مرخصی" },
 ];
 
 describe("toShiftLabels", () => {
@@ -19,6 +20,7 @@ describe("toShiftLabels", () => {
       N: "شب",
       ME: "طولانی",
       OFF: "استراحت",
+      H: "مرخصی",
     });
     expect(Object.isFrozen(labels)).toBe(true);
   });
@@ -32,9 +34,9 @@ describe("toShiftLabels", () => {
   });
 
   it("ignores rows the domain does not know: a row never becomes a shift code", () => {
-    const labels = toShiftLabels([...ROWS, { code: "H", label: "تعطیل" }]);
-    expect(Object.keys(labels)).toEqual(["M", "E", "N", "ME", "OFF"]);
-    expect(labels).not.toHaveProperty("H");
+    const labels = toShiftLabels([...ROWS, { code: "X", label: "تعطیل" }]);
+    expect(Object.keys(labels)).toEqual(["M", "E", "N", "ME", "OFF", "H"]);
+    expect(labels).not.toHaveProperty("X");
   });
 
   it("fails explicitly when a required label is missing or blank", () => {
@@ -49,6 +51,10 @@ describe("toShiftLabels", () => {
         ROWS.map((r) => (r.code === "ME" ? { ...r, label: "  " } : r)),
       ),
     ).toThrowError(/required code ME/);
+    // Leave (H, D118) is required like every other decision.
+    expect(() =>
+      toShiftLabels(ROWS.filter((r) => r.code !== "H")),
+    ).toThrowError(/required code H/);
     expect(() => toShiftLabels([])).toThrowError(ShiftReferenceDataError);
   });
 });

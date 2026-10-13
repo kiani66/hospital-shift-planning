@@ -15,6 +15,7 @@ import {
 } from "../../domain/shared/period";
 import { unwrap } from "../../domain/shared/result";
 import {
+  isLeave,
   isWorkingShift,
   type AssignmentCode,
 } from "../../domain/shifts/shift-type";
@@ -83,6 +84,8 @@ export interface MyShiftSchedule {
   /** The actor's visible shifts of this schedule inside the requested period. */
   readonly shiftCount: number;
   readonly offCount: number;
+  /** Leave days (H, D118), apart from shifts and OFF. */
+  readonly leaveCount: number;
   /** Days of the requested period in an open revision (OFFICIAL only). */
   readonly pendingChangeDates: readonly IsoDate[];
 }
@@ -174,6 +177,7 @@ async function visibleSchedule(
       shiftCount: [...entries.values()].filter((e) => isWorkingShift(e.shift))
         .length,
       offCount: [...entries.values()].filter((e) => e.shift === "OFF").length,
+      leaveCount: [...entries.values()].filter((e) => isLeave(e.shift)).length,
       pendingChangeDates,
     },
     entries,
