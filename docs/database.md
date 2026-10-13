@@ -76,8 +76,8 @@ with their keys, foreign keys and checks (`legacy_shift_change_requests`,
 
 ## Reference data
 
-Rows of `shift_types` (0002) and `change_reasons` (0007) are inserted by migrations, not by the
-seed, and survive `resetData`. `shift_types.label` is the descriptive shift name every screen shows
+Rows of `shift_types` (0002; OFF from 0010, H from 0014) and `change_reasons` (0007) are inserted
+by migrations, not by the seed, and survive `resetData`. `shift_types.label` is the descriptive shift name every screen shows
 (D112; ME was aligned to «طولانی» by 0012); the codes stay the domain's constants, and a row with
 an unknown code is ignored, never treated as a shift. A change reason is never deleted once it may be referenced: retire
 it with `is_active = false` in a new migration (inactive reasons stay readable in history but

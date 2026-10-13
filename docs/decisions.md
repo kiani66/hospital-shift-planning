@@ -72,6 +72,8 @@ Enforced in `schedule/assignment-editing.ts`.
 
 ### D15 · One assignment per nurse per day
 
+> Extended by D100 (OFF) and D118 (H, leave): each is that day's single decision.
+
 Each nurse has at most one assignment per calendar day: `M`, `E`, `N` or `ME`. `ME` is the
 long Morning + Evening shift and is that day's single assignment; M and E are never stored as
 two assignments on the same day. A duplicate is a blocking violation.
@@ -275,6 +277,8 @@ Phase 6. Paths are relative to `src/`. No schema change: `nurse_preferences` (pr
 `(schedule_id, user_id, date)`, foreign key to the roster) already fits.
 
 ### D35 · Preference values
+
+> Clarified by D118: an OFF wish is a rest request, never leave. Preference values do not include H.
 
 A nurse picks at most one value per day from the persisted `preference_value` enum: `M`, `E`, `N`,
 `ME` and `OFF`. `OFF` already existed in the domain and database as "leave / unavailable" and is
@@ -1505,6 +1509,8 @@ Enforced in `domain/preferences/preference-fit.ts`, `domain/preferences/preferen
 
 ## D100 — Explicit OFF scheduling (approved; supersedes conflicting D40/D44/D48/D98/D99 details)
 
+> Extended by D118: H (leave) is a second explicit non-working decision with the same coverage and working-time semantics as OFF.
+
 > Staffing details (default minimum of one, maxima as warnings) superseded by D102/D105; OFF semantics unchanged.
 
 - A missing assignment row is UNDECIDED («تعیین‌نشده»), never OFF. An assignment
@@ -1809,6 +1815,8 @@ earlier decision: planning edits (D7, D48), Supervisor visibility (D12), effecti
 
 ### D111 · Candidate Recommendation V1
 
+> Narrowed by D118: a nurse on leave (H) on the target date is never a candidate.
+
 - **Purpose.** Help a Head Nurse resolve an existing coverage shortage by listing who could fill
   it. Deterministic, rule-based, explainable and non-generative; it is not automatic scheduling,
   never selects a person and never writes on its own. The Head Nurse decides.
@@ -1982,3 +1990,61 @@ Presentation only: no route, navigation item, label, permission or information a
   page inert and not scrolled, Escape closes, focus returns to the button). Choosing a link, a click
   outside the panel, any navigation and growing into the sidebar layout close it. The bottom bar and
   the «بیشتر» page are unchanged.
+
+## Leave day decisions
+
+### D118 · Leave day (H, «مرخصی»)
+
+Approved product requirement: the Head Nurse records a nurse's leave directly in the monthly
+schedule as `H`, next to M, E, N, ME and OFF. Paths are relative to `src/`.
+
+- **Model.** `H` is an explicit non-working day status, an `AssignmentCode` but never a `ShiftCode`:
+  `NON_WORKING_CODES = OFF, H` (`domain/shifts/shift-type.ts`). It is stored like every decision in
+  `shift_assignments` / `schedule_version_assignments` (the existing `text` foreign key to
+  `shift_types`), so the primary key keeps exactly one decision per nurse and day (D15): leave and a
+  working shift can never coexist; choosing one replaces the other. A missing row stays UNDECIDED
+  (D100); OFF stays the Head Nurse's rest decision. Leave, OFF and undecided are three distinct
+  states everywhere.
+- **Migration 0014** inserts only the reference row (`H`, «مرخصی», no coverage, not night, sort order 6) with `ON CONFLICT DO NOTHING`. No column, constraint, enum or existing row changes; nothing is
+  backfilled; approved versions are untouched. `preference_value` is unchanged and the
+  `CHANGE_SHIFT` target check still allows working shifts only. The label is reference data (D112);
+  `master-recovery` restores the row like the other defaults. Deploy order is the usual one
+  (migrations before `next build`, D9): the label loader requires the H row.
+- **Rules.** H adds zero working minutes, zero shifts, zero nights and zero coverage, so it never
+  satisfies a staffing minimum (D102). It is a completed decision for FINALIZE / SUBMIT
+  completeness. It is not a night, and N followed by H satisfies night rest (D7), within and across
+  schedule boundaries. Editing H uses `setAssignments` unchanged: authorization, status and
+  revision scope (D14, D48), optimistic concurrency (D49), per-cell audit with `before` / `after`.
+  After approval, leave goes through the existing adjustment → revision → approval path (D70, D72);
+  an adjustment that would create a shortage is refused like any other.
+- **Leave is personal.** It is never moved or overwritten by someone else's action: coverage
+  candidates exclude a nurse on H (D111); a swap (nurse request or Head Nurse direct swap, D68,
+  D100) with H on either side is refused, swap partners never include a nurse on leave, and a swap
+  cannot be refreshed onto a leave day; an UNAVAILABLE replacement cannot be a nurse on leave. A
+  nurse on leave may still ask to work instead (CHANGE_SHIFT) or OTHER; UNAVAILABLE needs a working
+  shift. Requests never change assignments by themselves (D13).
+- **Preferences and requests are unchanged.** Nurses cannot wish for H; OFF wishes are never
+  converted to H. Preference fit keeps D100's exact-code comparison, so an OFF wish against an H
+  decision reads «مغایر ترجیح» (a neutral note, never a finding). Approved UNAVAILABLE still
+  yields OFF, never H. A future leave-request workflow must write the same authoritative record (an
+  H assignment through the existing write path, after an explicit Head Nurse decision); nothing is
+  auto-approved or auto-applied.
+- **Reporting.** `summarizeShifts` adds `leaveCount`; My Shifts shows «روزهای مرخصی» apart from
+  shifts, scheduled hours, nights and rest, under the same publication and version rules (D11,
+  D98): during an open revision the nurse still sees the approved decision. No paid-leave or
+  payroll hours are computed (no verified business rule; D77).
+- **Presentation.** `LEAVE_PRESENTATION`: code `H` always shown, the label from `shift_types`
+  («مرخصی»), a luggage icon and new `shift-leave` tokens (a muted sand, outside the cool working
+  family and apart from attention amber and the valid/success greens). The day editor gets an H
+  control, filter chip and keyboard shortcut `H` (by key position); on phones the controls read
+  M/E/N, ME/OFF/H, then clear beside the range control. The month cell shows `H n` from `sm` up and
+  its accessible name says «n نفر مرخصی (H)» (information, never a validation category); the
+  read-only day lists «مرخصی» apart from rest and undecided.
+- **Excel.** `domain/shifts/spreadsheet-codes.ts` maps spreadsheet day codes M, E, N, ME, OFF and H
+  (case and surrounding spaces ignored) to decisions; an empty cell is UNDECIDED and any other code
+  is reported, never guessed. Nothing imports schedules yet; the October 1405 spreadsheet is not
+  imported by this change.
+
+Enforced in `domain/shifts/shift-type.ts`, `domain/shifts/working-time.ts`,
+`domain/candidates/evaluate-candidates.ts`, `domain/change-requests/`,
+`application/schedules/direct-swap.ts`, migration `0014_leave_day` and `features/shifts/catalog.ts`.
