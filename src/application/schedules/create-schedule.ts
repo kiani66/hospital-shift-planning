@@ -16,7 +16,11 @@ import {
 import { listApplicableRuleSetVersions } from "../../infrastructure/repositories/staffing-rules";
 import { ConflictError, NotFoundError } from "../errors";
 import { defineCommand } from "../use-case";
-import { summarizeRoster, type RosterSummary } from "./roster-summary";
+import {
+  auditRosterSummary,
+  summarizeRoster,
+  type RosterSummary,
+} from "./roster-summary";
 
 export const createScheduleInput = z.object({
   departmentId: z.uuid(),
@@ -103,7 +107,7 @@ export const createSchedule = defineCommand({
         periodEnd: period.end,
         label: schedule.label,
         status: schedule.status,
-        roster,
+        roster: auditRosterSummary(roster),
         staffingRuleSetVersionId: ruleSet.id,
         staffingRuleSetVersionNo: ruleSet.versionNo,
         staffingRuleSetDepartmentId: ruleSet.departmentId,

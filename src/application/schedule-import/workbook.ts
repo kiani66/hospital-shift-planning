@@ -258,15 +258,6 @@ export async function scheduleWorkbookTemplate(
   sheet.getColumn(1).numFmt = "@";
   sheet.getColumn(1).width = 20;
   sheet.getColumn(2).width = 26;
-  for (let i = 3; i <= dayCount + 2; i++) {
-    sheet.getColumn(i).width = 6;
-    for (let row = 2; row <= 501; row++)
-      sheet.getCell(row, i).dataValidation = {
-        type: "list",
-        allowBlank: true,
-        formulae: ['"M,E,N,ME,OFF,H"'],
-      };
-  }
   if (sample)
     for (const [number, name, codes] of [
       ["1001", "سرپرستار نمونه", ["M", "E", "N", "", "ME", "H"]],
@@ -278,5 +269,14 @@ export async function scheduleWorkbookTemplate(
         name,
         ...Array.from({ length: dayCount }, (_, i) => codes[i % codes.length]),
       ]);
+  for (let i = 3; i <= dayCount + 2; i++) {
+    sheet.getColumn(i).width = 6;
+    for (let row = 2; row <= 501; row++)
+      sheet.getCell(row, i).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"M,E,N,ME,OFF,H"'],
+      };
+  }
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }

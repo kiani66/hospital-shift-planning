@@ -162,7 +162,7 @@ describe("atomic monthly schedule import", () => {
       {
         actorId: U.erHead.id,
         departmentId: DEMO_ER.id,
-        data: { assignments: 62, personnel: { secretaries: 1 } },
+        data: { assignments: 62, personnel: { clericalStaff: 1 } },
       },
     ]);
   });

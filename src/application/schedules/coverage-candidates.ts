@@ -36,13 +36,12 @@ import { countByShift, coverageOf } from "../../domain/shifts/coverage";
 import { COVERAGE_PERIODS } from "../../domain/shifts/shift-type";
 import {
   listAdjacentAssignments,
-  listAssignments,
+  listRosterAssignments,
 } from "../../infrastructure/repositories/assignments";
 import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import {
-  listRoster,
   listRosterMembersOn,
   lockRosterMemberOn,
 } from "../../infrastructure/repositories/roster";
@@ -209,14 +208,14 @@ export async function getCoverageCandidates(
   if (!isIsoDate(date) || !isInPeriod(period, date))
     throw new ValidationError("The date is not a day of the schedule", "date");
 
-  const [assignments, ruleSet, holidays] = await Promise.all([
-    listAssignments(db, schedule.id),
+  const [{ assignments, roster }, ruleSet, holidays] = await Promise.all([
+    listRosterAssignments(db, schedule.id),
     loadRuleSet(db, schedule.staffingRuleSetVersionId),
     holidayDates(ctx.holidays ?? NO_HOLIDAY_DATA, period),
   ]);
   // The day's bounds only, as a change of that day is validated (D106).
   const requirements = requirementsUnder(ruleSet, [date], holidays);
-  const staffingNurseIds = (await listRoster(db, schedule.id))
+  const staffingNurseIds = roster
     .filter((r) => r.role !== "SECRETARY")
     .map((r) => r.userId);
   const coverage = targetCoverage(
@@ -432,10 +431,13 @@ export const assignCoverageCandidate = defineCommand({
     });
     if (!member) throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
 
-    const staffingNurseIds = (await listRoster(uow.tx, schedule.id))
+    const { assignments, roster } = await listRosterAssignments(
+      uow.tx,
+      schedule.id,
+    );
+    const staffingNurseIds = roster
       .filter((r) => r.role !== "SECRETARY")
       .map((r) => r.userId);
-    const assignments = await listAssignments(uow.tx, schedule.id);
     const before =
       assignments.find((a) => a.nurseId === nurseId && a.date === date)
         ?.shift ?? null;

@@ -19,3 +19,8 @@ export function summarizeRoster(
     headNurses,
   };
 }
+
+/** Audit redaction treats keys containing "secret" as credentials; use a descriptive safe key. */
+export function auditRosterSummary({ secretaries, ...summary }: RosterSummary) {
+  return { ...summary, clericalStaff: secretaries };
+}

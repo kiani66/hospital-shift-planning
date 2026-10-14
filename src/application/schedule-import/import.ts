@@ -39,7 +39,10 @@ import { listApplicableRuleSetVersions } from "../../infrastructure/repositories
 import { NO_HOLIDAY_DATA, type HolidayCalendar } from "../calendar/holidays";
 import { ConflictError, NotFoundError } from "../errors";
 import { saveSchedule } from "../schedules/load-for-update";
-import { summarizeRoster } from "../schedules/roster-summary";
+import {
+  auditRosterSummary,
+  summarizeRoster,
+} from "../schedules/roster-summary";
 import {
   holidayDates,
   loadRuleSet,
@@ -475,7 +478,7 @@ export const commitScheduleImport = defineCommand({
           periodEnd: period.end,
           label: target.label,
           status: schedule.status,
-          roster: summarizeRoster(plan.roster),
+          roster: auditRosterSummary(summarizeRoster(plan.roster)),
           staffingRuleSetVersionId: plan.ruleSetId,
           source: "excel-import",
         },
@@ -497,7 +500,9 @@ export const commitScheduleImport = defineCommand({
       data: {
         periodStart: period.start,
         periodEnd: period.end,
-        personnel: summarizeRoster(plan.rows.map((r) => ({ role: r.role! }))),
+        personnel: auditRosterSummary(
+          summarizeRoster(plan.rows.map((r) => ({ role: r.role! }))),
+        ),
         assignments: plan.assignments.length,
         counts: plan.counts,
         fingerprint: proof.fingerprint,
