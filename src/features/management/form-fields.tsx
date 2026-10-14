@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { IsoDate } from "@/domain/shared/dates";
+import { JalaliDatePicker } from "@/features/calendar/jalali-date-picker";
 
 import type { ManagementFormState } from "./mutation-result";
 
@@ -65,6 +67,52 @@ export function ManagementInput({
           }
         >
           {error ?? hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A labeled Jalali date picker; it submits the same Jalali text field as a typed date input. */
+export function ManagementDateField({
+  name,
+  label,
+  value,
+  onChange,
+  error,
+  hint,
+  required,
+  minDate,
+  today,
+}: {
+  name: string;
+  label: string;
+  value: IsoDate | null;
+  onChange: (value: IsoDate | null) => void;
+  error?: string;
+  hint?: string;
+  required?: boolean;
+  minDate?: IsoDate | null;
+  today: IsoDate;
+}) {
+  const id = useId();
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <JalaliDatePicker
+        id={id}
+        name={name}
+        value={value}
+        onChange={onChange}
+        error={error}
+        required={required}
+        minDate={minDate}
+        today={today}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+      />
+      {hint && (
+        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+          {hint}
         </p>
       )}
     </div>

@@ -7,6 +7,7 @@ import type { MembershipView } from "@/application/management/read-model";
 import type { getMembershipFormOptions } from "@/application/management/personnel-queries";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import type { IsoDate } from "@/domain/shared/dates";
 import { formatJalaliDate } from "@/features/calendar/jalali";
 import { formatJalaliInput } from "@/features/calendar/jalali-input";
 
@@ -16,7 +17,11 @@ import {
   endMembershipAction,
   transferMembershipAction,
 } from "./actions";
-import { ManagementInput, ManagementSelect } from "./form-fields";
+import {
+  ManagementDateField,
+  ManagementInput,
+  ManagementSelect,
+} from "./form-fields";
 import { MutationDialog } from "./mutation-dialog";
 import { MEMBERSHIP_LABELS } from "./presentation";
 import { RelationsSection } from "./relations";
@@ -72,6 +77,9 @@ function MembershipDialog({
         ? formatJalaliInput(relation.endedOn)
         : "",
   );
+  // Add membership uses the date picker (ISO values); the other operations keep typed text.
+  const [startDate, setStartDate] = useState<IsoDate | null>(options.today);
+  const [endDate, setEndDate] = useState<IsoDate | null>(null);
   const departments = options.departments.filter(
     (d) => operation !== "transfer" || d.id !== relation?.department.id,
   );
@@ -147,40 +155,62 @@ function MembershipDialog({
                 <option value="HEAD_NURSE">سرپرستار</option>
                 <option value="SECRETARY">منشی</option>
               </ManagementSelect>
-              <ManagementInput
-                name="startedOn"
-                label={
-                  operation === "add"
-                    ? "تاریخ شروع (شمسی)"
-                    : "تاریخ مؤثر تغییر (شمسی)"
-                }
-                value={start}
-                onChange={setStart}
-                error={state.fields?.startedOn}
-                dir="ltr"
-                maxLength={10}
-                hint="قالب: سال/ماه/روز، مانند ۱۴۰۵/۰۷/۱۱"
-              />
+              {operation === "add" ? (
+                <ManagementDateField
+                  name="startedOn"
+                  label="تاریخ شروع (شمسی)"
+                  value={startDate}
+                  onChange={setStartDate}
+                  error={state.fields?.startedOn}
+                  required
+                  today={options.today}
+                  hint="از تقویم انتخاب کنید یا به‌صورت سال/ماه/روز بنویسید، مانند ۱۴۰۵/۰۷/۱۱."
+                />
+              ) : (
+                <ManagementInput
+                  name="startedOn"
+                  label="تاریخ مؤثر تغییر (شمسی)"
+                  value={start}
+                  onChange={setStart}
+                  error={state.fields?.startedOn}
+                  dir="ltr"
+                  maxLength={10}
+                  hint="قالب: سال/ماه/روز، مانند ۱۴۰۵/۰۷/۱۱"
+                />
+              )}
             </>
           )}
-          <ManagementInput
-            name="endedOn"
-            label={
-              operation === "end"
-                ? "تاریخ پایان (شمسی)"
-                : "تاریخ پایان عضویت جدید (شمسی، اختیاری)"
-            }
-            value={end}
-            onChange={setEnd}
-            error={state.fields?.endedOn}
-            dir="ltr"
-            maxLength={10}
-            hint={
-              operation === "end"
-                ? "روز انتخاب‌شده آخرین روز عضویت است و شامل عضویت می‌شود."
-                : "خالی یعنی بدون تاریخ پایان؛ برای مدت ثابت، تاریخ پایان را وارد کنید."
-            }
-          />
+          {operation === "add" ? (
+            <ManagementDateField
+              name="endedOn"
+              label="تاریخ پایان عضویت جدید (شمسی، اختیاری)"
+              value={endDate}
+              onChange={setEndDate}
+              error={state.fields?.endedOn}
+              minDate={startDate}
+              today={options.today}
+              hint="خالی یعنی بدون تاریخ پایان؛ برای مدت ثابت، تاریخ پایان را انتخاب کنید."
+            />
+          ) : (
+            <ManagementInput
+              name="endedOn"
+              label={
+                operation === "end"
+                  ? "تاریخ پایان (شمسی)"
+                  : "تاریخ پایان عضویت جدید (شمسی، اختیاری)"
+              }
+              value={end}
+              onChange={setEnd}
+              error={state.fields?.endedOn}
+              dir="ltr"
+              maxLength={10}
+              hint={
+                operation === "end"
+                  ? "روز انتخاب‌شده آخرین روز عضویت است و شامل عضویت می‌شود."
+                  : "خالی یعنی بدون تاریخ پایان؛ برای مدت ثابت، تاریخ پایان را وارد کنید."
+              }
+            />
+          )}
           {operation === "end" ? (
             <Callout icon={Info}>
               عضویت تا پایان {end || "روز انتخاب‌شده"} برقرار می‌ماند و سپس در

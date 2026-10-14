@@ -2129,3 +2129,32 @@ summary records actor, department, original period, role and assignment counts, 
 fingerprint. Failures roll back everything; repeats cannot duplicate records. Assignments reuse
 MANUAL storage provenance; the import audit identifies the import without expanding that enum.
 No historical approvals, signatures, approval timestamps or payroll values are fabricated.
+
+### D122 · Shared Jalali date picker (Add Membership first)
+
+`features/calendar/jalali-date-picker.tsx` is the shared Jalali date field: a text field
+(`YYYY/MM/DD`, Persian, Arabic or Latin digits, normalized to Persian digits when left) plus a
+Saturday-first month calendar opened from the field, its icon or ArrowDown. Its value is an ISO
+day (`IsoDate | null`); Jalali exists only in the calendar adapter (ICU via `jalali.ts`, typed
+text via `parseJalaliInput`). The field still submits the Jalali text under its `name`, so the
+server contract and its validation (D85) are unchanged; client messages are guidance only.
+
+- The calendar is a `popover="manual"` element in the top layer, positioned next to the field
+  (flipping above it when needed), so a modal `<dialog>` neither clips nor covers it. Outside
+  pointer or focus closes it; Escape closes only the calendar and returns focus to the field.
+- Keyboard: arrows move by day (ArrowLeft is the next day in RTL) and week, Home/End to the
+  week's Saturday/Friday, PageUp/PageDown by month, with Shift by year; Enter/Space picks.
+  Month and year selectors and previous/next buttons navigate quickly.
+- The selected day is filled brand blue; today has an outline and a dot plus
+  `aria-current="date"`. Days outside `minDate`/`maxDate` are `aria-disabled` and unreachable by
+  keyboard. Range errors show at once; format and required errors after the field is left.
+- "Today" comes from the server (`today` prop, Tehran); without it, it is read in Asia/Tehran only
+  when the calendar opens, so rendering never depends on the client clock (no hydration drift).
+
+Add Membership uses it for the required start (default today) and the optional end (blank is
+open-ended; `minDate` is the start, and a start moved past a chosen end flags the end). Other
+typed Jalali fields (membership end/transfer/role, Supervisor dates, staffing-rule effective
+dates, personnel import) migrate later.
+
+Enforced in `features/calendar/date-picker.ts`, `features/calendar/jalali-date-picker.tsx` and
+`features/management/membership-controls.tsx`.
