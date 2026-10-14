@@ -28,7 +28,7 @@ export const IMPORT_ROW_ERRORS: Record<ImportRowError, string> = {
   DISPLAY_NAME_TOO_LONG: "نام بیش از ۲۰۰ نویسه است.",
   EMAIL_INVALID: "ایمیل معتبر نیست.",
   MOBILE_INVALID: "شماره موبایل معتبر ایران نیست.",
-  ROLE_INVALID: "نقش باید «پرستار» یا «سرپرستار» (یا خالی) باشد.",
+  ROLE_INVALID: "نقش باید «پرستار»، «سرپرستار» یا «منشی» (یا خالی) باشد.",
   EXTRA_CELLS: "این ردیف خانه‌های بیشتری از سرستون‌ها دارد.",
   DUPLICATE_PERSONNEL_NUMBER_IN_FILE:
     "این شماره پرسنلی بیش از یک بار در فایل آمده است.",

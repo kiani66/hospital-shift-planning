@@ -265,7 +265,14 @@ export async function getScheduleReview(
     submissions,
     names: await listDisplayNames(db, workflowPeople(submissions)),
   });
-  const summary = summarizeScheduleDays({ period, assignments, violations });
+  const summary = summarizeScheduleDays({
+    period,
+    assignments,
+    violations,
+    staffingNurseIds: roster
+      .filter((r) => r.role !== "SECRETARY")
+      .map((r) => r.userId),
+  });
 
   const holidayOn = new Map(
     officialHolidays

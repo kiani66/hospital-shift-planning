@@ -72,6 +72,8 @@ const ROLE_VALUES = new Map<string, MembershipRole>([
   ["head nurse", "HEAD_NURSE"],
   ["headnurse", "HEAD_NURSE"],
   ["سرپرستار", "HEAD_NURSE"],
+  ["secretary", "SECRETARY"],
+  ["منشی", "SECRETARY"],
 ]);
 
 export type ImportFileError =

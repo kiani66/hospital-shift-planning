@@ -1,4 +1,4 @@
-export type MembershipRole = "NURSE" | "HEAD_NURSE";
+export type MembershipRole = "NURSE" | "HEAD_NURSE" | "SECRETARY";
 
 export interface Membership {
   readonly departmentId: string;

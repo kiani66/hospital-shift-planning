@@ -145,6 +145,7 @@ function MembershipDialog({
               >
                 <option value="NURSE">پرستار</option>
                 <option value="HEAD_NURSE">سرپرستار</option>
+                <option value="SECRETARY">منشی</option>
               </ManagementSelect>
               <ManagementInput
                 name="startedOn"

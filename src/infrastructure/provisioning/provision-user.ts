@@ -49,7 +49,11 @@ import {
  * Every write is audited (actor: the target account, `source: operatorCli`).
  */
 
-export const PROVISIONABLE_ROLES = ["HEAD_NURSE", "NURSE"] as const;
+export const PROVISIONABLE_ROLES = [
+  "HEAD_NURSE",
+  "NURSE",
+  "SECRETARY",
+] as const;
 export const PROVISION_MODES = [
   "create",
   "reset-password",

@@ -159,7 +159,7 @@ function RosterSection({
           ["پرسنل ثبت‌شده در این برنامه", `${faNumber(roster.total)} نفر`],
           [
             "ترکیب",
-            `${faNumber(roster.nurses)} ${ROLE_LABELS.NURSE}، ${faNumber(roster.headNurses)} ${ROLE_LABELS.HEAD_NURSE}`,
+            `${faNumber(roster.nurses)} ${ROLE_LABELS.NURSE}، ${faNumber(roster.headNurses)} ${ROLE_LABELS.HEAD_NURSE}، ${faNumber(roster.secretaries)} ${ROLE_LABELS.SECRETARY}`,
           ],
         ]}
       />

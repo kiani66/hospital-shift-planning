@@ -21,4 +21,8 @@ export const PREFERENCE_STATE_LABELS: Record<
   CLOSED: "بسته",
 };
 
-export const ROLE_LABELS = { NURSE: "پرستار", HEAD_NURSE: "سرپرستار" } as const;
+export const ROLE_LABELS = {
+  NURSE: "پرستار",
+  HEAD_NURSE: "سرپرستار",
+  SECRETARY: "منشی",
+} as const;

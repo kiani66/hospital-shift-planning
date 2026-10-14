@@ -42,6 +42,7 @@ import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/man
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import {
+  listRoster,
   listRosterMembersOn,
   lockRosterMemberOn,
 } from "../../infrastructure/repositories/roster";
@@ -138,11 +139,14 @@ function targetCoverage(
   requirements: ReadonlyMap<IsoDate, StaffingRequirement>,
   date: IsoDate,
   shift: CandidateShift,
+  staffingNurseIds: readonly string[],
 ): CandidateCoverage {
   const bounds = requirements.get(date)?.[shift];
   const covered = coverageOf(
     countByShift(
-      assignments.filter((a) => a.date === date).map((a) => a.shift),
+      assignments
+        .filter((a) => a.date === date && staffingNurseIds.includes(a.nurseId))
+        .map((a) => a.shift),
     ),
   )[shift];
   return {
@@ -212,7 +216,16 @@ export async function getCoverageCandidates(
   ]);
   // The day's bounds only, as a change of that day is validated (D106).
   const requirements = requirementsUnder(ruleSet, [date], holidays);
-  const coverage = targetCoverage(assignments, requirements, date, shift);
+  const staffingNurseIds = (await listRoster(db, schedule.id))
+    .filter((r) => r.role !== "SECRETARY")
+    .map((r) => r.userId);
+  const coverage = targetCoverage(
+    assignments,
+    requirements,
+    date,
+    shift,
+    staffingNurseIds,
+  );
   const base = {
     scheduleId: schedule.id,
     revision: schedule.revision,
@@ -231,7 +244,11 @@ export async function getCoverageCandidates(
     mayEdit &&
     (schedule.status === "REVISING" || schedule.status === "RETURNED");
   const [universe, preferences, revision] = await Promise.all([
-    listRosterMembersOn(db, { scheduleId: schedule.id, onDate: date }),
+    listRosterMembersOn(db, {
+      scheduleId: schedule.id,
+      onDate: date,
+      nursingOnly: true,
+    }),
     listPreferences(db, schedule.id, { date }),
     revisionScoped ? findOpenRevision(db, schedule.id) : null,
   ]);
@@ -255,6 +272,7 @@ export async function getCoverageCandidates(
       assignments,
       adjacentAssignments: adjacent,
       staffingRequirements: requirements,
+      staffingNurseIds,
       preferences: new Map(preferences.map((p) => [p.userId, p.value])),
     }),
   );
@@ -410,9 +428,13 @@ export const assignCoverageCandidate = defineCommand({
       scheduleId: schedule.id,
       onDate: date,
       userId: nurseId,
+      nursingOnly: true,
     });
     if (!member) throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
 
+    const staffingNurseIds = (await listRoster(uow.tx, schedule.id))
+      .filter((r) => r.role !== "SECRETARY")
+      .map((r) => r.userId);
     const assignments = await listAssignments(uow.tx, schedule.id);
     const before =
       assignments.find((a) => a.nurseId === nurseId && a.date === date)
@@ -427,8 +449,8 @@ export const assignCoverageCandidate = defineCommand({
     const holidays = await holidayDates(uow.holidays, period);
     const requirements = requirementsUnder(ruleSet, [date], holidays);
     if (
-      targetCoverage(assignments, requirements, date, shift).status !==
-      "BELOW_MINIMUM"
+      targetCoverage(assignments, requirements, date, shift, staffingNurseIds)
+        .status !== "BELOW_MINIMUM"
     )
       throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NO_SHORTAGE);
 
@@ -446,6 +468,7 @@ export const assignCoverageCandidate = defineCommand({
       edits: [{ nurseId, date, shift }],
       adjacentAssignments: adjacent,
       staffingRequirements: requirements,
+      staffingNurseIds,
     });
     if (assessment.blocked) throw new RuleViolationError(assessment.blocking);
 

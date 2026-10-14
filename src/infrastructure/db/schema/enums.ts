@@ -25,6 +25,7 @@ import {
 export const membershipRole = pgEnum("membership_role", [
   "NURSE",
   "HEAD_NURSE",
+  "SECRETARY",
 ] as const satisfies readonly MembershipRole[]);
 
 export const scheduleStatus = pgEnum("schedule_status", SCHEDULE_STATUSES);

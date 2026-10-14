@@ -235,6 +235,9 @@ export async function evaluateScheduleChange(
     })),
     adjacentAssignments: adjacent,
     staffingRequirements: requirements,
+    staffingNurseIds: roster
+      .filter((r) => r.role !== "SECRETARY")
+      .map((r) => r.userId),
   });
   return {
     target,
@@ -245,6 +248,9 @@ export async function evaluateScheduleChange(
       after,
       dates,
       requirements,
+      staffingNurseIds: roster
+        .filter((r) => r.role !== "SECRETARY")
+        .map((r) => r.userId),
     }),
     openRevisionId: openRevision?.id ?? null,
   };

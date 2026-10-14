@@ -9,6 +9,8 @@ export interface ScheduleValidationInput {
   readonly period: DatePeriod;
   /** The schedule's working-copy assignments. */
   readonly assignments: readonly Assignment[];
+  /** Nursing coverage only; the complete roster still needs daily decisions. */
+  readonly staffingNurseIds?: readonly string[];
   /** Roster snapshot: every rostered nurse requires a decision on every period day. */
   readonly rosterNurseIds?: readonly string[];
   /**
@@ -85,7 +87,11 @@ export function validateSchedule(input: ScheduleValidationInput): Violation[] {
     violations.push(
       ...findStaffingViolations({
         period,
-        assignments,
+        assignments: input.staffingNurseIds
+          ? assignments.filter((a) =>
+              input.staffingNurseIds!.includes(a.nurseId),
+            )
+          : assignments,
         requirements: input.staffingRequirements,
       }),
     );

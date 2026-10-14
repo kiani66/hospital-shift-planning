@@ -111,3 +111,6 @@ Phase 14 delivery details and exact verification counts: [implementation report]
 Phase 14 also previews all retained personnel/import reservations and provides controlled, admin-only
 recovery of missing standard reference data. See [the reset/recovery runbook](docs/phase-14-reset.md)
 for explicit conflict resolution, department operator steps and staffing-policy review.
+
+Phase 15 secretary membership and standardized monthly XLSX import:
+[Persian operator instructions, templates and real NICU workbook prerequisites](docs/monthly-schedule-import.md).

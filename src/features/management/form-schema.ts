@@ -79,7 +79,10 @@ const expectedEnd = z.union([
     .refine(isIsoDate, "اطلاعات تاریخ فرم معتبر نیست. صفحه را تازه کنید.")
     .transform((v) => v as IsoDate),
 ]);
-const role = z.enum(["NURSE", "HEAD_NURSE"], "نقش عضویت را انتخاب کنید.");
+const role = z.enum(
+  ["NURSE", "HEAD_NURSE", "SECRETARY"],
+  "نقش عضویت را انتخاب کنید.",
+);
 const active = z
   .enum(["true", "false"], "وضعیت فرم معتبر نیست.")
   .transform((v) => v === "true");

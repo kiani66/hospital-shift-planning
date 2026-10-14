@@ -15,7 +15,11 @@ import { MobileNavDrawer } from "./mobile-nav-drawer";
 import { BottomNavLink } from "./nav-link";
 import type { Navigation } from "./navigation";
 
-const ROLE_LABELS = { NURSE: "پرستار", HEAD_NURSE: "سرپرستار" } as const;
+const ROLE_LABELS = {
+  NURSE: "پرستار",
+  HEAD_NURSE: "سرپرستار",
+  SECRETARY: "منشی",
+} as const;
 
 /** One line per department relation, e.g. "سرپرستار · ICU". */
 export function describeRoles(ctx: ShellContext): string[] {

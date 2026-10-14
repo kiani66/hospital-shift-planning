@@ -97,7 +97,7 @@ describe("createSchedule", () => {
       data: {
         scheduleId: expect.any(String),
         revision: 0,
-        roster: { total: 4, nurses: 3, headNurses: 1 },
+        roster: { total: 4, nurses: 3, headNurses: 1, secretaries: 0 },
         // No override exists: the Hospital Default legacy baseline (D106).
         staffingRuleSetVersionId: LEGACY_BASELINE_VERSION_ID,
       },
@@ -126,7 +126,7 @@ describe("createSchedule", () => {
           periodEnd: "2026-11-21",
           label: "آبان ۱۴۰۵",
           status: "DRAFT",
-          roster: { total: 4, nurses: 3, headNurses: 1 },
+          roster: { total: 4, nurses: 3, headNurses: 1, secretaries: 0 },
           staffingRuleSetVersionId: LEGACY_BASELINE_VERSION_ID,
           staffingRuleSetVersionNo: 1,
           staffingRuleSetDepartmentId: null,
@@ -697,7 +697,7 @@ describe("getDepartmentSchedules", () => {
       status: "DRAFT",
       revision: 0,
       dayCount: 30,
-      roster: { total: 6, nurses: 5, headNurses: 1 },
+      roster: { total: 6, nurses: 5, headNurses: 1, secretaries: 0 },
       preferences: { state: "NONE", windows: [] },
       actions: { openPreferences: true, closePreferences: false },
     });

@@ -198,3 +198,18 @@ Existing rows, inactive reasons, personnel credentials and policies are never ov
 See [personnel readiness and controlled recovery](phase-14-reset.md#controlled-default-recovery)
 for conflict resolution and the approved-value department operator procedure. Do not replay old
 migrations or seed demo data as a pilot recovery mechanism.
+
+## Phase 15 secretary membership and monthly Excel import
+
+Migration `0015_secretary` adds SECRETARY to the existing `membership_role` enum used by both
+`department_memberships` and `schedule_roster`. No table or existing row changes, identity
+backfill or default assignment. Apply the migration before deploying the new role controls.
+Downgrade by deploying the old application is limited once SECRETARY data exists: old code does
+not understand the new role. Do not relabel secretaries as nurses or rewrite historical rosters.
+
+Monthly import uses existing schedule/roster/assignment/audit tables, period exclusion and
+assignment primary keys. Plain inserts never overwrite assignments. Storage source stays MANUAL;
+`schedule.imported` supplies actor, period, role/code counts and file-plan provenance. Proofs are
+stateless HMACs and expire in 15 minutes. Imports briefly share-lock personnel/membership tables
+and lock relevant schedules in UUID order to protect dated eligibility and adjacent context.
+See [monthly Excel import](monthly-schedule-import.md) and D119–D121.

@@ -2055,3 +2055,77 @@ schedule as `H`, next to M, E, N, ME and OFF. Paths are relative to `src/`.
 Enforced in `domain/shifts/shift-type.ts`, `domain/shifts/working-time.ts`,
 `domain/candidates/evaluate-candidates.ts`, `domain/change-requests/`,
 `application/schedules/direct-swap.ts`, migration `0014_leave_day` and `features/shifts/catalog.ts`.
+
+## Phase 15 — Secretary and monthly Excel import
+
+### D119 · Secretary is a scheduled department member, never nursing coverage
+
+Approved membership role `SECRETARY`, displayed as «منشی». Migration 0015 only expands the
+existing membership enum; no user, identifier, membership, default shift or historical snapshot
+is created or rewritten. Personnel creation/membership management, directory/profile reads,
+CSV import (`SECRETARY` / `منشی`), roster, editor and role summaries recognize it explicitly.
+NURSE, HEAD_NURSE, Supervisor and Hospital Admin authority is unchanged. Secretary membership
+allows the existing own-calendar/preferences/requests rules and grants no management authority.
+
+Secretaries receive M/E/N/ME/OFF/H through ordinary Head Nurse decisions. No automatic morning
+assignment: absence remains UNDECIDED. Every roster member stays in completeness, night-rest,
+revision, publication and reset rules. Personal scheduled minutes, OFF and H use the existing
+catalog durations and leave semantics, with no payroll assumptions. Nursing minimum/maximum,
+live coverage, change impacts, staffing validation, candidate universe/assignment and nurse
+replacement selection exclude SECRETARY. Staffing uses an explicit nursing subset independently
+of the complete roster; roster counts show nurses, Head Nurses and secretaries separately.
+
+### D120 · Standard monthly XLSX import and explicit imported OFF
+
+Approved reusable Head Nurse workflow: upload → validate → preview → explicit confirmation →
+atomic commit. The department's schedule page links to its import page. The user selects any
+supported Jalali year/month (including historical 1405 months); only the presentation adapter
+converts it to ISO dates. The database retains the true inclusive schedule period, not the import
+execution date. Month-specific blank and fictional sample XLSX downloads contain personnel
+number, full name and numbered day columns. V1 accepts the standard single-sheet format, not
+arbitrary hospital print layouts or column mapping.
+
+M/E/N/ME/OFF/H are normalized for surrounding spaces/case. **An empty actual in-month day cell
+becomes explicit OFF in this import only.** This supersedes D118's empty-spreadsheet preparation
+note for monthly import; `parseSpreadsheetDayCode` still distinguishes EMPTY and manual absence
+still means UNDECIDED. No rows, decorative empty columns or dates outside the selected month
+produce decisions. Unknown codes, formulas/objects, missing identity/day columns, duplicates,
+identity mismatches, inactive accounts, wrong departments and invalid dated memberships block.
+Names verify personnel-number identity; accounts/memberships are never created or corrected.
+Numeric identities beyond Excel's 15-digit precision are rejected; long identifiers must be text.
+
+An absent schedule may be created in DRAFT with the existing dated eligible roster and staffing
+pin. An existing schedule must be exactly the selected period, DRAFT/PLANNING, empty of working
+assignments and changes, and without submissions, versions, revisions or request history. No
+reset, overwrite, upsert, auto approval, publication or silent transition occurs. A partially
+valid membership cannot receive OFF outside its effective dates; resolve the dates/personnel
+row explicitly. Omitted roster people stay undecided, as in normal planning.
+
+The preview includes role/code counts, a horizontally scrollable RTL grid, dated/cell errors,
+actual nursing coverage, shortages/surpluses and the existing `validateSchedule` findings,
+including cross-month night rest. Import blockers are distinct from planning findings: ordinary
+planning permits saving a draft with hard findings; FINALIZE/SUBMIT remain blocked by them.
+
+### D121 · Import transaction, freshness and resource limits
+
+ExcelJS 4.4.0 reads/writes XLSX; fflate 0.8.2 inspects ZIP entries and checks actual incremental
+inflation before ExcelJS. Limits: 512 KiB upload, 500 data rows, 40 columns, 128 archive entries,
+8 MiB expanded data, one visible data sheet, no merged cells, macros or external-link parts.
+Formulas and non-scalar cell values are never evaluated or interpreted as shifts.
+
+Preview is a consistent read-only repeatable-read transaction. A purpose-, actor-, period- and
+row-bound HMAC proof uses AUTH_SECRET, expires after 15 minutes, and includes a SHA-256 digest
+of the schedule/revision, roster, identity/membership state, staffing rules, adjacent assignments,
+parsed rows and findings. Commit validates the proof and explicit confirmation server-side,
+locks relevant department schedules including both boundary days in the existing UUID order,
+and takes short SHARE locks on departments/users/memberships to prevent eligibility phantoms
+and authority/identity changes through commit. It reauthorizes from current effective relations
+and reconstructs the plan; any change rejects the preview. Concurrent new schedule creation
+also remains protected by the existing period exclusion constraint.
+
+Schedule/roster creation, plain assignment INSERTs (no conflict overwrites), revision bump and
+append-only `schedule.created` / `schedule.imported` audit are in one transaction. The import
+summary records actor, department, original period, role and assignment counts, findings and
+fingerprint. Failures roll back everything; repeats cannot duplicate records. Assignments reuse
+MANUAL storage provenance; the import audit identifies the import without expanding that enum.
+No historical approvals, signatures, approval timestamps or payroll values are fabricated.

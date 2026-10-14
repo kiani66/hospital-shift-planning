@@ -5,6 +5,7 @@ export interface RosterSummary {
   readonly total: number;
   readonly nurses: number;
   readonly headNurses: number;
+  readonly secretaries: number;
 }
 
 export function summarizeRoster(
@@ -13,7 +14,8 @@ export function summarizeRoster(
   const headNurses = roster.filter((r) => r.role === "HEAD_NURSE").length;
   return {
     total: roster.length,
-    nurses: roster.length - headNurses,
+    nurses: roster.filter((r) => r.role === "NURSE").length,
+    secretaries: roster.filter((r) => r.role === "SECRETARY").length,
     headNurses,
   };
 }

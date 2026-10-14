@@ -11,6 +11,8 @@ export interface EditsAssessmentInput {
   readonly period: DatePeriod;
   /** The schedule's working copy before the edits. Never modified. */
   readonly assignments: readonly Assignment[];
+  /** Nursing coverage only; the complete roster still needs daily decisions. */
+  readonly staffingNurseIds?: readonly string[];
   /** The cells to change (null clears); already planned, so each changes its cell. */
   readonly edits: readonly AssignmentEdit[];
   /**
@@ -48,6 +50,7 @@ export function assessEdits(input: EditsAssessmentInput): EditsAssessment {
       assignments,
       adjacentAssignments: input.adjacentAssignments,
       staffingRequirements: input.staffingRequirements,
+      staffingNurseIds: input.staffingNurseIds,
     });
   return {
     after,

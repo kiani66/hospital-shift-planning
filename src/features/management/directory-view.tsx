@@ -99,6 +99,7 @@ export function DirectoryView({
           <option value="">همه نقش‌ها</option>
           <option value="NURSE">پرستار</option>
           <option value="HEAD_NURSE">سرپرستار</option>
+          <option value="SECRETARY">منشی</option>
         </Filter>
         <Filter name="admin" label="نقش سیستمی" value={filters.admin}>
           <option value="all">همه کاربران</option>

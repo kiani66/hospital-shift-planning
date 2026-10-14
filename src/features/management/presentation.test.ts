@@ -11,5 +11,6 @@ it("provides distinct Persian relation statuses and membership roles", () => {
   expect(MEMBERSHIP_LABELS).toEqual({
     NURSE: "پرستار",
     HEAD_NURSE: "سرپرستار",
+    SECRETARY: "منشی",
   });
 });

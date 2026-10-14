@@ -361,7 +361,13 @@ export function DayEditor({
   const shiftOf = (userId: string) => shifts.get(userId) ?? null;
   // Live coverage of the decisions on screen (pending ones included), against
   // the pinned bounds; the same comparison the server validates with.
-  const live = coverageOf(countByShift(nurses.map((n) => shiftOf(n.userId))));
+  const live = coverageOf(
+    countByShift(
+      nurses
+        .filter((n) => n.role !== "SECRETARY")
+        .map((n) => shiftOf(n.userId)),
+    ),
+  );
   const filters = { shift: filter, conflictsOnly, query };
   const visible = filterEditorNurses(nurses, shiftOf, filters, kept);
   const count = (f: ShiftFilter) =>
@@ -838,9 +844,9 @@ function NurseRow({
             >
               {nurse.displayName}
             </span>
-            {nurse.role === "HEAD_NURSE" && (
+            {nurse.role !== "NURSE" && (
               <Badge tone="brand-soft" size="sm">
-                {ROLE_LABELS.HEAD_NURSE}
+                {ROLE_LABELS[nurse.role]}
               </Badge>
             )}
             {nurse.flagged && (
