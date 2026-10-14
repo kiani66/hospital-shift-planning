@@ -222,19 +222,65 @@ describe("unsafe and malformed files", () => {
     reject(big);
   });
 
-  it("rejects archives that inflate beyond the limit", async () => {
-    const bomb = zipSync(
+  // A minimal package (no spreadsheet library) at level 1 keeps building the
+  // fixture fast; zeros still compress far below the upload limit.
+  const bombWith = async (padding: number) =>
+    zipSync(
       {
-        ...unzipSync(await syntheticTemplate()),
-        "xl/media/padding.bin": new Uint8Array(
-          EXCEL_TEMPLATE_LIMITS.maxExpandedBytes,
-        ),
+        "[Content_Types].xml": strToU8("<Types/>"),
+        "xl/workbook.xml": strToU8("<workbook/>"),
+        "xl/media/padding.bin": new Uint8Array(padding),
       },
-      { level: 9 },
+      { level: 1 },
     );
-    expect(bomb.length).toBeLessThan(EXCEL_TEMPLATE_LIMITS.maxBytes);
-    reject(bomb);
-  });
+  // Inflating tens of MiB is the point of these two; give them room on slow runners.
+  const HEAVY = { timeout: 30_000 };
+
+  it(
+    "rejects archives that declare more than the inflation limit",
+    HEAVY,
+    async () => {
+      const bomb = await bombWith(EXCEL_TEMPLATE_LIMITS.maxExpandedBytes);
+      expect(bomb.length).toBeLessThan(EXCEL_TEMPLATE_LIMITS.maxBytes);
+      expect(() => inspectExcelTemplate(bomb, DEFAULT_MAPPING)).toThrow(
+        "حجم بازشده",
+      );
+    },
+  );
+
+  it(
+    "rejects archives that lie about their size, while inflating",
+    HEAVY,
+    async () => {
+      const bomb = await bombWith(EXCEL_TEMPLATE_LIMITS.maxExpandedBytes);
+      // Rewrite the declared uncompressed size of padding.bin to 1 byte in both
+      // the local header (offset 22) and the central directory (offset 24).
+      const view = new DataView(bomb.buffer, bomb.byteOffset, bomb.byteLength);
+      const name = new TextEncoder().encode("xl/media/padding.bin");
+      let patched = 0;
+      for (let i = 0; i + 46 < bomb.length; i++) {
+        const signature = view.getUint32(i, true);
+        const local = signature === 0x04034b50;
+        if (!local && signature !== 0x02014b50) continue;
+        const nameLength = view.getUint16(i + (local ? 26 : 28), true);
+        const start = i + (local ? 30 : 46);
+        const entryName = bomb.subarray(start, start + nameLength);
+        if (
+          nameLength !== name.length ||
+          !entryName.every((b, k) => b === name[k])
+        )
+          continue;
+        view.setUint32(i + (local ? 22 : 24), 1, true);
+        patched++;
+      }
+      expect(patched).toBe(2);
+      // The declared sizes pass; the streaming pass rejects it (fflate reports
+      // the size mismatch, or the incremental inflation limit stops it first).
+      expect(() => inspectExcelTemplate(bomb, DEFAULT_MAPPING)).toThrow(
+        ValidationError,
+      );
+    },
+  );
 
   it("rejects too many parts", async () => {
     const parts: Record<string, Uint8Array> = unzipSync(
