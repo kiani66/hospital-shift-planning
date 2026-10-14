@@ -6,7 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { SHIFT_CODES } from "@/domain/shifts/shift-type";
+import { SHIFT_CODES, type ShiftCode } from "@/domain/shifts/shift-type";
 import { BrandMark, PRODUCT_NAME } from "@/features/shell/brand-mark";
 import {
   SHIFT_PRESENTATION,
@@ -24,10 +24,72 @@ const HIGHLIGHTS: readonly { icon: LucideIcon; text: string }[] = [
   { icon: SlidersHorizontal, text: "ثبت ترجیحات پرستاران پیش از چیدن برنامه" },
 ];
 
+/** Saturday-first weekday initials (decoration only). */
+const WEEKDAYS = ["ش", "ی", "د", "س", "چ", "پ", "ج"] as const;
+
+/**
+ * An illustrative week for the decorative preview: three rows of codes,
+ * `null` for a day off. Every night is followed by rest, as the real rule
+ * requires, so the picture never shows something the app would flag.
+ */
+const SAMPLE_WEEK: readonly (readonly (ShiftCode | null)[])[] = [
+  ["M", "M", "E", "N", null, "M", "E"],
+  ["E", "N", null, "M", "ME", null, "M"],
+  [null, "M", "ME", "E", "N", null, "E"],
+];
+
+/**
+ * A glimpse of a monthly schedule in the app's own shift tokens, so the
+ * panel shows the product instead of describing it. `aria-hidden`: the
+ * accessible content is the legend below it. Only on tall screens, so the
+ * panel never scrolls on a short laptop display.
+ */
+function SchedulePreview() {
+  return (
+    <div
+      aria-hidden="true"
+      className="hidden rounded-2xl border border-sidebar-border bg-sidebar-accent/45 p-4 shadow-lg shadow-black/10 backdrop-blur-sm [@media(min-height:46rem)]:block"
+    >
+      <div className="grid grid-cols-7 gap-1.5 text-center">
+        {WEEKDAYS.map((day) => (
+          <span
+            key={day}
+            className="pb-1 text-[0.6875rem] text-sidebar-muted-foreground"
+          >
+            {day}
+          </span>
+        ))}
+        {SAMPLE_WEEK.flatMap((row, r) =>
+          row.map((code, d) =>
+            code ? (
+              <span
+                key={`${r}-${d}`}
+                dir="ltr"
+                className={cn(
+                  "inline-flex h-7 items-center justify-center rounded-md text-xs font-bold",
+                  SHIFT_PRESENTATION[code].tokenClass,
+                )}
+              >
+                {code}
+              </span>
+            ) : (
+              <span
+                key={`${r}-${d}`}
+                className="h-7 rounded-md border border-dashed border-sidebar-border"
+              />
+            ),
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The login page's identity panel, on the same navy surface as the app's
  * navigation. Desktop (lg+): a full-height column beside the form with the
- * product, what it is for and the shift codes. Phones: a compact band
+ * product, what it is for, a decorative schedule glimpse (tall screens) and
+ * the shift codes. Phones: a compact band
  * above the form (mark, name, one line), so the form stays near the top.
  * Not a landing page: no links, no calls to action; the decoration is
  * `aria-hidden` and the text is plain paragraphs (the form's `h1` stays
@@ -48,7 +110,7 @@ export function LoginBrandPanel({
       <Hospital
         aria-hidden="true"
         strokeWidth={1}
-        className="absolute -end-10 -bottom-12 -z-10 size-72 text-sidebar-foreground/[0.06] max-lg:hidden"
+        className="absolute -end-10 -bottom-12 -z-10 size-72 text-sidebar-foreground/[0.06] max-lg:hidden [@media(min-height:46rem)]:hidden"
       />
       <span
         aria-hidden="true"
@@ -97,7 +159,8 @@ export function LoginBrandPanel({
           سامانه برنامه‌ریزی و تأیید شیفت ماهانه پرستاران
         </p>
 
-        <div className="flex flex-col gap-2.5 max-lg:hidden">
+        <div className="flex max-w-md flex-col gap-2.5 max-lg:hidden">
+          <SchedulePreview />
           <p className="text-xs text-sidebar-muted-foreground">
             شیفت‌ها همه‌جا با کد و رنگ خود نمایش داده می‌شوند
           </p>

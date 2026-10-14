@@ -1,11 +1,26 @@
 "use client";
 
-import { CircleAlert, LoaderCircle, LogIn } from "lucide-react";
-import { useActionState } from "react";
+import {
+  CircleAlert,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  LockKeyhole,
+  LogIn,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  useActionState,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 import { loginAction, type LoginState } from "./actions";
 
@@ -15,11 +30,43 @@ const MESSAGES = {
     "به دلیل تلاش‌های ناموفق متعدد، ورود به این حساب موقتاً مسدود شده است. لطفاً ۱۵ دقیقه دیگر دوباره تلاش کنید.",
 } as const;
 
+/**
+ * A 48px login field with a decorative icon at the inline start (the right,
+ * in the RTL page). The value itself is LTR (an e-mail, a number, a
+ * password), so inside the input the icon's side is its *end*: `pe-11`
+ * keeps the typed text clear of it. `trailing` sits at the opposite edge.
+ */
+function IconField({
+  icon: Icon,
+  trailing,
+  className,
+  ...props
+}: ComponentProps<typeof Input> & {
+  icon: LucideIcon;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="group relative">
+      <Icon
+        aria-hidden="true"
+        className="pointer-events-none absolute start-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary"
+      />
+      <Input
+        dir="ltr"
+        className={cn("min-h-12 pe-11 text-start", className)}
+        {...props}
+      />
+      {trailing}
+    </div>
+  );
+}
+
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(
     loginAction,
     {},
   );
+  const [showPassword, setShowPassword] = useState(false);
   const error = state.error ? MESSAGES[state.error] : null;
 
   return (
@@ -44,11 +91,11 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="identifier">شماره پرسنلی یا ایمیل</Label>
-        <Input
+        <IconField
+          icon={UserRound}
           id="identifier"
           name="identifier"
           type="text"
-          dir="ltr"
           autoComplete="username"
           autoCapitalize="none"
           autoCorrect="off"
@@ -58,22 +105,38 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           defaultValue={state.identifier}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
-          className="min-h-12 text-start"
         />
       </div>
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="password">رمز عبور</Label>
-        <Input
+        <IconField
+          icon={LockKeyhole}
           id="password"
           name="password"
-          type="password"
-          dir="ltr"
+          type={showPassword ? "text" : "password"}
           autoComplete="current-password"
           required
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
-          className="min-h-12 text-start"
+          // The toggle sits at the inline end (the left, the LTR input's start).
+          className="ps-12"
+          trailing={
+            <button
+              type="button"
+              onClick={() => setShowPassword((shown) => !shown)}
+              aria-pressed={showPassword}
+              aria-controls="password"
+              aria-label="نمایش رمز"
+              className="absolute end-1 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {showPassword ? (
+                <EyeOff aria-hidden="true" className="size-5" />
+              ) : (
+                <Eye aria-hidden="true" className="size-5" />
+              )}
+            </button>
+          }
         />
       </div>
 
@@ -81,7 +144,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         type="submit"
         disabled={pending}
         aria-disabled={pending}
-        className="mt-1 min-h-12 text-base font-semibold shadow-sm shadow-primary/25"
+        className="mt-1 min-h-12 text-base font-semibold shadow-md shadow-primary/30 hover:shadow-lg hover:shadow-primary/30"
       >
         {pending ? (
           <LoaderCircle
