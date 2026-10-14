@@ -70,6 +70,24 @@ test.describe("login page", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
+  test("fits a laptop window without scrolling vertically", async ({
+    page,
+  }) => {
+    test.skip(
+      (page.viewportSize()?.width ?? 0) < 1024,
+      "the split layout is checked on desktop",
+    );
+    await page.setViewportSize({ width: 1366, height: 607 });
+    await page.goto("/login");
+    await page.evaluate(() => document.fonts.ready);
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollHeight -
+        document.documentElement.clientHeight,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test("shows the same generic error for a wrong password and an unknown e-mail", async ({
     page,
   }, testInfo) => {

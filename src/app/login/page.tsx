@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <main className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <LoginBrandPanel shiftLabels={shiftLabels} />
-      <div className="relative -mt-10 flex justify-center px-4 pb-10 lg:mt-0 lg:items-center lg:px-10 lg:py-12 lg:bg-login-canvas">
+      <div className="relative -mt-10 flex justify-center px-4 pb-10 lg:mt-0 lg:items-center lg:px-10 lg:py-6 lg:bg-login-canvas [@media(min-height:44rem)]:lg:py-12">
         <div className="w-full max-w-md">
           <section
             aria-labelledby="login-title"
