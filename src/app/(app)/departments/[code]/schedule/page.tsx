@@ -330,7 +330,6 @@ export default async function DepartmentSchedulePage({
       <div className="flex flex-col gap-3">
         <MonthSummary
           month={review.month}
-          dayHref={selected.status === "DRAFT" ? here : undefined}
           workflowNotice={
             <HeadNurseWorkflowNotice
               workflow={review.workflow}

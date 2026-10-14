@@ -10,6 +10,7 @@ import type { Violation } from "../rules/violation";
 import {
   eventsFrom,
   PREFERENCE_WINDOW_OPEN,
+  PREFERENCES_ALREADY_OPENED,
   transition,
   TRANSITIONS,
   type ScheduleCommand,
@@ -34,7 +35,7 @@ const warning = { ...nightRest, severity: "warning" } as unknown as Violation;
 
 /** A command that passes every guard. */
 const passing: Record<ScheduleEvent, ScheduleCommand> = {
-  OPEN_PREFERENCES: { type: "OPEN_PREFERENCES" },
+  OPEN_PREFERENCES: { type: "OPEN_PREFERENCES", existingWindows: 0 },
   START_PLANNING: { type: "START_PLANNING" },
   FINALIZE: { type: "FINALIZE", violations: [] },
   SUBMIT: { type: "SUBMIT", violations: [], activePreferenceWindows: 0 },
@@ -47,13 +48,17 @@ const passing: Record<ScheduleEvent, ScheduleCommand> = {
 
 const EVENTS = Object.keys(passing) as ScheduleEvent[];
 
-/** The approved state machine (plan section 5). */
+/** The approved state machine (plan section 5, amended by D124). */
 const EXPECTED: Record<
   ScheduleStatus,
   Partial<Record<ScheduleEvent, ScheduleStatus>>
 > = {
-  DRAFT: { OPEN_PREFERENCES: "PLANNING", START_PLANNING: "PLANNING" },
-  PLANNING: { FINALIZE: "FINALIZED" },
+  DRAFT: {
+    OPEN_PREFERENCES: "PLANNING",
+    START_PLANNING: "PLANNING",
+    FINALIZE: "FINALIZED",
+  },
+  PLANNING: { OPEN_PREFERENCES: "PLANNING", FINALIZE: "FINALIZED" },
   FINALIZED: { SUBMIT: "SUBMITTED" },
   SUBMITTED: { APPROVE: "APPROVED", RETURN: "RETURNED", WITHDRAW: "FINALIZED" },
   RETURNED: { SUBMIT: "SUBMITTED", DISCARD_REVISION: "APPROVED" },
@@ -122,11 +127,68 @@ describe("approved workflow decisions", () => {
   );
 });
 
-describe("guards", () => {
-  describe.each(["FINALIZE", "SUBMIT"] as const)("%s", (event) => {
-    const from: ScheduleStatus =
-      event === "FINALIZE" ? "PLANNING" : "FINALIZED";
+describe("D124: preferences are optional", () => {
+  it.each(["DRAFT", "PLANNING"] as const)(
+    "FINALIZE from %s needs no preference collection",
+    (from) => {
+      expect(transition(from, passing.FINALIZE)).toEqual({
+        ok: true,
+        value: "FINALIZED",
+      });
+    },
+  );
 
+  it("opening preferences from DRAFT moves to PLANNING", () => {
+    expect(transition("DRAFT", passing.OPEN_PREFERENCES)).toEqual({
+      ok: true,
+      value: "PLANNING",
+    });
+  });
+
+  it("opening preferences in PLANNING keeps the status", () => {
+    expect(transition("PLANNING", passing.OPEN_PREFERENCES)).toEqual({
+      ok: true,
+      value: "PLANNING",
+    });
+  });
+
+  it.each(["DRAFT", "PLANNING"] as const)(
+    "preferences open once per schedule: a second opening from %s is refused",
+    (from) => {
+      const result = transition(from, {
+        type: "OPEN_PREFERENCES",
+        existingWindows: 1,
+      });
+      expect(!result.ok && result.error).toBeInstanceOf(InvalidStateError);
+      expect(!result.ok && (result.error as InvalidStateError).attempted).toBe(
+        PREFERENCES_ALREADY_OPENED,
+      );
+    },
+  );
+
+  it.each([
+    "FINALIZED",
+    "SUBMITTED",
+    "RETURNED",
+    "APPROVED",
+    "REVISING",
+  ] as const)(
+    "preferences cannot be opened from %s (they end with planning, D65)",
+    (from) => {
+      const result = transition(from, passing.OPEN_PREFERENCES);
+      expect(!result.ok && (result.error as InvalidStateError).attempted).toBe(
+        "OPEN_PREFERENCES",
+      );
+    },
+  );
+});
+
+describe("guards", () => {
+  describe.each([
+    ["FINALIZE", "DRAFT"],
+    ["FINALIZE", "PLANNING"],
+    ["SUBMIT", "FINALIZED"],
+  ] as const)("%s from %s", (event, from) => {
     it("is blocked by a night-rest violation", () => {
       const result = transition(from, {
         ...passing[event],

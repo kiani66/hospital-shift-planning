@@ -16,7 +16,11 @@ import type { ScheduleStatus } from "./status";
  * function stays pure; the use case gathers them inside its transaction.
  */
 export type ScheduleCommand =
-  | { readonly type: "OPEN_PREFERENCES" }
+  | {
+      readonly type: "OPEN_PREFERENCES";
+      /** Preference windows the schedule already has, open or closed. */
+      readonly existingWindows: number;
+    }
   | { readonly type: "START_PLANNING" }
   | { readonly type: "FINALIZE"; readonly violations: readonly Violation[] }
   | {
@@ -33,8 +37,14 @@ export type ScheduleCommand =
 export type ScheduleEvent = ScheduleCommand["type"];
 
 export const TRANSITIONS = {
-  DRAFT: { OPEN_PREFERENCES: "PLANNING", START_PLANNING: "PLANNING" },
-  PLANNING: { FINALIZE: "FINALIZED" },
+  // D124: preferences are optional. FINALIZE needs no preference step, and
+  // opening preferences in PLANNING keeps the status (the window is not a state).
+  DRAFT: {
+    OPEN_PREFERENCES: "PLANNING",
+    START_PLANNING: "PLANNING",
+    FINALIZE: "FINALIZED",
+  },
+  PLANNING: { OPEN_PREFERENCES: "PLANNING", FINALIZE: "FINALIZED" },
   FINALIZED: { SUBMIT: "SUBMITTED" },
   SUBMITTED: { APPROVE: "APPROVED", RETURN: "RETURNED", WITHDRAW: "FINALIZED" },
   RETURNED: { SUBMIT: "SUBMITTED", DISCARD_REVISION: "APPROVED" },
@@ -60,9 +70,16 @@ export type TransitionError =
 export const PREFERENCE_WINDOW_OPEN = "PREFERENCE_WINDOW_OPEN";
 
 /**
+ * `InvalidStateError.attempted` when OPEN_PREFERENCES is refused because the
+ * schedule already had its one preference collection (D30, D65: no reopen).
+ */
+export const PREFERENCES_ALREADY_OPENED = "PREFERENCES_ALREADY_OPENED";
+
+/**
  * Computes the next status or explains why the command is not allowed.
  *
  * Guards:
+ * - OPEN_PREFERENCES: once per schedule (opened before, even if closed: refused).
  * - FINALIZE / SUBMIT: blocked by any error-severity violation (e.g. night-rest).
  * - SUBMIT: blocked while a preference window is still active.
  * - RETURN: a non-blank comment is required.
@@ -79,6 +96,10 @@ export function transition(
   if (!target) return err(new InvalidStateError(from, command.type));
 
   switch (command.type) {
+    case "OPEN_PREFERENCES":
+      return command.existingWindows > 0
+        ? err(new InvalidStateError(from, PREFERENCES_ALREADY_OPENED))
+        : ok(target);
     case "FINALIZE":
     case "SUBMIT": {
       if (hasBlockingViolations(command.violations)) {

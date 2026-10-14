@@ -321,11 +321,8 @@ describe("finalizeSchedule", () => {
     });
   });
 
-  it("is refused from DRAFT (INVALID_STATE) and when already FINALIZED", async () => {
-    expect(await run(finalizeSchedule, actors.icuHead)).toMatchObject({
-      ok: false,
-      error: { code: "INVALID_STATE", reason: "FINALIZE" },
-    });
+  // From DRAFT it is allowed since D124 (tests/integration/optional-preferences.test.ts).
+  it("is refused when already FINALIZED (INVALID_STATE)", async () => {
     await toFinalized();
     expect(await run(finalizeSchedule, actors.icuHead)).toMatchObject({
       ok: false,

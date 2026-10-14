@@ -91,6 +91,8 @@ export function HeadNurseLifecycleAction({
             {SCHEDULE_STATUS_LABELS.FINALIZED}» می‌شود تا برای تأیید سوپروایزر
             ارسال شود. شیفت‌ها تغییری نمی‌کنند و تا پیش از ارسال همچنان قابل
             اصلاح‌اند؛ اما بازگشت به مرحله برنامه‌ریزی ممکن نیست.
+            {workflow.status === "DRAFT" &&
+              " ثبت ترجیحات پرستاران اختیاری است و پس از نهایی‌سازی دیگر نمی‌توان آن را باز کرد."}
             {workflow.preferenceWindowOpen &&
               " ثبت ترجیحات باز می‌ماند؛ پیش از ارسال باید آن را ببندید."}
           </>
@@ -360,8 +362,9 @@ function ReturnComment({ submission }: { submission: WorkflowSubmission }) {
 /**
  * Where the schedule stands for the Head Nurse, under the header: what
  * blocks the next step (with links to the days to fix), that it waits for
- * the Supervisor, the return comment, or that it is approved. Nothing in
- * DRAFT (its next step, opening preferences, needs no explanation).
+ * the Supervisor, the return comment, or that it is approved. In DRAFT and
+ * PLANNING it is finalize's blockers: preferences are optional (D124), so
+ * opening them is never a step this notice asks for.
  */
 export function HeadNurseWorkflowNotice({
   workflow,

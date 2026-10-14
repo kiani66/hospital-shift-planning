@@ -400,9 +400,13 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       region.getByRole("list", { name: "خلاصه اعتبارسنجی برنامه" }),
     ).toContainText("۰ روز از ۳۰ روز آماده");
     await expect(region.locator("tbody a")).toHaveCount(30);
-    await region.getByText("مشاهده روزهای نیازمند اقدام").click();
+    // A new DRAFT offers finalize (preferences are optional, D124); its
+    // blockers name the undecided days with links to them.
+    const blockers = page.locator("#workflow-blockers");
+    await expect(blockers).toContainText("نهایی‌سازی فعلاً ممکن نیست");
+    await blockers.getByText("مشاهده موانع و روزهای مرتبط").click();
     await expect(
-      region.getByRole("link", { name: "۱ دی ۱۴۰۵", exact: true }),
+      blockers.getByRole("link", { name: "۱ دی", exact: true }),
     ).toBeVisible();
     // A schedule with no assignment yet says so, and how to start.
     await expect(region.getByRole("note")).toContainText(

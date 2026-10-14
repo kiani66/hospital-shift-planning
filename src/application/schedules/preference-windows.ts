@@ -44,10 +44,12 @@ export interface PreferenceWindowOutput {
 /**
  * Opens preference collection (the INITIAL window). By default the whole
  * schedule period for the whole roster; a narrower date or nurse scope must lie
- * inside the period and the roster. The status change comes from the state
- * machine (`OPEN_PREFERENCES`: DRAFT → PLANNING), so opening twice is an
- * invalid transition, and the row lock plus `expectedRevision` make concurrent
- * attempts resolve to one success and one CONFLICT.
+ * inside the period and the roster. The status comes from the state machine
+ * (`OPEN_PREFERENCES`): DRAFT → PLANNING, or PLANNING kept as it is (D124);
+ * assignments are never touched. Preferences open once per schedule, so a
+ * second opening is an invalid transition, and the row lock plus
+ * `expectedRevision` make concurrent attempts resolve to one success and one
+ * CONFLICT.
  */
 export const openPreferenceWindow = defineCommand({
   name: "schedule.openPreferences",
@@ -66,11 +68,12 @@ export const openPreferenceWindow = defineCommand({
     if (schedule.revision !== input.expectedRevision) throw new ConflictError();
 
     const next = unwrap(
-      transition(schedule.status, { type: "OPEN_PREFERENCES" }),
+      transition(schedule.status, {
+        type: "OPEN_PREFERENCES",
+        existingWindows: (await listPreferenceWindows(uow.tx, schedule.id))
+          .length,
+      }),
     );
-    // Defensive: an INITIAL window exists only once per schedule.
-    if ((await listPreferenceWindows(uow.tx, schedule.id)).length > 0)
-      throw new ConflictError("Preference collection was already opened");
 
     const scope = unwrap(expandDateScope(input.scope, schedule.period));
     const roster = await listRoster(uow.tx, schedule.id);
@@ -105,8 +108,10 @@ export const openPreferenceWindow = defineCommand({
         dateCount: scope.dates.length,
         nurseScope: nurseIds.length === 0 ? "ROSTER" : "SELECTED",
         nurseIds,
-        from: schedule.status,
-        to: next,
+        // A lifecycle change only from DRAFT; opening in PLANNING keeps it (D124).
+        ...(next === schedule.status
+          ? { status: schedule.status }
+          : { from: schedule.status, to: next }),
       },
     });
 

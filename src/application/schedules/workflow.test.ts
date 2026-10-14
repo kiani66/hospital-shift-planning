@@ -98,7 +98,8 @@ const offered = (w: ReturnType<typeof describeWorkflow>) =>
 
 describe("describeWorkflow: what each actor is offered", () => {
   it.each([
-    ["DRAFT", []],
+    // Preferences are optional: finalize is offered without opening them (D124).
+    ["DRAFT", ["finalize"]],
     ["PLANNING", ["finalize"]],
     ["FINALIZED", ["submit"]],
     ["SUBMITTED", ["withdraw"]],
@@ -196,6 +197,17 @@ describe("describeWorkflow: blockers come from the state machine's guards", () =
       ready: false,
       dates: { undecided: [], coverage: [], ruleViolations: ["2026-10-26"] },
     });
+  });
+
+  it("finalize from DRAFT has the same validation blockers as from PLANNING (D124)", () => {
+    const draft = describeFor(head, "DRAFT", { violations: [nightRest] });
+    const planning = describeFor(head, "PLANNING", { violations: [nightRest] });
+    expect(draft.actions.finalize).toEqual({ blockers: ["VALIDATION"] });
+    expect(draft.validation).toEqual(planning.validation);
+    expect(describeFor(head, "DRAFT").actions.finalize).toEqual({
+      blockers: [],
+    });
+    expect(describeFor(nurse, "DRAFT").actions.finalize).toBeNull();
   });
 
   it("finalize is not blocked by an open preference window", () => {

@@ -48,7 +48,7 @@ export function PreferenceAction({ schedule }: { schedule: ScheduleOverview }) {
         icon="open"
         triggerLabel="باز کردن ثبت ترجیحات"
         title="باز کردن ثبت ترجیحات؟"
-        description={`ثبت ترجیحات برای همه پرسنل برنامه (${faNumber(schedule.roster.total)} نفر) و تمام روزهای ${range} باز می‌شود و به پرستاران اطلاع داده می‌شود. وضعیت برنامه به «${SCHEDULE_STATUS_LABELS.PLANNING}» تغییر می‌کند.`}
+        description={`ثبت ترجیحات برای همه پرسنل برنامه (${faNumber(schedule.roster.total)} نفر) و تمام روزهای ${range} باز می‌شود و به پرستاران اطلاع داده می‌شود. شیفت‌های ثبت‌شده تغییری نمی‌کنند${schedule.status === "DRAFT" ? ` و وضعیت برنامه به «${SCHEDULE_STATUS_LABELS.PLANNING}» تغییر می‌کند` : ""}.`}
         confirmLabel="بله، باز شود"
       />
     );
