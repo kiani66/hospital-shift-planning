@@ -2174,11 +2174,13 @@ Amends D57's login card and brand panel; layout, wording and auth are unchanged.
   It has a fixed name «نمایش رمز» with `aria-pressed`, deliberately without «عبور», so
   `getByLabel("رمز عبور")` still finds only the field. It sits in the tab order between the
   password and «ورود».
-- **Brand panel.** On tall screens (`min-height: 46rem`) a decorative, `aria-hidden` week
-  preview (Saturday-first, three rows of shift tokens with their codes) sits above the shift
-  legend and replaces the large hospital outline. Every night in it is followed by rest, so it
-  never shows something the app would flag. Short screens keep D57's panel unchanged, so it
-  never scrolls.
+- **Brand panel.** A decorative, `aria-hidden` week preview (Saturday-first, two rows of shift
+  tokens with their codes) sits above the shift legend and replaces the large hospital outline;
+  the legend's caption is dropped, as the preview shows the same thing. It is sized for an
+  ordinary laptop window and shows from 600px tall (`min-height: 37.5rem`). Every night in it
+  is followed by rest, so it never shows something the app would flag.
+- **Fit.** Below 44rem tall the form column's vertical padding shrinks (`py-6`), and below 50rem
+  the panel's does (`py-10`), so the page never scrolls vertically on a laptop window.
 
 Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
 `features/auth/login-brand-panel.tsx` and `tests/e2e/login.spec.ts`.

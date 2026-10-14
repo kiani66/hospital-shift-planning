@@ -28,27 +28,27 @@ const HIGHLIGHTS: readonly { icon: LucideIcon; text: string }[] = [
 const WEEKDAYS = ["ش", "ی", "د", "س", "چ", "پ", "ج"] as const;
 
 /**
- * An illustrative week for the decorative preview: three rows of codes,
+ * An illustrative week for the decorative preview: two rows of codes,
  * `null` for a day off. Every night is followed by rest, as the real rule
  * requires, so the picture never shows something the app would flag.
  */
 const SAMPLE_WEEK: readonly (readonly (ShiftCode | null)[])[] = [
   ["M", "M", "E", "N", null, "M", "E"],
   ["E", "N", null, "M", "ME", null, "M"],
-  [null, "M", "ME", "E", "N", null, "E"],
 ];
 
 /**
  * A glimpse of a monthly schedule in the app's own shift tokens, so the
  * panel shows the product instead of describing it. `aria-hidden`: the
- * accessible content is the legend below it. Only on tall screens, so the
- * panel never scrolls on a short laptop display.
+ * accessible content is the legend below it. Compact enough for an ordinary
+ * laptop window (600px tall and up); hidden below that, so the panel never
+ * scrolls.
  */
 function SchedulePreview() {
   return (
     <div
       aria-hidden="true"
-      className="hidden rounded-2xl border border-sidebar-border bg-sidebar-accent/45 p-4 shadow-lg shadow-black/10 backdrop-blur-sm [@media(min-height:46rem)]:block"
+      className="hidden rounded-xl border border-sidebar-border bg-sidebar-accent/45 p-3 shadow-lg shadow-black/10 backdrop-blur-sm [@media(min-height:37.5rem)]:block"
     >
       <div className="grid grid-cols-7 gap-1.5 text-center">
         {WEEKDAYS.map((day) => (
@@ -66,7 +66,7 @@ function SchedulePreview() {
                 key={`${r}-${d}`}
                 dir="ltr"
                 className={cn(
-                  "inline-flex h-7 items-center justify-center rounded-md text-xs font-bold",
+                  "inline-flex h-6 items-center justify-center rounded-md text-xs font-bold",
                   SHIFT_PRESENTATION[code].tokenClass,
                 )}
               >
@@ -75,7 +75,7 @@ function SchedulePreview() {
             ) : (
               <span
                 key={`${r}-${d}`}
-                className="h-7 rounded-md border border-dashed border-sidebar-border"
+                className="h-6 rounded-md border border-dashed border-sidebar-border"
               />
             ),
           ),
@@ -88,8 +88,8 @@ function SchedulePreview() {
 /**
  * The login page's identity panel, on the same navy surface as the app's
  * navigation. Desktop (lg+): a full-height column beside the form with the
- * product, what it is for, a decorative schedule glimpse (tall screens) and
- * the shift codes. Phones: a compact band
+ * product, what it is for, a decorative schedule glimpse and the shift
+ * codes. Phones: a compact band
  * above the form (mark, name, one line), so the form stays near the top.
  * Not a landing page: no links, no calls to action; the decoration is
  * `aria-hidden` and the text is plain paragraphs (the form's `h1` stays
@@ -110,7 +110,7 @@ export function LoginBrandPanel({
       <Hospital
         aria-hidden="true"
         strokeWidth={1}
-        className="absolute -end-10 -bottom-12 -z-10 size-72 text-sidebar-foreground/[0.06] max-lg:hidden [@media(min-height:46rem)]:hidden"
+        className="absolute -end-10 -bottom-12 -z-10 size-72 text-sidebar-foreground/[0.06] max-lg:hidden [@media(min-height:37.5rem)]:hidden"
       />
       <span
         aria-hidden="true"
@@ -121,7 +121,7 @@ export function LoginBrandPanel({
         className="absolute -end-10 -bottom-10 -z-10 size-64 rounded-full border border-sidebar-foreground/[0.07] max-lg:hidden"
       />
 
-      <div className="flex flex-col gap-3 px-6 pt-8 pb-16 max-lg:items-center max-lg:text-center sm:pt-10 lg:h-full lg:justify-between lg:gap-10 lg:p-12 xl:p-16">
+      <div className="flex flex-col gap-3 px-6 pt-8 pb-16 max-lg:items-center max-lg:text-center sm:pt-10 lg:h-full lg:justify-between lg:gap-8 lg:px-12 lg:py-10 xl:px-16 [@media(min-height:50rem)]:lg:py-16">
         <div className="flex items-center gap-3">
           <BrandMark className="size-11 lg:size-12" />
           <div className="flex flex-col text-start">
@@ -161,9 +161,6 @@ export function LoginBrandPanel({
 
         <div className="flex max-w-md flex-col gap-2.5 max-lg:hidden">
           <SchedulePreview />
-          <p className="text-xs text-sidebar-muted-foreground">
-            شیفت‌ها همه‌جا با کد و رنگ خود نمایش داده می‌شوند
-          </p>
           <ul aria-label="انواع شیفت" className="flex flex-wrap gap-2">
             {shiftLabels &&
               SHIFT_CODES.map((code) => {
