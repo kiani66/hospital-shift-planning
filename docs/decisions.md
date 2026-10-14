@@ -2158,3 +2158,27 @@ dates, personnel import) migrate later.
 
 Enforced in `features/calendar/date-picker.ts`, `features/calendar/jalali-date-picker.tsx` and
 `features/management/membership-controls.tsx`.
+
+### D123 · Login page refinement
+
+Amends D57's login card and brand panel; layout, wording and auth are unchanged.
+
+- **Card.** The header is centered: a large key icon well with a soft brand halo, the `h1`
+  and the instruction. The brand top edge is a symmetric blue gradient and the card shadow is
+  deeper. On `lg+` the form side is the canvas lit by one soft brand-tint glow
+  (`bg-login-canvas`) behind the card.
+- **Fields.** Each field has a decorative icon at the inline start (user, lock) that turns blue
+  while the field has focus. The values stay LTR, so inside the input that side is its end
+  (`pe-11`).
+- **Password toggle.** A button at the field's inline end shows or hides the typed password.
+  It has a fixed name «نمایش رمز» with `aria-pressed`, deliberately without «عبور», so
+  `getByLabel("رمز عبور")` still finds only the field. It sits in the tab order between the
+  password and «ورود».
+- **Brand panel.** On tall screens (`min-height: 46rem`) a decorative, `aria-hidden` week
+  preview (Saturday-first, three rows of shift tokens with their codes) sits above the shift
+  legend and replaces the large hospital outline. Every night in it is followed by rest, so it
+  never shows something the app would flag. Short screens keep D57's panel unchanged, so it
+  never scrolls.
+
+Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
+`features/auth/login-brand-panel.tsx` and `tests/e2e/login.spec.ts`.

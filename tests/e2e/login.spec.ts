@@ -36,6 +36,20 @@ test.describe("login page", () => {
     await expect(page.getByText(/ثبت‌نام|فراموشی/)).toHaveCount(0);
   });
 
+  test("can show and hide the typed password", async ({ page }) => {
+    await page.goto("/login");
+    const password = page.getByLabel("رمز عبور");
+    await password.fill("demo-only-password");
+    const show = page.getByRole("button", { name: "نمایش رمز" });
+    await expect(show).toHaveAttribute("aria-pressed", "false");
+    await show.click();
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(show).toHaveAttribute("aria-pressed", "true");
+    await show.click();
+    await expect(password).toHaveAttribute("type", "password");
+    await expect(password).toHaveValue("demo-only-password");
+  });
+
   test("uses the Vazirmatn font", async ({ page }) => {
     await page.goto("/login");
     await page.evaluate(() => document.fonts.ready);
@@ -107,6 +121,8 @@ test.describe("login page", () => {
     await page.keyboard.press("Tab");
     await expect(page.getByLabel("رمز عبور")).toBeFocused();
     await page.keyboard.type("demo-only-password");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "نمایش رمز" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "ورود" })).toBeFocused();
     await page.keyboard.press("Enter");

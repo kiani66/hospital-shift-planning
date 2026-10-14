@@ -300,6 +300,21 @@
 }
 
 /*
+ * The login form's side: the calm canvas lit by one soft brand-tint glow
+ * behind the card, so the card sits in a light zone instead of on a flat
+ * gray. Direction-neutral decoration.
+ */
+@utility bg-login-canvas {
+  background:
+    radial-gradient(
+      36rem 28rem at 50% 42%,
+      color-mix(in oklch, var(--brand-soft) 90%, transparent),
+      transparent 70%
+    ),
+    var(--canvas);
+}
+
+/*
  * The work area's light brand wash: the top of the canvas picks up the
  * brand tint next to the navy sidebar, then settles into the calm canvas.
  */
