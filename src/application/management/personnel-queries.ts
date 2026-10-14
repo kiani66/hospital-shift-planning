@@ -31,7 +31,10 @@ const filtersSchema = z.object({
   active: z.enum(["all", "active", "inactive"]).catch("all").default("all"),
   admin: z.enum(["all", "admin", "other"]).catch("all").default("all"),
   departmentId: z.uuid().optional().catch(undefined),
-  role: z.enum(["NURSE", "HEAD_NURSE"]).optional().catch(undefined),
+  role: z
+    .enum(["NURSE", "HEAD_NURSE", "SECRETARY"])
+    .optional()
+    .catch(undefined),
   page: z.coerce.number().int().min(1).max(10000).catch(1).default(1),
 });
 

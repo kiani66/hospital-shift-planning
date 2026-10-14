@@ -18,7 +18,7 @@ import { authorizeAdministration, requireRelationTargets } from "./context";
 import { endRelationInput, managementDay, relationInput } from "./input";
 
 const membershipInput = relationInput.extend({
-  role: z.enum(["NURSE", "HEAD_NURSE"]),
+  role: z.enum(["NURSE", "HEAD_NURSE", "SECRETARY"]),
 });
 
 export const addDepartmentMembership = defineCommand({
@@ -70,7 +70,7 @@ export const transitionDepartmentMembership = defineCommand({
     relationId: z.uuid(),
     expectedEndedOn: managementDay.nullable(),
     departmentId: z.uuid(),
-    role: z.enum(["NURSE", "HEAD_NURSE"]),
+    role: z.enum(["NURSE", "HEAD_NURSE", "SECRETARY"]),
     startedOn: managementDay,
     // Require an explicit successor term; never silently extend a fixed-term contract.
     endedOn: managementDay.nullable(),

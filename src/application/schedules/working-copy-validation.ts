@@ -89,6 +89,9 @@ export function validateUnder(
       assignments: loaded.assignments,
       adjacentAssignments: loaded.adjacent,
       rosterNurseIds: loaded.roster.map((r) => r.userId),
+      staffingNurseIds: loaded.roster
+        .filter((r) => r.role !== "SECRETARY")
+        .map((r) => r.userId),
       staffingRequirements: requirements,
     }),
   };

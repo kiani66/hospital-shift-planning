@@ -672,7 +672,9 @@ export async function getChangeRequestReview(
       planRequestChange({
         request: state,
         current: { ...current, replacement: cells.shiftOf(replacementId) },
-        rosterNurseIds: new Set(roster.map((r) => r.userId)),
+        rosterNurseIds: new Set(
+          roster.filter((r) => r.role !== "SECRETARY").map((r) => r.userId),
+        ),
         resolution,
       }),
     );
@@ -725,6 +727,7 @@ export async function getChangeRequestReview(
         ? candidates
             .filter(
               (r) =>
+                r.role !== "SECRETARY" &&
                 r.userId !== record.requesterId &&
                 isFreeToCover(cells.shiftOf(r.userId)),
             )

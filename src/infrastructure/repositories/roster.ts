@@ -206,6 +206,7 @@ export interface RosterMemberOnDate {
   readonly userId: string;
   readonly displayName: string;
   readonly personnelNumber: string | null;
+  readonly role: MembershipRole;
 }
 
 /**
@@ -221,6 +222,7 @@ export async function listRosterMembersOn(
     scheduleId: string;
     onDate: IsoDate;
     userIds?: readonly string[];
+    nursingOnly?: boolean;
   },
 ): Promise<RosterMemberOnDate[]> {
   const m = departmentMemberships;
@@ -229,6 +231,7 @@ export async function listRosterMembersOn(
       userId: users.id,
       displayName: users.displayName,
       personnelNumber: users.personnelNumber,
+      role: scheduleRoster.role,
     })
     .from(scheduleRoster)
     .innerJoin(schedules, eq(schedules.id, scheduleRoster.scheduleId))
@@ -237,8 +240,11 @@ export async function listRosterMembersOn(
       and(
         eq(scheduleRoster.scheduleId, input.scheduleId),
         input.userIds ? inArray(users.id, [...input.userIds]) : undefined,
+        input.nursingOnly
+          ? sql`${scheduleRoster.role} <> 'SECRETARY'`
+          : undefined,
         eq(users.isActive, true),
-        sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)})`,
+        sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)} ${input.nursingOnly ? sql`and ${m.role} <> 'SECRETARY'` : sql``})`,
       ),
     )
     .orderBy(asc(users.id));
@@ -253,7 +259,12 @@ export async function listRosterMembersOn(
  */
 export async function lockRosterMemberOn(
   tx: Transaction,
-  input: { scheduleId: string; userId: string; onDate: IsoDate },
+  input: {
+    scheduleId: string;
+    userId: string;
+    onDate: IsoDate;
+    nursingOnly?: boolean;
+  },
 ): Promise<boolean> {
   const m = departmentMemberships;
   const rows = await tx
@@ -273,6 +284,9 @@ export async function lockRosterMemberOn(
       and(
         eq(scheduleRoster.scheduleId, input.scheduleId),
         eq(users.id, input.userId),
+        input.nursingOnly
+          ? sql`${scheduleRoster.role} <> 'SECRETARY' and ${m.role} <> 'SECRETARY'`
+          : undefined,
         eq(users.isActive, true),
       ),
     )

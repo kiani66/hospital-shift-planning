@@ -115,6 +115,8 @@ export interface CandidateEvaluationInput {
   readonly nurseIds: readonly string[];
   /** The schedule's working copy (the same baseline for every candidate). */
   readonly assignments: readonly Assignment[];
+  /** Nursing coverage only; the complete roster still needs daily decisions. */
+  readonly staffingNurseIds?: readonly string[];
   /**
    * The neighbouring schedules' assignments for the whole universe, the
    * night-rest context across the period boundary (D7, D20).
@@ -179,6 +181,8 @@ export function evaluateCandidates(
   const available: AvailableCandidate[] = [];
   const notAllowed: NotAllowedCandidate[] = [];
   for (const nurseId of new Set(input.nurseIds)) {
+    if (input.staffingNurseIds && !input.staffingNurseIds.includes(nurseId))
+      continue;
     const dayStatus = candidateDayStatus(current.get(nurseId) ?? null);
     if (dayStatus === null) continue;
     const preference = candidatePreference(
@@ -191,6 +195,7 @@ export function evaluateCandidates(
       edits: [{ nurseId, date, shift }],
       adjacentAssignments: input.adjacentAssignments,
       staffingRequirements: input.staffingRequirements,
+      staffingNurseIds: input.staffingNurseIds,
     });
     if (assessment.blocked)
       notAllowed.push({

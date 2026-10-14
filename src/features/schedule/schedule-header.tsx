@@ -59,7 +59,7 @@ export function ScheduleHeader({
       className="mb-4 overflow-hidden rounded-xl border border-primary/15 bg-card shadow-sm shadow-primary/5"
     >
       <div className="flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-5">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3 lg:flex-1">
           <IconWell
             size="lg"
             className="bg-primary text-primary-foreground shadow-sm shadow-primary/30 max-sm:hidden"
@@ -71,7 +71,7 @@ export function ScheduleHeader({
           )}
           <h1
             id={SCHEDULE_HEADING_ID}
-            className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
+            className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start lg:flex-1"
           >
             <span className="truncate text-sm font-medium text-brand-soft-foreground">
               برنامه بخش · {departmentName}
@@ -86,7 +86,7 @@ export function ScheduleHeader({
           )}
         </div>
         {(primaryAction || secondaryAction) && (
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end max-sm:[&>button:last-child]:self-center">
+          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:max-w-[60%] lg:justify-end max-sm:[&>button:last-child]:self-center">
             {primaryAction}
             {primaryAction && secondaryAction && (
               <span

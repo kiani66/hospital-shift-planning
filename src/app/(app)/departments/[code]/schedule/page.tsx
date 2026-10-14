@@ -2,6 +2,7 @@ import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { MonthlyResetControl } from "@/features/reset/monthly-control";
 import type { Metadata, Route } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { NotFoundError } from "@/application/errors";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
@@ -159,6 +160,14 @@ export default async function DepartmentSchedulePage({
   }).catch(orNotFound);
 
   const periods = data.schedules.map((s) => s.period);
+  const importLink = data.canCreate ? (
+    <Link
+      className="text-sm underline"
+      href={`/departments/${department.code}/schedule/import`}
+    >
+      ورود برنامه از Excel
+    </Link>
+  ) : null;
   const createDialog = (primary: boolean, focus?: JalaliMonth) => {
     const months = jalaliMonthOptions(today, periods, focus);
     return (
@@ -185,6 +194,7 @@ export default async function DepartmentSchedulePage({
       <>
         <PageHeader title={`برنامه بخش — ${department.name}`} />
         <EmptySchedules action={data.canCreate ? createDialog(true) : null} />
+        {importLink}
       </>
     );
 
@@ -218,7 +228,12 @@ export default async function DepartmentSchedulePage({
         />
         <EmptyMonth
           label={monthLabel}
-          action={data.canCreate ? createDialog(true, current) : null}
+          action={
+            <>
+              {data.canCreate ? createDialog(true, current) : null}
+              {importLink}
+            </>
+          }
         />
       </>
     );
@@ -308,6 +323,7 @@ export default async function DepartmentSchedulePage({
               />
             )}
             {data.canCreate ? createDialog(false) : null}
+            {importLink}
           </>
         }
       />

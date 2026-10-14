@@ -36,7 +36,7 @@ import { countByShift, coverageOf } from "../../domain/shifts/coverage";
 import { COVERAGE_PERIODS } from "../../domain/shifts/shift-type";
 import {
   listAdjacentAssignments,
-  listAssignments,
+  listRosterAssignments,
 } from "../../infrastructure/repositories/assignments";
 import { lockActiveSchedulingUsers } from "../../infrastructure/repositories/management";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
@@ -138,11 +138,14 @@ function targetCoverage(
   requirements: ReadonlyMap<IsoDate, StaffingRequirement>,
   date: IsoDate,
   shift: CandidateShift,
+  staffingNurseIds: readonly string[],
 ): CandidateCoverage {
   const bounds = requirements.get(date)?.[shift];
   const covered = coverageOf(
     countByShift(
-      assignments.filter((a) => a.date === date).map((a) => a.shift),
+      assignments
+        .filter((a) => a.date === date && staffingNurseIds.includes(a.nurseId))
+        .map((a) => a.shift),
     ),
   )[shift];
   return {
@@ -205,14 +208,23 @@ export async function getCoverageCandidates(
   if (!isIsoDate(date) || !isInPeriod(period, date))
     throw new ValidationError("The date is not a day of the schedule", "date");
 
-  const [assignments, ruleSet, holidays] = await Promise.all([
-    listAssignments(db, schedule.id),
+  const [{ assignments, roster }, ruleSet, holidays] = await Promise.all([
+    listRosterAssignments(db, schedule.id),
     loadRuleSet(db, schedule.staffingRuleSetVersionId),
     holidayDates(ctx.holidays ?? NO_HOLIDAY_DATA, period),
   ]);
   // The day's bounds only, as a change of that day is validated (D106).
   const requirements = requirementsUnder(ruleSet, [date], holidays);
-  const coverage = targetCoverage(assignments, requirements, date, shift);
+  const staffingNurseIds = roster
+    .filter((r) => r.role !== "SECRETARY")
+    .map((r) => r.userId);
+  const coverage = targetCoverage(
+    assignments,
+    requirements,
+    date,
+    shift,
+    staffingNurseIds,
+  );
   const base = {
     scheduleId: schedule.id,
     revision: schedule.revision,
@@ -231,7 +243,11 @@ export async function getCoverageCandidates(
     mayEdit &&
     (schedule.status === "REVISING" || schedule.status === "RETURNED");
   const [universe, preferences, revision] = await Promise.all([
-    listRosterMembersOn(db, { scheduleId: schedule.id, onDate: date }),
+    listRosterMembersOn(db, {
+      scheduleId: schedule.id,
+      onDate: date,
+      nursingOnly: true,
+    }),
     listPreferences(db, schedule.id, { date }),
     revisionScoped ? findOpenRevision(db, schedule.id) : null,
   ]);
@@ -255,6 +271,7 @@ export async function getCoverageCandidates(
       assignments,
       adjacentAssignments: adjacent,
       staffingRequirements: requirements,
+      staffingNurseIds,
       preferences: new Map(preferences.map((p) => [p.userId, p.value])),
     }),
   );
@@ -410,10 +427,17 @@ export const assignCoverageCandidate = defineCommand({
       scheduleId: schedule.id,
       onDate: date,
       userId: nurseId,
+      nursingOnly: true,
     });
     if (!member) throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NOT_A_CANDIDATE);
 
-    const assignments = await listAssignments(uow.tx, schedule.id);
+    const { assignments, roster } = await listRosterAssignments(
+      uow.tx,
+      schedule.id,
+    );
+    const staffingNurseIds = roster
+      .filter((r) => r.role !== "SECRETARY")
+      .map((r) => r.userId);
     const before =
       assignments.find((a) => a.nurseId === nurseId && a.date === date)
         ?.shift ?? null;
@@ -427,8 +451,8 @@ export const assignCoverageCandidate = defineCommand({
     const holidays = await holidayDates(uow.holidays, period);
     const requirements = requirementsUnder(ruleSet, [date], holidays);
     if (
-      targetCoverage(assignments, requirements, date, shift).status !==
-      "BELOW_MINIMUM"
+      targetCoverage(assignments, requirements, date, shift, staffingNurseIds)
+        .status !== "BELOW_MINIMUM"
     )
       throw refuse(CANDIDATE_ASSIGNMENT_REFUSALS.NO_SHORTAGE);
 
@@ -446,6 +470,7 @@ export const assignCoverageCandidate = defineCommand({
       edits: [{ nurseId, date, shift }],
       adjacentAssignments: adjacent,
       staffingRequirements: requirements,
+      staffingNurseIds,
     });
     if (assessment.blocked) throw new RuleViolationError(assessment.blocking);
 

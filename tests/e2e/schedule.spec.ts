@@ -81,7 +81,7 @@ test.describe("Head Nurse schedule management", () => {
       "۴ نفر",
     );
     await expect(fact(roster(page), "ترکیب")).toHaveText(
-      "۳ پرستار، ۱ سرپرستار",
+      "۳ پرستار، ۱ سرپرستار، ۰ منشی",
     );
     await expect(fact(preferences(page), "وضعیت")).toHaveText("باز نشده");
     expect(await main(page).innerText()).not.toMatch(ISO_DATE);

@@ -98,6 +98,7 @@ export interface DayStaffingImpact {
  * from validation.
  */
 export function staffingImpact(input: {
+  readonly staffingNurseIds?: readonly string[];
   readonly before: readonly Assignment[];
   readonly after: readonly Assignment[];
   readonly dates: readonly IsoDate[];
@@ -106,7 +107,14 @@ export function staffingImpact(input: {
   const coverage = (assignments: readonly Assignment[], date: IsoDate) =>
     coverageOf(
       countByShift(
-        assignments.filter((a) => a.date === date).map((a) => a.shift),
+        assignments
+          .filter(
+            (a) =>
+              a.date === date &&
+              (!input.staffingNurseIds ||
+                input.staffingNurseIds.includes(a.nurseId)),
+          )
+          .map((a) => a.shift),
       ),
     );
   return uniqueSortedDates(input.dates).map((date) => {

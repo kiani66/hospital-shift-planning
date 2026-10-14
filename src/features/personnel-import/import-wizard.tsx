@@ -40,6 +40,7 @@ const faNumber = (n: number) => n.toLocaleString("fa-IR");
 const ROLE_LABELS: Record<string, string> = {
   NURSE: "پرستار",
   HEAD_NURSE: "سرپرستار",
+  SECRETARY: "منشی",
 };
 const ACTION_TONES = {
   CREATE: "brand-soft",

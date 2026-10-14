@@ -63,7 +63,7 @@ const EXPECTED_ENUMS = {
     "RESOLVED",
     "WITHDRAWN",
   ],
-  membership_role: ["NURSE", "HEAD_NURSE"],
+  membership_role: ["NURSE", "HEAD_NURSE", "SECRETARY"],
   notification_type: [
     "PREFERENCES_OPENED",
     "DATES_REOPENED",
@@ -236,7 +236,7 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0008 system-level Hospital Admin flag, 0009 personnel identity (stage 1),
     // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label, 0013 reset records,
     // 0014 leave day (H)
-    expect(before).toBe(15);
+    expect(before).toBe(16);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

@@ -549,7 +549,9 @@ export const applyChangeRequest = defineCommand({
           counterpart: cells.shiftOf(request.counterpartId),
           replacement: cells.shiftOf(replacementId),
         },
-        rosterNurseIds: new Set(roster.map((r) => r.userId)),
+        rosterNurseIds: new Set(
+          roster.filter((r) => r.role !== "SECRETARY").map((r) => r.userId),
+        ),
         resolution,
       }),
     );

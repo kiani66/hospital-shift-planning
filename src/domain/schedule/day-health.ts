@@ -40,6 +40,7 @@ export function summarizeScheduleDays(input: {
   readonly period: DatePeriod;
   readonly assignments: readonly Assignment[];
   readonly violations: readonly Violation[];
+  readonly staffingNurseIds?: readonly string[];
 }): ScheduleDaysSummary {
   const validation = summarizeValidation(input);
   const shiftsByDay = new Map<IsoDate, AssignmentCode[]>();
@@ -51,7 +52,23 @@ export function summarizeScheduleDays(input: {
     const codes = shiftsByDay.get(day.date) ?? [];
     const shifts = countByShift(codes);
     const leave = codes.filter(isLeave).length;
-    return { ...day, shifts, coverage: coverageOf(shifts), leave };
+    return {
+      ...day,
+      shifts,
+      coverage: coverageOf(
+        countByShift(
+          input.assignments
+            .filter(
+              (a) =>
+                a.date === day.date &&
+                (!input.staffingNurseIds ||
+                  input.staffingNurseIds.includes(a.nurseId)),
+            )
+            .map((a) => a.shift),
+        ),
+      ),
+      leave,
+    };
   });
   return { days, validation };
 }
