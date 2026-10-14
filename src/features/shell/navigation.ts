@@ -20,6 +20,7 @@ export type NavIcon =
   | "review"
   | "personnel"
   | "staffingRules"
+  | "settings"
   | "more";
 
 export interface NavItem {
@@ -55,7 +56,13 @@ type Capabilities = Pick<ShellContext, "memberships" | "supervised"> &
 
 const departmentPath = (
   code: string,
-  page: "schedule" | "requests" | "history" | "people" | "coverage-rules",
+  page:
+    | "schedule"
+    | "requests"
+    | "history"
+    | "people"
+    | "coverage-rules"
+    | "settings",
 ) => `/departments/${encodeURIComponent(code)}/${page}` as Route;
 
 /**
@@ -156,6 +163,12 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       label: qualify("قوانین پوشش", d.name),
       icon: "staffingRules",
     } satisfies NavItem,
+    settings: {
+      id: `department-settings-${d.code}`,
+      href: departmentPath(d.code, "settings"),
+      label: qualify("تنظیمات بخش", d.name),
+      icon: "settings",
+    } satisfies NavItem,
   }));
 
   // Personal pages are about the user's own data, so anyone who is not only
@@ -184,6 +197,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
         departmentItems[i]!.requests,
         departmentItems[i]!.history,
         departmentItems[i]!.coverageRules,
+        departmentItems[i]!.settings,
       ],
     }),
   );
@@ -208,6 +222,12 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       items: [
         ITEMS.personnel,
         ITEMS.staffingRules,
+        {
+          id: "excel-templates",
+          href: "/admin/excel-templates",
+          label: "قالب‌های خروجی اکسل",
+          icon: "settings",
+        },
         {
           id: "data-reset",
           href: "/admin/reset",

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { NotFoundError } from "@/application/errors";
+import { getExcelExportAvailability } from "@/application/excel-export/export";
 import { getDepartmentSchedules } from "@/application/schedules/queries";
 import { getRosterCandidates } from "@/application/schedules/roster";
 import {
@@ -27,6 +28,8 @@ import {
   toJalali,
   type JalaliMonth,
 } from "@/features/calendar/jalali";
+import { ExcelExportButton } from "@/features/excel-export/export-button";
+import { scheduleExportFileName } from "@/features/excel-export/file-name";
 import { CreateScheduleDialog } from "@/features/schedule/create-schedule-dialog";
 import { RosterAdditions } from "@/features/schedule/roster-additions";
 import { ScheduleHeader } from "@/features/schedule/schedule-header";
@@ -282,6 +285,11 @@ export default async function DepartmentSchedulePage({
   const noAssignments =
     review.month.totals.NOT_STARTED === review.month.days.length;
 
+  // «خروجی اکسل» in every status, once the department has a template (D124).
+  const excelExport = await getExcelExportAvailability(ctx, {
+    scheduleId: selected.id,
+  }).catch(orNotFound);
+
   // Explicit roster additions while the schedule is DRAFT / PLANNING.
   const rosterCandidates = await getRosterCandidates(ctx, {
     scheduleId: selected.id,
@@ -324,6 +332,21 @@ export default async function DepartmentSchedulePage({
             )}
             {data.canCreate ? createDialog(false) : null}
             {importLink}
+            <ExcelExportButton
+              scheduleId={selected.id}
+              fileName={scheduleExportFileName(
+                department.code,
+                selected.period.start,
+              )}
+              draftFileName={scheduleExportFileName(
+                department.code,
+                selected.period.start,
+                true,
+              )}
+              hasTemplate={excelExport.hasTemplate}
+              revisionDraftAvailable={excelExport.revisionDraftAvailable}
+              settingsHref={`/departments/${department.code}/settings` as Route}
+            />
           </>
         }
       />

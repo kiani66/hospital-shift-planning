@@ -230,3 +230,14 @@ Existing rows, inactive reasons, personnel credentials and policies are never ov
 See [personnel readiness and controlled recovery](phase-14-reset.md#controlled-default-recovery)
 for conflict resolution and the approved-value department operator procedure. Do not replay old
 migrations or seed demo data as a pilot recovery mechanism.
+
+## Phase 16 Excel template and export
+
+`excelTemplate.manage` is any Hospital Admin or the department's current Head Nurse; Supervisors,
+nurses and secretaries cannot upload, replace, map or download templates. `schedule.export`
+follows `schedule.viewDepartment` and is checked by the use case on every download. Unknown and
+forbidden departments/schedules return the same 404. Uploaded files are untrusted: size, entry
+count and actually inflated size are bounded before any XML is read; macros, external links, data
+connections, ActiveX and embedded objects are rejected; formulas are never evaluated. Downloads are
+`private, no-store` with `nosniff`. Error messages name cells and personnel numbers only to users
+already allowed to see that department's roster. See D124.

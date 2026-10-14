@@ -32,6 +32,7 @@ TypeScript schema.
 | Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                                    |
 | Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                                     |
 | Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                                       |
+| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migration 0016, D124)                                                                                                                                                    |
 | Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                                      |
 
 ## Where each rule is enforced
@@ -213,3 +214,16 @@ assignment primary keys. Plain inserts never overwrite assignments. Storage sour
 stateless HMACs and expire in 15 minutes. Imports briefly share-lock personnel/membership tables
 and lock relevant schedules in UUID order to protect dated eligibility and adjacent context.
 See [monthly Excel import](monthly-schedule-import.md) and D119–D121.
+
+## Phase 16 Excel export templates
+
+Migration `0016_excel_export_templates` adds `department_excel_templates` only. The template bytes
+are a `bytea` column (at most 2 MiB, checked by the application; the size check constraint ties
+`byte_size` to the stored bytes). A partial unique index allows one active row per department;
+uploads and replacements lock the department row (`FOR NO KEY UPDATE`) and swap the active row in
+one transaction, so a failed upload never removes the working template. Like `reset_operations`, the
+table has no foreign key (`department_id`, `uploaded_by`, `mapping_updated_by` are plain UUIDs):
+the Phase 14 reset refuses unregistered foreign keys into its tables, and templates are
+configuration outside its categories, so resets neither delete nor depend on them. Templates are
+read only through an active department, so a row whose department is gone is unreachable. Exports only read (repeatable read, read only).
+No existing table or row changes. See D124.

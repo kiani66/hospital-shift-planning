@@ -16,6 +16,9 @@ import {
   formatJalaliRange,
 } from "@/features/calendar/jalali";
 import { ScheduleHeader } from "@/features/schedule/schedule-header";
+import { getExcelExportAvailability } from "@/application/excel-export/export";
+import { ExcelExportButton } from "@/features/excel-export/export-button";
+import { scheduleExportFileName } from "@/features/excel-export/file-name";
 import { DayBadges, DayDetail } from "@/features/schedule-review/day-detail";
 import { ShortageCandidates } from "@/features/coverage-candidates/shortage-candidates";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
@@ -58,6 +61,13 @@ export default async function SupervisorReviewPage({
   });
   const { month, workflow, department } = review;
   const today = todayIn(APP_TIMEZONE);
+  // The Supervisor may download what they review (D124 `schedule.export`).
+  const excelExport = await getExcelExportAvailability(ctx, {
+    scheduleId: month.scheduleId,
+  }).catch((error) => {
+    if (error instanceof NotFoundError) notFound();
+    throw error;
+  });
 
   const here = (date?: string) =>
     `/review/${month.scheduleId}${date ? `?day=${date}` : ""}` as Route;
@@ -97,6 +107,23 @@ export default async function SupervisorReviewPage({
             }}
             departmentName={department.name}
             workflow={workflow}
+          />
+        }
+        secondaryAction={
+          <ExcelExportButton
+            scheduleId={month.scheduleId}
+            fileName={scheduleExportFileName(
+              department.code,
+              month.period.start,
+            )}
+            draftFileName={scheduleExportFileName(
+              department.code,
+              month.period.start,
+              true,
+            )}
+            hasTemplate={excelExport.hasTemplate}
+            revisionDraftAvailable={excelExport.revisionDraftAvailable}
+            settingsHref={null}
           />
         }
       />

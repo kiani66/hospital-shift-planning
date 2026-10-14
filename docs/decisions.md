@@ -2184,3 +2184,84 @@ Amends D57's login card and brand panel; layout, wording and auth are unchanged.
 
 Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
 `features/auth/login-brand-panel.tsx` and `tests/e2e/login.spec.ts`.
+
+## Phase 16 — Dynamic Excel template management and schedule export
+
+### D124 · Department Excel export template and template-driven export
+
+Approved: the Head Nurse downloads a monthly schedule as `.xlsx` in the hospital's own print
+workbook. The workbook is never generated: the department's uploaded template is copied and only
+its mapped day cells are written. Paths are relative to `src/`.
+
+- **Storage.** PostgreSQL, table `department_excel_templates` (migration 0016): the bytes
+  (`bytea`, at most 2 MiB), file name, size, SHA-256, the mapping, version, uploader and time.
+  Evaluated against Vercel Blob: Neon is already the only persistent store (D2), the file is small
+  and rarely written, and one transaction keeps the bytes, mapping, active flag and audit
+  consistent. Nothing touches the local or deployment file system or the repository; a new upload
+  is used by the next export with no commit, build, deployment or restart.
+- **One active template per department** (partial unique index). An upload or replacement locks
+  the department row, checks the template the user saw (`expectedTemplateId`; a concurrent
+  replacement gets CONFLICT), validates the file and mapping, then deactivates the old row and
+  inserts the new one in the same transaction, with `excelTemplate.uploaded` / `.replaced` audit.
+  A failed validation or write leaves the working template active. Older rows stay as minimal
+  history (no history UI in V1). A mapping change validates against the stored bytes, bumps the
+  row's `revision` (optimistic concurrency) and is audited (`excelTemplate.mappingUpdated`). The
+  table is configuration outside the Phase 14 reset registry and, like `reset_operations`, has no
+  operational foreign key (the reset refuses unregistered foreign keys into its tables): no reset
+  depends on, deletes or is blocked by a template. Templates are read only through an active
+  department the actor may manage, so a row whose department no longer exists is unreachable.
+  Registering templates as a reset category is a possible follow-up.
+- **Authorization.** `excelTemplate.manage`: any Hospital Admin, or a Head Nurse of that
+  department; Supervisor, Nurse and Secretary cannot. `schedule.export` follows the department
+  grid (`schedule.viewDepartment`): the Head Nurse in every status, a Supervisor from FINALIZED on.
+  Admins reach every department's settings from «قالب‌های خروجی اکسل»; the Head Nurse from
+  «تنظیمات بخش». Unknown and forbidden departments or schedules look the same (404).
+- **Mapping.** Worksheet name, personnel-number column, first and last personnel row (at most 500
+  rows) and the first of 31 consecutive day columns. Nothing about a layout is hard-coded. The
+  personnel-number column may be hidden. One universal 31-day template serves every month.
+- **Identity.** The personnel number is the only matching key (never the name, row or database
+  order), read as text so leading zeros survive; Persian digits are normalized. Numeric cells are
+  accepted only as integers of at most 15 digits (Excel's exact precision). Duplicates in the
+  mapped rows are rejected. A changed number is picked up by the next export once both the
+  application and the template carry it.
+- **Validation before activation** (and again on every export): `.xlsx` ZIP structure, upload
+  size, entry count and actually inflated size; no macros, external links, data connections,
+  ActiveX or embedded objects (external hyperlinks are allowed); the sheet exists; the mapping is
+  inside the grid and the personnel column is outside the day block; no formula, error, boolean,
+  date or rich value in mapped cells; no merged cell, array/shared formula or Excel table over the
+  mapped area; in a protected sheet the day cells must be unlocked; a row without a personnel
+  number must have empty day cells (decorative and spacing rows are ignored and kept); day cells
+  of personnel rows must be empty or hold a shift code from a previous export (anything else
+  usually means a wrong first-day column). Messages name the Excel cell.
+- **Export.** One repeatable-read, read-only transaction: authorize, load the active template and
+  mapping, the roster and decisions. DRAFT … RETURNED write the working copy; an approved schedule
+  (APPROVED, or REVISING / a revision's SUBMITTED / RETURNED) writes the latest approved version
+  by default, and the open revision's working copy only through the explicit «خروجی پیش‌نویس
+  بازبینی (تأییدنشده)» (file name suffix `-revision-draft`), so unapproved revision changes never
+  appear in the official export (D11, D70). Codes are the project's: M, E, N, ME, OFF, H. An
+  undecided day is blank, never OFF (D100; unlike Phase 15 import, D120). Days the month lacks
+  (30–31 of a 29-day month) are blank; the length comes from the schedule's own period. Every
+  active roster member, and every roster member with a decision, needs a row: a missing number or
+  a person without a personnel number fails the export naming them. Template rows of people not
+  on the roster are cleared. Secretaries are exported like nurses (staffing rules unchanged, D119).
+  No schedule or template row is written, and no audit row is added.
+- **Preservation.** The workbook is patched at the ZIP/XML level: every part except the mapped
+  worksheet is copied byte for byte, and in that worksheet only the `<c>` elements of the mapped
+  day cells of matched rows change (inline strings, the cell's own style kept). Fonts, borders,
+  fills, merges, hidden columns, row heights, column widths, print area, margins, orientation,
+  headers/footers, drawings, formulas and totals are untouched. A library round trip (ExcelJS)
+  was rejected because it re-serializes the whole workbook and drops features it does not model.
+  When the workbook contains formulas, `fullCalcOnLoad` is set so Excel recalculates hand-made
+  totals on open. The stored template bytes never change.
+- **Download.** `GET /api/schedules/[scheduleId]/excel` (`?source=revision-draft`) and
+  `GET /api/departments/[code]/excel-template`, authorized on every request, `private, no-store`,
+  the xlsx content type and an attachment named from the schedule month only, e.g.
+  `NICU-schedule-1405-07.xlsx`; the month printed inside the template is not edited in V1.
+  Server Actions accept up to 3 MB (`serverActions.bodySizeLimit`) for the upload.
+- **Out of scope (V1):** non-consecutive day columns, several active templates, version-history
+  UI, editing headings, totals or formulas, and any change to Excel import.
+
+Enforced in `domain/excel-export/template-mapping.ts`, `domain/authz/policies.ts`,
+`application/excel-export/`, `infrastructure/repositories/excel-templates.ts`, migration
+`0016_excel_export_templates`, `features/excel-export/` and
+`app/(app)/departments/[code]/settings/page.tsx`.

@@ -114,3 +114,6 @@ for explicit conflict resolution, department operator steps and staffing-policy 
 
 Phase 15 secretary membership and standardized monthly XLSX import:
 [Persian operator instructions, templates and real NICU workbook prerequisites](docs/monthly-schedule-import.md).
+
+Phase 16 department Excel export template and template-driven monthly schedule export:
+[Persian operator guide](docs/excel-export-template.md) and D124 in [decisions](docs/decisions.md).
