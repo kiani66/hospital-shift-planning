@@ -6,7 +6,7 @@ import type { DayReview, ReviewCoverage } from "@/application/schedules/review";
 import { summarizePreferenceAlignment } from "@/domain/preferences/preference-alignment";
 import { isoDate } from "@/domain/shared/dates";
 
-import { CoverageSummary } from "./day-detail";
+import { CoverageSummary, DayDetail } from "./day-detail";
 import {
   PreferenceAlignmentSummary,
   PreferenceContext,
@@ -300,5 +300,56 @@ describe("PreferenceAlignmentSummary", () => {
       "تعیین‌نشده در این روز: ۳ نفر جدا شمرده می‌شود و با دسته‌های بالا هم‌پوشانی دارد.",
     );
     expect(t).toContain("مغایرت با ترجیح جلوی نهایی‌سازی برنامه را نمی‌گیرد");
+  });
+});
+
+describe("DayDetail role badge (read-only)", () => {
+  const withRole = (
+    userId: string,
+    role: "NURSE" | "HEAD_NURSE" | "SECRETARY",
+  ) => ({ ...nurse(userId), role });
+
+  /** The badge texts in one nurse's row (Badge: `rounded-full border`; the avatar has no border). */
+  const badgesOf = (html: string, displayName: string) => {
+    const at = html.indexOf(`title="${displayName}"`);
+    const row = html.slice(
+      html.lastIndexOf("<li", at),
+      html.indexOf("</li>", at),
+    );
+    return [
+      ...row.matchAll(
+        /<span class="[^"]*\brounded-full border\b[^"]*">([^<]*)<\/span>/g,
+      ),
+    ].map(([, label]) => label);
+  };
+
+  it.each([
+    ["nurse", "پرستار"],
+    ["head", "سرپرستار"],
+    ["secretary", "منشی"],
+  ] as const)("shows exactly one badge for %s: «%s»", (name, label) => {
+    const base = day([]);
+    const html = render(
+      createElement(DayDetail, {
+        shiftLabels: SHIFT_LABELS,
+        day: {
+          ...base,
+          shifts: [
+            {
+              code: "M",
+              nurses: [
+                withRole("nurse", "NURSE"),
+                withRole("head", "HEAD_NURSE"),
+              ],
+            },
+            { code: "E", nurses: [] },
+            { code: "N", nurses: [] },
+            { code: "ME", nurses: [] },
+          ],
+          off: [withRole("secretary", "SECRETARY")],
+        },
+      }),
+    );
+    expect(badgesOf(html, name)).toEqual([label]);
   });
 });

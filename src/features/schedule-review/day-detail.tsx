@@ -404,11 +404,9 @@ function ReadOnlyNurseRow({
       >
         {nurse.displayName}
       </span>
-      {nurse.role !== "NURSE" && (
-        <Badge tone="muted" size="sm">
-          {ROLE_LABELS[nurse.role]}
-        </Badge>
-      )}
+      <Badge tone="muted" size="sm">
+        {ROLE_LABELS[nurse.role]}
+      </Badge>
       {flagged && (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
           <CircleAlert aria-hidden="true" className="size-3.5" />

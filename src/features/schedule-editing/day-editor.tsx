@@ -844,11 +844,9 @@ function NurseRow({
             >
               {nurse.displayName}
             </span>
-            {nurse.role !== "NURSE" && (
-              <Badge tone="brand-soft" size="sm">
-                {ROLE_LABELS[nurse.role]}
-              </Badge>
-            )}
+            <Badge tone="brand-soft" size="sm">
+              {ROLE_LABELS[nurse.role]}
+            </Badge>
             {nurse.flagged && (
               <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-destructive">
                 <CircleAlert aria-hidden="true" className="size-3.5" />

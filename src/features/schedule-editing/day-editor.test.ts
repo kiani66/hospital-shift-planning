@@ -124,3 +124,54 @@ describe("DayEditor assignment control", () => {
     },
   );
 });
+
+describe("DayEditor role badge", () => {
+  const roster: EditorNurse[] = [
+    { ...nurse(null), userId: "n1", displayName: "سارا نمونه", role: "NURSE" },
+    {
+      ...nurse("M"),
+      userId: "h1",
+      displayName: "مینا سرپرست",
+      role: "HEAD_NURSE",
+    },
+    {
+      ...nurse("OFF"),
+      userId: "s1",
+      displayName: "رضا منشی",
+      role: "SECRETARY",
+    },
+  ];
+
+  /** The badge texts in one nurse's name line (Badge: `rounded-full border`). */
+  const badgesOf = (html: string, userId: string) => {
+    const row = html.slice(html.indexOf(`data-nurse-row="${userId}"`));
+    const nameLine = row.slice(0, row.indexOf("</p>"));
+    return [
+      ...nameLine.matchAll(
+        /<span class="[^"]*\brounded-full border\b[^"]*">([^<]*)<\/span>/g,
+      ),
+    ].map(([, label]) => label);
+  };
+
+  it.each([
+    ["n1", "پرستار"],
+    ["h1", "سرپرستار"],
+    ["s1", "منشی"],
+  ] as const)("shows exactly one badge for %s: «%s»", (userId, label) => {
+    const html = renderToStaticMarkup(
+      createElement(DayEditor, {
+        scheduleId: "s1",
+        revision: 1,
+        date,
+        dayLabel: "شنبه ۲ آبان ۱۴۰۵",
+        nurses: roster,
+        rangeEnds: [],
+        coverage: [],
+        previousDayHref: null,
+        nextDayHref: null,
+        shiftLabels: SHIFT_LABELS,
+      }),
+    );
+    expect(badgesOf(html, userId)).toEqual([label]);
+  });
+});
