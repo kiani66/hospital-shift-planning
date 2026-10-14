@@ -321,7 +321,7 @@ describe("finalizeSchedule", () => {
     });
   });
 
-  // From DRAFT it is allowed since D124 (tests/integration/optional-preferences.test.ts).
+  // From DRAFT it is allowed since D125 (tests/integration/optional-preferences.test.ts).
   it("is refused when already FINALIZED (INVALID_STATE)", async () => {
     await toFinalized();
     expect(await run(finalizeSchedule, actors.icuHead)).toMatchObject({

@@ -400,7 +400,7 @@ test.describe("Head Nurse monthly review (read-only)", () => {
       region.getByRole("list", { name: "خلاصه اعتبارسنجی برنامه" }),
     ).toContainText("۰ روز از ۳۰ روز آماده");
     await expect(region.locator("tbody a")).toHaveCount(30);
-    // A new DRAFT offers finalize (preferences are optional, D124); its
+    // A new DRAFT offers finalize (preferences are optional, D125); its
     // blockers name the days with links to them (a day can be listed under
     // more than one category: undecided and coverage).
     const blockers = page.locator("#workflow-blockers");

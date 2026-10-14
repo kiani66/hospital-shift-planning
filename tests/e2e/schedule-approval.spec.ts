@@ -41,7 +41,7 @@ test.describe("approval workflow", () => {
     const [nurse1] = department.nurseNames as [string];
 
     // Head Nurse, in DRAFT, preferences never opened: finalize is offered
-    // (preferences are optional, D124) but blocked by the night-rest
+    // (preferences are optional, D125) but blocked by the night-rest
     // finding on 4 Aban.
     await signInAndWait(page, department.headEmail);
     await page.goto(monthUrl(department));

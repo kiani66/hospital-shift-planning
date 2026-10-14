@@ -45,7 +45,7 @@ export interface PreferenceWindowOutput {
  * Opens preference collection (the INITIAL window). By default the whole
  * schedule period for the whole roster; a narrower date or nurse scope must lie
  * inside the period and the roster. The status comes from the state machine
- * (`OPEN_PREFERENCES`): DRAFT → PLANNING, or PLANNING kept as it is (D124);
+ * (`OPEN_PREFERENCES`): DRAFT → PLANNING, or PLANNING kept as it is (D125);
  * assignments are never touched. Preferences open once per schedule, so a
  * second opening is an invalid transition, and the row lock plus
  * `expectedRevision` make concurrent attempts resolve to one success and one
@@ -108,7 +108,7 @@ export const openPreferenceWindow = defineCommand({
         dateCount: scope.dates.length,
         nurseScope: nurseIds.length === 0 ? "ROSTER" : "SELECTED",
         nurseIds,
-        // A lifecycle change only from DRAFT; opening in PLANNING keeps it (D124).
+        // A lifecycle change only from DRAFT; opening in PLANNING keeps it (D125).
         ...(next === schedule.status
           ? { status: schedule.status }
           : { from: schedule.status, to: next }),

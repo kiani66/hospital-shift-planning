@@ -363,7 +363,7 @@ function ReturnComment({ submission }: { submission: WorkflowSubmission }) {
  * Where the schedule stands for the Head Nurse, under the header: what
  * blocks the next step (with links to the days to fix), that it waits for
  * the Supervisor, the return comment, or that it is approved. In DRAFT and
- * PLANNING it is finalize's blockers: preferences are optional (D124), so
+ * PLANNING it is finalize's blockers: preferences are optional (D125), so
  * opening them is never a step this notice asks for.
  */
 export function HeadNurseWorkflowNotice({

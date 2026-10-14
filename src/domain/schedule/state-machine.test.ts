@@ -48,7 +48,7 @@ const passing: Record<ScheduleEvent, ScheduleCommand> = {
 
 const EVENTS = Object.keys(passing) as ScheduleEvent[];
 
-/** The approved state machine (plan section 5, amended by D124). */
+/** The approved state machine (plan section 5, amended by D125). */
 const EXPECTED: Record<
   ScheduleStatus,
   Partial<Record<ScheduleEvent, ScheduleStatus>>
@@ -127,7 +127,7 @@ describe("approved workflow decisions", () => {
   );
 });
 
-describe("D124: preferences are optional", () => {
+describe("D125: preferences are optional", () => {
   it.each(["DRAFT", "PLANNING"] as const)(
     "FINALIZE from %s needs no preference collection",
     (from) => {

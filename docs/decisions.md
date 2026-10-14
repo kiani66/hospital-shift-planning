@@ -211,7 +211,7 @@ Enforced in `features/calendar/jalali.ts` and `features/schedule/actions.ts`.
 
 ### D30 · Schedule creation and preference window lifecycle
 
-> Amended by D124: preferences are optional; FINALIZE is also allowed from DRAFT, and opening
+> Amended by D125: preferences are optional; FINALIZE is also allowed from DRAFT, and opening
 > preferences is also allowed from PLANNING (status kept).
 
 - A schedule is created in `DRAFT` by a Head Nurse of the department, with its roster snapshotted
@@ -735,7 +735,7 @@ domain change is a stable reason code for the open-window guard (`PREFERENCE_WIN
 ### D58 · Lifecycle commands, validation and concurrency
 
 > Wording of refusals amended by D104; the gate itself is unchanged.
-> Amended by D124: FINALIZE also from DRAFT, with the same gate; no preference step is needed.
+> Amended by D125: FINALIZE also from DRAFT, with the same gate; no preference step is needed.
 
 - Five commands: `finalizeSchedule` (PLANNING → FINALIZED), `submitSchedule` (FINALIZED or RETURNED
   → SUBMITTED), `withdrawSubmission` (SUBMITTED → FINALIZED, D10), `approveSchedule` and
@@ -841,7 +841,7 @@ Enforced in `application/schedules/lifecycle.ts` and `features/notifications/pre
 
 ### D64 · Workflow presentation
 
-> Amended by D124: in DRAFT, finalize is offered beside opening preference collection.
+> Amended by D125: in DRAFT, finalize is offered beside opening preference collection.
 
 - The schedule header keeps D52's single next step: open or close preference collection, then
   finalize, submit (or "submit again" after a return) or withdraw, never two lifecycle steps at
@@ -2193,7 +2193,7 @@ Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
 
 ## Optional preference decisions
 
-### D124 · Preferences are optional; finalize from DRAFT; open preferences until finalization
+### D125 · Preferences are optional; finalize from DRAFT; open preferences until finalization
 
 Approved product decision. Supersedes the parts of D30, D58 and D64 that made opening preference collection
 the only way out of DRAFT. D48 stands: editing never changes the status. No schema change and no migration.

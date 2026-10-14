@@ -51,7 +51,7 @@ function database() {
  * own Supervisor, with every other nurse-day decided.
  *
  * `stage`, always through the real use cases: "draft" leaves Aban in DRAFT,
- * never having collected preferences (they are optional, D124); "planning"
+ * never having collected preferences (they are optional, D125); "planning"
  * is a schedule whose preferences were collected (opened, then closed);
  * "finalized" fixes the finding and finalizes straight from DRAFT,
  * "submitted" also submits, "approved" also has the department's Supervisor

@@ -37,7 +37,7 @@ export type ScheduleCommand =
 export type ScheduleEvent = ScheduleCommand["type"];
 
 export const TRANSITIONS = {
-  // D124: preferences are optional. FINALIZE needs no preference step, and
+  // D125: preferences are optional. FINALIZE needs no preference step, and
   // opening preferences in PLANNING keeps the status (the window is not a state).
   DRAFT: {
     OPEN_PREFERENCES: "PLANNING",

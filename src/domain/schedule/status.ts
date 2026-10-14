@@ -10,7 +10,7 @@ export const SCHEDULE_STATUSES = [
 
 /**
  * DRAFT      created; only the Head Nurse works on it (no preference collection
- *            yet); may be finalized directly, preferences being optional (D124)
+ *            yet); may be finalized directly, preferences being optional (D125)
  * PLANNING   preference collection and/or scheduling in progress
  * FINALIZED  locked by the Head Nurse (corrections still possible); change requests open
  * SUBMITTED  awaiting Supervisor review; frozen

@@ -38,7 +38,7 @@ import { completeScheduleFixture } from "../support/complete-schedule";
 import { setupTestDatabase } from "./support/database";
 
 /**
- * D124: nurse preferences are optional and advisory. A schedule is finalized,
+ * D125: nurse preferences are optional and advisory. A schedule is finalized,
  * submitted and approved without ever opening them; they can be opened at any
  * point before finalization (DRAFT → PLANNING, or PLANNING kept), once per
  * schedule, without touching assignments; an open window still blocks SUBMIT.
