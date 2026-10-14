@@ -179,9 +179,14 @@ test.describe("approval workflow", () => {
     await expectStatus(page, "پیش‌نویس");
     const dayDialog = page.getByRole("dialog");
     await expect(dayDialog).toBeVisible();
-    const shiftsBefore = await dayDialog
-      .getByRole("group", { name: /^شیفت / })
-      .allInnerTexts();
+    // Each nurse's decided shift: the pressed code in their row.
+    const decided = () =>
+      page
+        .getByRole("dialog")
+        .getByRole("group", { name: /^شیفت / })
+        .locator('button[aria-pressed="true"]')
+        .allTextContents();
+    const shiftsBefore = await decided();
     expect(shiftsBefore.length).toBeGreaterThan(0);
     await dayDialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
     const summary = page.getByRole("list", {
@@ -209,11 +214,10 @@ test.describe("approval workflow", () => {
     await expect(page.locator("#workflow-blockers")).not.toContainText(
       "ترجیحات",
     );
-    await expect(summary).toHaveText(summaryBefore);
+    await expect.poll(() => summary.innerText()).toBe(summaryBefore);
     await page.goto(`${monthUrl(department)}&day=2026-10-24`);
-    await expect(
-      page.getByRole("dialog").getByRole("group", { name: /^شیفت / }),
-    ).toHaveText(shiftsBefore);
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect.poll(decided).toEqual(shiftsBefore);
   });
 
   test("the Head Nurse withdraws a submission before the Supervisor acts", async ({
