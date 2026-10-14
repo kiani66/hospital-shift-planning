@@ -16,6 +16,10 @@ import {
   uploadExcelTemplate,
 } from "../../src/application/excel-export/templates";
 import { NotFoundError } from "../../src/application/errors";
+import { executeFullReset } from "../../src/application/reset/execute";
+import { previewFullReset } from "../../src/application/reset/preview";
+import { FULL_OPERATIONAL_CATEGORIES } from "../../src/domain/reset/categories";
+import { readResetInventory } from "../../src/infrastructure/repositories/reset-inventory";
 import type { ActionResult } from "../../src/application/result";
 import { createSchedule } from "../../src/application/schedules/create-schedule";
 import {
@@ -37,6 +41,8 @@ import { jalaliMonthPeriod } from "../../src/features/calendar/jalali";
 import {
   auditEvents,
   departmentExcelTemplates,
+  departments,
+  resetOperations,
   scheduleVersionAssignments,
   schedules,
   shiftAssignments,
@@ -622,5 +628,78 @@ describe("schedule export (D124)", () => {
       });
       expect(supervisor.row(11)[2]).toBe("M");
     });
+  });
+});
+
+describe("templates and data lifecycle (D124)", () => {
+  const templates = async () =>
+    (await db.select({ n: count() }).from(departmentExcelTemplates))[0]!.n;
+  const reset = async (
+    categories: readonly (typeof FULL_OPERATIONAL_CATEGORIES)[number][],
+  ) => {
+    await db.delete(resetOperations);
+    // The reset requires a usable (credentialed) admin; the value is never verified here.
+    await db
+      .update(users)
+      .set({ passwordHash: "test-only-placeholder" })
+      .where(eq(users.id, admin.actor.userId));
+    const preview = await previewFullReset(admin, {
+      scope: { kind: "APPLICATION" },
+      categories: [...categories],
+    });
+    expect(preview.plan.blockers).toEqual([]);
+    expect(
+      await executeFullReset(admin, { ...preview, confirmed: true }),
+    ).toMatchObject({ ok: true });
+    return preview;
+  };
+
+  it("cannot orphan a template: its department cannot be deleted under it", async () => {
+    ok(await upload(head, await icuTemplate()));
+    await expect(
+      db.delete(departments).where(eq(departments.id, DEMO_ICU.id)),
+    ).rejects.toThrow();
+  });
+
+  it("keeps templates through an operational reset (configuration)", async () => {
+    ok(await upload(head, await icuTemplate()));
+    await reset(FULL_OPERATIONAL_CATEGORIES);
+    expect(await templates()).toBe(1);
+    expect(
+      (await getExcelTemplateSettings(admin, { departmentId: DEMO_ICU.id }))
+        .template?.inspection.valid,
+    ).toBe(true);
+  });
+
+  it("deletes a department's templates, counted in the preview, when the department is reset", async () => {
+    ok(await upload(head, await icuTemplate()));
+    const current = await getExcelTemplateSettings(head, {
+      departmentId: DEMO_ICU.id,
+    });
+    ok(
+      await upload(head, await icuTemplate(), {
+        expectedTemplateId: current.template!.id,
+      }),
+    );
+    // Departments only (plus the operational data that depends on them);
+    // global reference data (shift types, reasons) is left alone.
+    const preview = await reset([
+      ...FULL_OPERATIONAL_CATEGORIES,
+      "departments",
+    ]);
+    expect(
+      preview.plan.tables.find((t) => t.table === "department_excel_templates"),
+    ).toMatchObject({ category: "departments", total: 2, remove: 2 });
+    expect(await templates()).toBe(0);
+  });
+
+  it("never reads the template bytes into the reset inventory", async () => {
+    ok(await upload(head, await icuTemplate()));
+    const table = (await readResetInventory(db)).find(
+      (t) => t.name === "department_excel_templates",
+    )!;
+    expect(table.rows).toHaveLength(1);
+    expect(table.rows[0]).not.toHaveProperty("content");
+    expect(table.rows[0]).toHaveProperty("sha256");
   });
 });

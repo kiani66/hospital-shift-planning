@@ -907,10 +907,19 @@ export function populateExcelTemplate(
 
   const output = new Map(workbook!.parts);
   output.set(sheet!.part, encoder.encode(sheetXml));
-  // Summaries the hospital keeps as formulas must reflect the new codes on open.
-  const hasFormulas = workbook!.sheets.some((s) =>
-    /<(?:[\w.-]+:)?f(?=[\s/>])/.test(text(workbook!.parts, s.part) ?? ""),
-  );
+  // Summaries the hospital keeps as formulas must never show the template's
+  // stale results: a viewer that does not recalculate (Protected View,
+  // previews, other spreadsheet apps) would print last month's totals. Cached
+  // results are dropped (formulas themselves are untouched) and Excel is told
+  // to recalculate everything on open.
+  let hasFormulas = false;
+  for (const s of workbook!.sheets) {
+    const xml =
+      s.part === sheet!.part ? sheetXml : text(workbook!.parts, s.part);
+    if (!xml || !FORMULA.test(xml)) continue;
+    hasFormulas = true;
+    output.set(s.part, encoder.encode(withoutCachedResults(xml)));
+  }
   if (hasFormulas) {
     const workbookXml = text(workbook!.parts, workbook!.workbookPart)!;
     output.set(
@@ -1008,6 +1017,19 @@ function rewriteRow(
     ? row.openTag.replace(/\sspans\s*=\s*("[^"]*"|'[^']*')/, "")
     : row.openTag;
   return `${openTag}${kept.map((t) => t.text).join("")}</${p}row>`;
+}
+
+const FORMULA = /<(?:[\w.-]+:)?f(?=[\s/>])/;
+
+/** Removes the cached `<v>` result of every formula cell; the `<f>` is kept as is. */
+function withoutCachedResults(xml: string): string {
+  return xml.replace(
+    /<((?:[\w.-]+:)?)c(?=[\s/>])([^>]*?)>([\s\S]*?)<\/\1c\s*>/g,
+    (cell, prefix: string, attrs: string, inner: string) =>
+      FORMULA.test(inner)
+        ? `<${prefix}c${attrs}>${inner.replace(/<((?:[\w.-]+:)?)v(?=[\s/>])[^>]*?(?:\/>|>[\s\S]*?<\/\1v\s*>)/g, "")}</${prefix}c>`
+        : cell,
+  );
 }
 
 /** Sets `fullCalcOnLoad` so Excel recalculates formulas when it opens the file. */

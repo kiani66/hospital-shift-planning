@@ -1,5 +1,5 @@
 {
-  "id": "a272d428-3032-47c1-93e5-2ce8677ded59",
+  "id": "77aae2c0-14ac-4c37-8eec-c019e47c973e",
   "prevId": "5c7a3c03-b5ba-4ddc-b03b-0fca3ce1c776",
   "version": "7",
   "dialect": "postgresql",
@@ -4183,7 +4183,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "department_excel_templates_department_id_departments_id_fk": {
+          "name": "department_excel_templates_department_id_departments_id_fk",
+          "tableFrom": "department_excel_templates",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "department_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "department_excel_templates_version_key": {

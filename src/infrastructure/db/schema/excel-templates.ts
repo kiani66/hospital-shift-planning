@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { createdAt, id, instant } from "./columns";
+import { departments } from "./identity";
 
 /** PostgreSQL `bytea`, read and written as a Uint8Array. */
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
@@ -26,19 +27,20 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
  * insert; a replacement is a new row and the old one is deactivated in the
  * same transaction. At most one row per department is active.
  *
- * Configuration outside the Phase 14 reset registry: like `reset_operations`
- * it has no operational foreign key (the reset refuses unregistered foreign
- * keys into its tables), so no reset depends on or deletes it. The
- * application only reads it through an active department it may manage, so
- * a row whose department is gone is unreachable. The audit trail keeps the
- * authoritative actor of every upload and mapping change.
+ * Department configuration: it belongs to its department and is registered
+ * in the Phase 14 reset's `departments` category, so a reset that deletes a
+ * department deletes its templates with it (never orphaned), while an
+ * operational reset keeps them. `uploaded_by` / `mapping_updated_by` are
+ * evidence without a foreign key, so templates never retain personnel; the
+ * audit trail keeps the authoritative actor of every upload and change.
  */
 export const departmentExcelTemplates = pgTable(
   "department_excel_templates",
   {
     id: id(),
-    /** No foreign key: see above. */
-    departmentId: uuid().notNull(),
+    departmentId: uuid()
+      .notNull()
+      .references(() => departments.id),
     /** 1, 2, … per department, in upload order. */
     version: integer().notNull(),
     isActive: boolean().notNull(),

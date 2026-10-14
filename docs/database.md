@@ -221,9 +221,9 @@ Migration `0016_excel_export_templates` adds `department_excel_templates` only. 
 are a `bytea` column (at most 2 MiB, checked by the application; the size check constraint ties
 `byte_size` to the stored bytes). A partial unique index allows one active row per department;
 uploads and replacements lock the department row (`FOR NO KEY UPDATE`) and swap the active row in
-one transaction, so a failed upload never removes the working template. Like `reset_operations`, the
-table has no foreign key (`department_id`, `uploaded_by`, `mapping_updated_by` are plain UUIDs):
-the Phase 14 reset refuses unregistered foreign keys into its tables, and templates are
-configuration outside its categories, so resets neither delete nor depend on them. Templates are
-read only through an active department, so a row whose department is gone is unreachable. Exports only read (repeatable read, read only).
+one transaction, so a failed upload never removes the working template. `department_id` references
+`departments` (no cascade) and the table is registered in the Phase 14 reset's `departments`
+category: deleting a department through the reset deletes its templates (counted in the preview),
+an operational reset keeps them, and a template can never be orphaned. The reset inventory projects
+out the `content` bytes. `uploaded_by` / `mapping_updated_by` carry no foreign key. Exports only read (repeatable read, read only).
 No existing table or row changes. See D124.

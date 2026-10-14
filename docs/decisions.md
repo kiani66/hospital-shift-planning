@@ -2206,11 +2206,12 @@ its mapped day cells are written. Paths are relative to `src/`.
   A failed validation or write leaves the working template active. Older rows stay as minimal
   history (no history UI in V1). A mapping change validates against the stored bytes, bumps the
   row's `revision` (optimistic concurrency) and is audited (`excelTemplate.mappingUpdated`). The
-  table is configuration outside the Phase 14 reset registry and, like `reset_operations`, has no
-  operational foreign key (the reset refuses unregistered foreign keys into its tables): no reset
-  depends on, deletes or is blocked by a template. Templates are read only through an active
-  department the actor may manage, so a row whose department no longer exists is unreachable.
-  Registering templates as a reset category is a possible follow-up.
+  template belongs to its department (foreign key, no cascade) and is registered in the Phase 14
+  reset's `departments` master category: a reset that deletes a department deletes and counts its
+  templates, an operational reset keeps them, and a department can never be deleted under a
+  template, so no template is ever orphaned or unreachable. The reset inventory never reads the
+  workbook bytes (`sha256` identifies them). `uploaded_by` / `mapping_updated_by` have no foreign
+  key, so templates never retain personnel through a personnel reset.
 - **Authorization.** `excelTemplate.manage`: any Hospital Admin, or a Head Nurse of that
   department; Supervisor, Nurse and Secretary cannot. `schedule.export` follows the department
   grid (`schedule.viewDepartment`): the Head Nurse in every status, a Supervisor from FINALIZED on.
@@ -2251,8 +2252,10 @@ its mapped day cells are written. Paths are relative to `src/`.
   fills, merges, hidden columns, row heights, column widths, print area, margins, orientation,
   headers/footers, drawings, formulas and totals are untouched. A library round trip (ExcelJS)
   was rejected because it re-serializes the whole workbook and drops features it does not model.
-  When the workbook contains formulas, `fullCalcOnLoad` is set so Excel recalculates hand-made
-  totals on open. The stored template bytes never change.
+  When the workbook contains formulas, their cached results are dropped (the formulas themselves
+  are kept exactly) and `fullCalcOnLoad` is set: Excel recalculates on open, and a viewer that does
+  not recalculate (Protected View, previews, other apps) computes or shows nothing rather than the
+  template's stale totals (verified: a stale cached `0` became the correct `2` in LibreOffice). The stored template bytes never change.
 - **Download.** `GET /api/schedules/[scheduleId]/excel` (`?source=revision-draft`) and
   `GET /api/departments/[code]/excel-template`, authorized on every request, `private, no-store`,
   the xlsx content type and an attachment named from the schedule month only, e.g.

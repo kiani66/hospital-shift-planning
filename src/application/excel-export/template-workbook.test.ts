@@ -346,8 +346,11 @@ describe("populateExcelTemplate", () => {
       expect(b.replace(DAY_RE(r), "")).toContain(
         /<row r="\d+"[^>]*>/.exec(a.slice(a.indexOf(`<row r="${r}"`)))![0],
       );
+    // Besides the day cells, only formula cells' cached results are dropped.
     const strip = (xml: string) =>
-      [7, 8, 11, 12, 13].reduce((s, r) => s.replace(DAY_RE(r), ""), xml);
+      [7, 8, 11, 12, 13]
+        .reduce((s, r) => s.replace(DAY_RE(r), ""), xml)
+        .replace(/(<f>[^<]*<\/f>)<v>[^<]*<\/v>/g, "$1");
     expect(strip(b)).toBe(strip(a));
     // Formulas recalculate when Excel opens the file.
     expect(strFromU8(after["xl/workbook.xml"]!)).toContain(
@@ -410,6 +413,42 @@ describe("populateExcelTemplate", () => {
       DEFAULT_MAPPING.sheetName,
     )!;
     expect(sheet.getCell("K11").value).toBe("H");
+  });
+
+  it("never ships the template's stale formula results", async () => {
+    const template = await syntheticTemplate({
+      otherSheets: ["خلاصه"],
+      // A cross-sheet total cached at a stale value.
+      extraCells: [["C20", { formula: "COUNTA(F7:AJ14)", result: 99 }]],
+    });
+    const part = sheetPart(template, DEFAULT_MAPPING.sheetName);
+    const summary = sheetPart(template, "خلاصه");
+    const withSummaryFormula = patchXlsx(template, {
+      [summary]: strFromU8(unzipSync(template)[summary]!).replace(
+        /<c r="A1"[^>]*>.*?<\/c>/,
+        `<c r="A1"><f>'برنامه ماهانه'!AK11</f><v>7</v></c>`,
+      ),
+    });
+    const after = unzipSync(
+      populateExcelTemplate(withSummaryFormula, DEFAULT_MAPPING, values),
+    );
+    const before = unzipSync(withSummaryFormula);
+    for (const name of [part, summary]) {
+      const xml = strFromU8(after[name]!);
+      const formulas = (x: string) =>
+        [...x.matchAll(/<f>[^<]*<\/f>/g)].map((m) => m[0]);
+      // Every formula is kept exactly; none keeps a cached result.
+      expect(formulas(xml)).toEqual(formulas(strFromU8(before[name]!)));
+      expect(formulas(xml).length).toBeGreaterThan(0);
+      expect(xml).not.toMatch(/<\/f><v>/);
+    }
+    // Plain values elsewhere keep their cached text.
+    const sheet = (
+      await readWorkbook(
+        populateExcelTemplate(withSummaryFormula, DEFAULT_MAPPING, values),
+      )
+    ).getWorksheet(DEFAULT_MAPPING.sheetName)!;
+    expect(sheet.getCell("C11").value).toBe("پرستار نمونه یکم");
   });
 
   it("does not add a recalculation flag to a workbook without formulas", async () => {
