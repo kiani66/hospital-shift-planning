@@ -40,7 +40,14 @@ export const openPreferencesForTest = defineCommand({
         departmentId: schedule.departmentId,
       });
 
-    const next = unwrap(transition(schedule.status, { type: input.event }));
+    const next = unwrap(
+      transition(
+        schedule.status,
+        input.event === "OPEN_PREFERENCES"
+          ? { type: input.event, existingWindows: 0 }
+          : { type: input.event },
+      ),
+    );
     const saved = await saveSchedule(uow, schedule, { status: next });
 
     await uow.audit({

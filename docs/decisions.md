@@ -211,6 +211,9 @@ Enforced in `features/calendar/jalali.ts` and `features/schedule/actions.ts`.
 
 ### D30 · Schedule creation and preference window lifecycle
 
+> Amended by D125: preferences are optional; FINALIZE is also allowed from DRAFT, and opening
+> preferences is also allowed from PLANNING (status kept).
+
 - A schedule is created in `DRAFT` by a Head Nurse of the department, with its roster snapshotted
   in the same transaction (D19, D21). A period overlapping another schedule of the department is
   `CONFLICT` (D18); a period with no effective member is rejected.
@@ -732,6 +735,7 @@ domain change is a stable reason code for the open-window guard (`PREFERENCE_WIN
 ### D58 · Lifecycle commands, validation and concurrency
 
 > Wording of refusals amended by D104; the gate itself is unchanged.
+> Amended by D125: FINALIZE also from DRAFT, with the same gate; no preference step is needed.
 
 - Five commands: `finalizeSchedule` (PLANNING → FINALIZED), `submitSchedule` (FINALIZED or RETURNED
   → SUBMITTED), `withdrawSubmission` (SUBMITTED → FINALIZED, D10), `approveSchedule` and
@@ -836,6 +840,8 @@ page while the schedule is RETURNED, and fixes and resubmits from there.
 Enforced in `application/schedules/lifecycle.ts` and `features/notifications/presentation.ts`.
 
 ### D64 · Workflow presentation
+
+> Amended by D125: in DRAFT, finalize is offered beside opening preference collection.
 
 - The schedule header keeps D52's single next step: open or close preference collection, then
   finalize, submit (or "submit again" after a return) or withdraw, never two lifecycle steps at
@@ -2184,3 +2190,41 @@ Amends D57's login card and brand panel; layout, wording and auth are unchanged.
 
 Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
 `features/auth/login-brand-panel.tsx` and `tests/e2e/login.spec.ts`.
+
+## Optional preference decisions
+
+### D125 · Preferences are optional; finalize from DRAFT; open preferences until finalization
+
+Approved product decision. Supersedes the parts of D30, D58 and D64 that made opening preference collection
+the only way out of DRAFT. D48 stands: editing never changes the status. No schema change and no migration.
+
+- **Preferences are optional and advisory** (D35, D99, D101 unchanged). A schedule is created,
+  edited, finalized, submitted and approved without ever opening preference collection. No number
+  of responses is required, and a preference is never a scheduling constraint.
+- **FINALIZE from DRAFT and PLANNING.** The state machine has `DRAFT → FINALIZED` on the existing
+  `FINALIZE` event, beside `PLANNING → FINALIZED`. Both run the same `finalizeSchedule` use case: the
+  row lock, `schedule.finalize`, the revision check, `validateWorkingCopy` (undecided days,
+  staffing, night rest and every other blocking finding) and the `schedule.finalized` audit event
+  (`{ from, to }` names the status it left). No preference-related FINALIZE blocker exists. There
+  is no "start planning" step: `START_PLANNING` stays in the state machine and the policies, with
+  no use case or button.
+- **Open preferences until finalization.** `OPEN_PREFERENCES` is allowed from DRAFT (→ PLANNING, as
+  before) and from PLANNING, where it keeps the status (`PLANNING → PLANNING`: the window is its
+  own entity, not a lifecycle state). Assignments are never touched. Its guard keeps D30/D65's
+  "once per schedule": a schedule that already had a window, open or closed, gets `INVALID_STATE`
+  (`PREFERENCES_ALREADY_OPENED`); there is still no reopen. From FINALIZED on it stays unavailable
+  (D65). The `schedule.preferencesOpened` audit event carries `{ from, to }` only when the status
+  changed, and `{ status }` when it did not.
+- **SUBMIT is unchanged.** An open preference window still blocks SUBMIT (`PREFERENCE_WINDOW_OPEN`),
+  and nothing closes a window implicitly (D58).
+- **Presentation.** In DRAFT the header shows «باز کردن ثبت ترجیحات» and «نهایی‌سازی برنامه»
+  together; a blocked finalize is described by the workflow blocker panel, as in PLANNING (the
+  DRAFT-only «مشاهده روزهای نیازمند اقدام» list is gone, so the days are not listed twice).
+  Finalizing from DRAFT says that preferences are optional and cannot be opened afterwards. The
+  open dialog says the assigned shifts do not change, and mentions the status change only from
+  DRAFT.
+
+Enforced in `domain/schedule/state-machine.ts`, `application/schedules/preference-windows.ts`,
+`application/schedules/queries.ts`, `features/schedule-workflow/workflow-ui.tsx` and
+`features/schedule/schedule-overview.tsx`; tested in `tests/integration/optional-preferences.test.ts`
+and `tests/e2e/schedule-approval.spec.ts`.
