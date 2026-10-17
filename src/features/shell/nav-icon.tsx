@@ -9,6 +9,7 @@ import {
   House,
   Inbox,
   MessagesSquare,
+  Settings,
   ShieldCheck,
   SlidersHorizontal,
   type LucideIcon,
@@ -19,6 +20,7 @@ import type { NavIcon as NavIconName } from "./navigation";
 const ICONS: Record<NavIconName, LucideIcon> = {
   personnel: Users,
   staffingRules: ShieldCheck,
+  settings: Settings,
   home: House,
   myShifts: CalendarDays,
   preferences: SlidersHorizontal,

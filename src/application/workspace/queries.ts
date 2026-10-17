@@ -82,7 +82,8 @@ export type DepartmentPageAction =
   | "department.manage"
   | "audit.view"
   | "changeRequest.review"
-  | "staffingRules.view";
+  | "staffingRules.view"
+  | "excelTemplate.manage";
 
 /**
  * The department behind a URL segment, if the actor may open it for

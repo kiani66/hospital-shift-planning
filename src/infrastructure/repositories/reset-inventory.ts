@@ -15,6 +15,7 @@ const wanted = new Set<string>(
 const definitions = [
   schema.users,
   schema.departments,
+  schema.departmentExcelTemplates,
   schema.departmentMemberships,
   schema.supervisorAssignments,
   schema.shiftTypes,
@@ -87,7 +88,10 @@ export async function readResetInventory(
     const projection =
       t.name === "users"
         ? sql`(to_jsonb(r) - 'password_hash') || jsonb_build_object('has_credentials', r.password_hash is not null, 'credential_revision', md5(coalesce(r.password_hash,'')))`
-        : sql`to_jsonb(r)`;
+        : t.name === "department_excel_templates"
+          ? // The workbook bytes never enter the inventory; sha256 identifies them.
+            sql`to_jsonb(r) - 'content'`
+          : sql`to_jsonb(r)`;
     const result = await db.execute(
       sql`select ${projection} as record from ${sql.identifier(t.name)} r`,
     );

@@ -6,6 +6,7 @@ import type { Database, DbExecutor } from "../database";
 import { snapshotRosterFromMemberships } from "../../repositories/roster";
 import {
   auditEvents,
+  departmentExcelTemplates,
   departmentMemberships,
   departments,
   loginThrottles,
@@ -83,6 +84,8 @@ export const DATA_TABLES = [
   staffingRuleSets,
   supervisorAssignments,
   departmentMemberships,
+  // Department configuration without a foreign key (D124); demo departments own it.
+  departmentExcelTemplates,
   departments,
   users,
 ];

@@ -1,4 +1,4 @@
-/** Product categories, never user-supplied table names. Tables verified against migrations 0000–0012. */
+/** Product categories, never user-supplied table names. Tables verified against migrations 0000–0016. */
 export const RESET_CATEGORIES = {
   schedules: {
     label: "برنامه‌ها و داده‌های اولیه",
@@ -86,10 +86,11 @@ export const RESET_CATEGORIES = {
   departments: {
     label: "بخش‌ها",
     description:
-      "بخش و عضویت‌های وابسته حذف می‌شوند؛ با صفر بخش، برنامه‌ریزی، ورود CSV و دسترسی سرپرستار تا ایجاد بخش فعال و عضویت معتبر در دسترس نیست. مدیر همچنان به مدیریت و بازیابی دسترسی دارد. بخش فقط با نام و کد تأییدشده توسط اپراتور ایجاد می‌شود.",
+      "بخش، عضویت‌ها و قالب خروجی اکسل وابسته حذف می‌شوند؛ با صفر بخش، برنامه‌ریزی، ورود CSV و دسترسی سرپرستار تا ایجاد بخش فعال و عضویت معتبر در دسترس نیست. مدیر همچنان به مدیریت و بازیابی دسترسی دارد. بخش فقط با نام و کد تأییدشده توسط اپراتور ایجاد می‌شود.",
     master: true,
     global: false,
-    tables: ["departments"],
+    // A department's Excel export template goes with it (D124).
+    tables: ["departments", "department_excel_templates"],
   },
   shiftTypes: {
     label: "تعریف شیفت‌ها — سراسری",

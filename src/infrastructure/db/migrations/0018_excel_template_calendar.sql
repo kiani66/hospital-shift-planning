@@ -1,0 +1,7 @@
+ALTER TABLE "department_excel_templates" ADD COLUMN "weekday_row" integer;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "weekday_format" text DEFAULT 'LONG' NOT NULL;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "month_heading_cell" text;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "holiday_fill_cell" text;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "normal_fill_column" text;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD CONSTRAINT "department_excel_templates_calendar_check" CHECK (("department_excel_templates"."weekday_row" is null or "department_excel_templates"."weekday_row" >= 1) and "department_excel_templates"."weekday_format" in ('LONG', 'NARROW') and ("department_excel_templates"."month_heading_cell" is null or "department_excel_templates"."month_heading_cell" ~ '^[A-Z]{1,3}[1-9][0-9]{0,6}$'));--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD CONSTRAINT "department_excel_templates_holiday_fill_check" CHECK (("department_excel_templates"."holiday_fill_cell" is null) = ("department_excel_templates"."normal_fill_column" is null) and ("department_excel_templates"."holiday_fill_cell" is null or "department_excel_templates"."holiday_fill_cell" ~ '^[A-Z]{1,3}[1-9][0-9]{0,6}$') and ("department_excel_templates"."normal_fill_column" is null or "department_excel_templates"."normal_fill_column" ~ '^[A-Z]{1,3}$'));

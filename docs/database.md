@@ -32,6 +32,7 @@ TypeScript schema.
 | Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                                    |
 | Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                                     |
 | Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                                       |
+| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migrations 0016–0019, D124)                                                                                                                                              |
 | Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                                      |
 
 ## Where each rule is enforced
@@ -213,3 +214,35 @@ assignment primary keys. Plain inserts never overwrite assignments. Storage sour
 stateless HMACs and expire in 15 minutes. Imports briefly share-lock personnel/membership tables
 and lock relevant schedules in UUID order to protect dated eligibility and adjacent context.
 See [monthly Excel import](monthly-schedule-import.md) and D119–D121.
+
+## Phase 16 Excel export templates
+
+Migration `0016_excel_export_templates` adds `department_excel_templates` only. The template bytes
+are a `bytea` column (at most 2 MiB, checked by the application; the size check constraint ties
+`byte_size` to the stored bytes). A partial unique index allows one active row per department;
+uploads and replacements lock the department row (`FOR NO KEY UPDATE`) and swap the active row in
+one transaction, so a failed upload never removes the working template. `department_id` references
+`departments` (no cascade; the foreign key is added by `0019`, see below) and the table is registered in the Phase 14 reset's `departments`
+category: deleting a department through the reset deletes its templates (counted in the preview),
+an operational reset keeps them, and a template can never be orphaned. The reset inventory projects
+out the `content` bytes. `uploaded_by` / `mapping_updated_by` carry no foreign key. Exports only read (repeatable read, read only).
+No existing table or row changes. See D124.
+
+Migration `0017_excel_template_statistics` adds the optional mapping parts to the same table:
+`day_header_row` (nullable, `>= 1`), `statistic_columns` and `summary_rows` (`jsonb` arrays,
+default `[]`, validated by the domain mapping before every write). Existing templates keep their
+behaviour with empty lists. No other table changes.
+
+Migration `0018_excel_template_calendar` adds the calendar mapping to the same table:
+`weekday_row` (nullable, `>= 1`), `weekday_format` (`LONG` or `NARROW`, default `LONG`),
+`month_heading_cell`, `holiday_fill_cell` (nullable cell addresses) and `normal_fill_column`
+(nullable column letters; set together with `holiday_fill_cell` or not at all, enforced by a check
+constraint). Existing templates keep their behaviour: no weekday row, heading or highlighting. No
+other table changes; no holiday data is stored (official holidays remain a separate change).
+
+Migration `0019_excel_template_department_fk` adds the `department_id` foreign key to `departments`
+(`department_excel_templates_department_id_departments_id_fk`, no action on delete or update). 0016
+was first published without the constraint, applied by Preview databases, and then rewritten;
+0016 is restored to the applied text and timestamp, and the constraint is added here only when it is
+missing, so databases that applied either shape reach the same schema. A released migration is never
+edited again (`tests/unit/migration-history.test.ts`).
