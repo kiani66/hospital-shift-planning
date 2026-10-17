@@ -40,10 +40,15 @@ test.describe("approval workflow", () => {
     const department = await provisionApprovalDepartment();
     const [nurse1] = department.nurseNames as [string];
 
-    // Head Nurse: finalize is blocked by the night-rest finding on 4 Aban.
+    // Head Nurse, in DRAFT, preferences never opened: finalize is offered
+    // (preferences are optional, D125) but blocked by the night-rest
+    // finding on 4 Aban.
     await signInAndWait(page, department.headEmail);
     await page.goto(monthUrl(department));
-    await expectStatus(page, "در حال برنامه‌ریزی");
+    await expectStatus(page, "پیش‌نویس");
+    await expect(
+      header(page).getByRole("button", { name: "باز کردن ثبت ترجیحات" }),
+    ).toBeVisible();
     const finalize = header(page).getByRole("button", {
       name: "نهایی‌سازی برنامه",
     });
@@ -67,10 +72,22 @@ test.describe("approval workflow", () => {
     await day.getByRole("button", { name: "بستن جزئیات روز" }).click();
     await expect(blockers).toHaveCount(0);
 
-    // Finalize, then submit.
+    // Finalize straight from DRAFT, then submit.
     await expect(finalize).toBeEnabled();
-    await confirm(page, "نهایی‌سازی برنامه", "بله، نهایی شود");
+    await finalize.click();
+    const finalizeDialog = page.getByRole("dialog");
+    await expect(finalizeDialog).toContainText(
+      "ثبت ترجیحات پرستاران اختیاری است",
+    );
+    await finalizeDialog
+      .getByRole("button", { name: "بله، نهایی شود" })
+      .click();
+    await expect(finalizeDialog).toBeHidden();
     await expectStatus(page, "نهایی‌شده");
+    // Preferences end with planning (D65): no way to open them now.
+    await expect(
+      header(page).getByRole("button", { name: /ثبت ترجیحات$/ }),
+    ).toHaveCount(0);
     await confirm(page, "ارسال برای تأیید", "بله، ارسال شود");
     await expectStatus(page, "ارسال‌شده برای تأیید");
     await expect(page.getByText(/در انتظار بررسی سوپروایزر/)).toBeVisible();
@@ -151,6 +168,56 @@ test.describe("approval workflow", () => {
       "پس گرفتن ارسال",
     ])
       await expect(header(page).getByRole("button", { name })).toHaveCount(0);
+  });
+
+  test("shifts assigned first, preferences opened later: status moves to planning, shifts stay", async ({
+    page,
+  }) => {
+    const department = await provisionApprovalDepartment("draft");
+    await signInAndWait(page, department.headEmail);
+    await page.goto(`${monthUrl(department)}&day=2026-10-24`);
+    await expectStatus(page, "پیش‌نویس");
+    const dayDialog = page.getByRole("dialog");
+    await expect(dayDialog).toBeVisible();
+    // Each nurse's decided shift: the pressed code in their row.
+    const decided = () =>
+      page
+        .getByRole("dialog")
+        .getByRole("group", { name: /^شیفت / })
+        .locator('button[aria-pressed="true"]')
+        .allTextContents();
+    const shiftsBefore = await decided();
+    expect(shiftsBefore.length).toBeGreaterThan(0);
+    await dayDialog.getByRole("button", { name: "بستن جزئیات روز" }).click();
+    const summary = page.getByRole("list", {
+      name: "خلاصه اعتبارسنجی برنامه",
+    });
+    const summaryBefore = await summary.innerText();
+
+    await header(page)
+      .getByRole("button", { name: "باز کردن ثبت ترجیحات" })
+      .click();
+    const open = page.getByRole("dialog", { name: "باز کردن ثبت ترجیحات؟" });
+    await expect(open).toContainText("شیفت‌های ثبت‌شده تغییری نمی‌کنند");
+    await expect(open).toContainText("در حال برنامه‌ریزی");
+    await open.getByRole("button", { name: "بله، باز شود" }).click();
+    await expect(open).toBeHidden();
+
+    await expectStatus(page, "در حال برنامه‌ریزی");
+    await expect(
+      header(page).getByRole("button", { name: "بستن ثبت ترجیحات" }),
+    ).toBeVisible();
+    // Finalize stays where it was: blocked by the same finding, nothing new.
+    await expect(
+      header(page).getByRole("button", { name: "نهایی‌سازی برنامه" }),
+    ).toBeDisabled();
+    await expect(page.locator("#workflow-blockers")).not.toContainText(
+      "ترجیحات",
+    );
+    await expect.poll(() => summary.innerText()).toBe(summaryBefore);
+    await page.goto(`${monthUrl(department)}&day=2026-10-24`);
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect.poll(decided).toEqual(shiftsBefore);
   });
 
   test("the Head Nurse withdraws a submission before the Supervisor acts", async ({

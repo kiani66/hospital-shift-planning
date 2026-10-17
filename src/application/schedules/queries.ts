@@ -5,7 +5,7 @@ import {
   preferenceCollectionState,
   type PreferenceCollectionState,
 } from "../../domain/preferences/preference-window";
-import { eventsFrom } from "../../domain/schedule/state-machine";
+import { transition } from "../../domain/schedule/state-machine";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import type { DateScopeKind } from "../../domain/scope/date-scope";
 import {
@@ -203,9 +203,10 @@ export async function getDepartmentSchedules(
           .reverse(),
       },
       actions: {
-        openPreferences:
-          windows.length === 0 &&
-          eventsFrom(chosen.status).includes("OPEN_PREFERENCES"),
+        openPreferences: transition(chosen.status, {
+          type: "OPEN_PREFERENCES",
+          existingWindows: windows.length,
+        }).ok,
         closePreferences: state === "OPEN",
       },
     },

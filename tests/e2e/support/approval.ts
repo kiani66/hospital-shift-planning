@@ -48,15 +48,18 @@ function database() {
 
 /**
  * The review department (Aban with a night-rest finding on 4 Aban) plus its
- * own Supervisor, with Aban moved to PLANNING through the real use cases
- * (preference collection opened, then closed).
+ * own Supervisor, with every other nurse-day decided.
  *
- * `stage` goes further, also through the use cases: "finalized" fixes the
- * finding and finalizes, "submitted" also submits, "approved" also has the
- * department's Supervisor approve it.
+ * `stage`, always through the real use cases: "draft" leaves Aban in DRAFT,
+ * never having collected preferences (they are optional, D125); "planning"
+ * is a schedule whose preferences were collected (opened, then closed);
+ * "finalized" fixes the finding and finalizes straight from DRAFT,
+ * "submitted" also submits, "approved" also has the department's Supervisor
+ * approve it.
  */
 export async function provisionApprovalDepartment(
-  stage: "planning" | "finalized" | "submitted" | "approved" = "planning",
+  stage:
+    "draft" | "planning" | "finalized" | "submitted" | "approved" = "draft",
 ): Promise<ApprovalDepartment> {
   const department = await provisionReviewDepartment();
   const { db, pool } = database();
@@ -111,8 +114,10 @@ export async function provisionApprovalDepartment(
       });
       if (!result.ok) throw new Error(result.error?.message);
     };
-    await step(openPreferenceWindow);
-    await step(closePreferenceWindow);
+    if (stage === "planning") {
+      await step(openPreferenceWindow);
+      await step(closePreferenceWindow);
+    }
     const nurse3 = (await findUserByEmail(
       db,
       department.nurseEmail.replace("nurse1.", "nurse3."),
@@ -127,7 +132,7 @@ export async function provisionApprovalDepartment(
       nurse2.id,
       nightCover.id,
     ]);
-    if (stage !== "planning") {
+    if (stage !== "draft" && stage !== "planning") {
       // Explicit rest after the Night keeps every nurse-day decided.
       const nurse1 = (await findUserByEmail(db, department.nurseEmail))!;
       await setAssignment(db, {
