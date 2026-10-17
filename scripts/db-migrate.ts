@@ -11,6 +11,10 @@
  */
 import { loadEnvConfig } from "@next/env";
 
+import {
+  DIAGNOSTIC_FAILED_LINE,
+  describeDatabaseIdentity,
+} from "../src/infrastructure/config/db-identity";
 import { migrationDatabaseUrl } from "../src/infrastructure/config/env-schema";
 import {
   decideMigration,
@@ -20,6 +24,16 @@ import { runMigrations } from "../src/infrastructure/db/migrate";
 
 async function main() {
   loadEnvConfig(process.cwd());
+
+  // Preview only, hashes only. Never fails the build, and a failure is reported
+  // (sanitized) rather than swallowed; absent output is not isolation evidence.
+  try {
+    const identity = describeDatabaseIdentity(process.env);
+    if (identity) console.log(identity);
+  } catch {
+    if (process.env.VERCEL_ENV === "preview")
+      console.warn(DIAGNOSTIC_FAILED_LINE);
+  }
 
   const decision = decideMigration(process.env);
   if (decision.action === "skip") {

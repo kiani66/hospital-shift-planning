@@ -92,6 +92,46 @@ Preview contains a copy of staff data; use a sanitized parent when that matters.
 Command must stay the default (`vercel-build`); a custom command that bypasses
 `scripts/db-migrate.ts` also bypasses this guard.
 
+### Verifying a Preview's database identity
+
+Vercel hides connection values (`sensitive`) and redacts them from build logs, so the effective target
+of a Preview cannot be read. In a Preview build only (`VERCEL_ENV=preview`), `scripts/db-migrate.ts`
+prints one line before the migration decision:
+
+```
+[db:identity] v1 env=preview commit=<sha> deployment=<dpl_...> pooled=<16 hex> unpooled=<16 hex>
+```
+
+Each identifier is the first 16 hex characters of SHA-256 over `[version, environment, commit,
+deployment, role, hostname, port, database]` (`src/infrastructure/config/db-identity.ts`).
+`pooled` comes from the variable the runtime reads (`getServerEnv().DATABASE_URL`, the same schema),
+`unpooled` from the variable `db:migrate` uses. The line contains no credentials, user, URL or
+hostname. Production, local and CI builds print nothing; there is no health field and no endpoint.
+A Preview build always prints a line. If the diagnostic itself fails it prints a sanitized
+`status=diagnostic-failed` notice (no error text), and an identifier that could not be produced
+shows `unset` or `unavailable` with `warning=incomplete-not-evidence-of-isolation`. The diagnostic
+never fails the build, and a missing line, a failure notice or an incomplete line is absence of
+evidence: it must never be read as verified isolation.
+
+Validation procedure (read-only, after the Preview deploy):
+
+1. Read the `[db:identity]` line in that deployment's build log (Vercel dashboard, Build Logs, or the
+   Vercel connector). Check that `commit` and `deployment` equal the deployment under test.
+2. Get the authoritative hostnames from Neon (hostnames only): console, project, branch, Connection
+   details (pooled and direct host), or the API/connector fields `read_write_pooled_host` and
+   `read_write_host` of the branch's endpoint. Do the same for the Production branch (`main`).
+3. For the Preview branch: `pnpm db:identity-verify --line "<line>" --pooled-host <pooled host>
+--unpooled-host <direct host> [--database neondb]`. Both must print `MATCH` (exit 0).
+4. For the Production branch's hosts, the same command must print `MISMATCH` for both (exit 1).
+   Anything else, including one `MATCH` and one `MISMATCH`, means the Preview is not isolated.
+5. The CLI refuses URLs, credentials and ports; never paste a connection string anywhere.
+
+Limits. The identifier is a consistency check, not a secret or an access-control boundary: Neon
+hostnames are low-entropy and guessable, so anyone can recompute an unkeyed hash of a guessed host.
+Its integrity rests on who can read the build log and who can push the code that prints it. It proves
+the deployment's environment at build time; the runtime reads the same per-deployment variables, but
+that is Vercel's behavior, not something this line proves on its own.
+
 ### Migration history is append-only
 
 drizzle runs a migration when its journal timestamp is newer than the newest applied one and never
