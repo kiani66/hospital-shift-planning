@@ -16,6 +16,7 @@ import type { TemplateInspection } from "@/application/excel-export/template-wor
 import type {
   DailyStatistic,
   PersonStatistic,
+  WeekdayFormat,
 } from "@/domain/excel-export/template-mapping";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -56,6 +57,11 @@ export interface StoredTemplateView {
       statistic: PersonStatistic;
     }[];
     readonly summaryRows: readonly { row: number; statistic: DailyStatistic }[];
+    readonly weekdayRow: number | null;
+    readonly weekdayFormat: WeekdayFormat;
+    readonly monthHeadingCell: string | null;
+    readonly holidayFillCell: string | null;
+    readonly normalFillColumn: string | null;
   };
   readonly inspection: TemplateInspection;
 }
@@ -103,6 +109,41 @@ function MappingSummary({ inspection }: { inspection: TemplateInspection }) {
               [
                 "عنوان روزها",
                 <span key="h">ردیف {faNumber(m.dayHeaderRow)}</span>,
+              ],
+            ] as const)
+          : []),
+        ...(m.weekdayRow !== null
+          ? ([
+              [
+                "روزهای هفته",
+                <span key="w">
+                  ردیف {faNumber(m.weekdayRow)} —{" "}
+                  {m.weekdayFormat === "NARROW"
+                    ? "یک‌حرفی (ش، ی، …)"
+                    : "نام کامل (شنبه، …)"}
+                </span>,
+              ],
+            ] as const)
+          : []),
+        ...(m.monthHeading
+          ? ([
+              [
+                "عنوان ماه",
+                <bdi key="mh" dir="ltr">
+                  {m.monthHeading.cell}
+                </bdi>,
+              ],
+            ] as const)
+          : []),
+        ...(m.holidayFill
+          ? ([
+              [
+                "رنگ جمعه",
+                <span key="hf">
+                  رنگ خانه <bdi dir="ltr">{m.holidayFill.holidayCell.cell}</bdi>
+                  ؛ روز عادی مانند ستون{" "}
+                  <bdi dir="ltr">{m.holidayFill.normalColumn}</bdi>
+                </span>,
               ],
             ] as const)
           : []),
@@ -240,6 +281,7 @@ function StatField({
   defaultValue,
   numeric = false,
   list = false,
+  cell = false,
 }: {
   id: string;
   name: string;
@@ -248,6 +290,8 @@ function StatField({
   defaultValue: string | number;
   numeric?: boolean;
   list?: boolean;
+  /** One cell address such as `U3`. */
+  cell?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -258,15 +302,17 @@ function StatField({
         dir="ltr"
         defaultValue={defaultValue}
         placeholder={placeholder}
-        maxLength={list ? 40 : numeric ? 7 : 3}
+        maxLength={list ? 40 : numeric ? 7 : cell ? 10 : 3}
         pattern={
-          list
-            ? numeric
-              ? "[0-9 ,]*"
-              : "[A-Za-z ,]*"
-            : numeric
-              ? "[0-9]*"
-              : "[A-Za-z]{0,3}"
+          cell
+            ? "[A-Za-z]{1,3}[0-9]{1,7}"
+            : list
+              ? numeric
+                ? "[0-9 ,]*"
+                : "[A-Za-z ,]*"
+              : numeric
+                ? "[0-9]*"
+                : "[A-Za-z]{0,3}"
         }
         inputMode={numeric ? "numeric" : undefined}
       />
@@ -313,6 +359,11 @@ export function ExcelTemplateManager({
     coverageE: useId(),
     coverageN: useId(),
     clearRows: useId(),
+    weekdays: useId(),
+    weekdayFormat: useId(),
+    monthHeading: useId(),
+    holidayFill: useId(),
+    normalFill: useId(),
   };
   const statisticColumn = (statistic: PersonStatistic) =>
     m?.statisticColumns.find((c) => c.statistic === statistic)?.column ?? "";
@@ -534,21 +585,21 @@ export function ExcelTemplateManager({
               id={ids.shiftCount}
               name="shiftCountColumn"
               label="ستون تعداد شیفت"
-              placeholder="K"
+              placeholder="L"
               defaultValue={statisticColumn("SHIFT_COUNT")}
             />
             <StatField
               id={ids.leave}
               name="leaveDaysColumn"
               label="ستون روزهای مرخصی (H)"
-              placeholder="J"
+              placeholder="K"
               defaultValue={statisticColumn("LEAVE_DAYS")}
             />
             <StatField
               id={ids.clear}
               name="clearColumns"
               label="ستون‌های پاک‌شونده"
-              placeholder="I"
+              placeholder="J"
               defaultValue={(m?.statisticColumns ?? [])
                 .filter((c) => c.statistic === "CLEAR")
                 .map((c) => c.column)
@@ -559,7 +610,7 @@ export function ExcelTemplateManager({
               id={ids.coverageM}
               name="coverageMRow"
               label="ردیف تعداد صبح"
-              placeholder="25"
+              placeholder="23"
               defaultValue={summaryRow("COVERAGE_M")}
               numeric
             />
@@ -567,7 +618,7 @@ export function ExcelTemplateManager({
               id={ids.coverageE}
               name="coverageERow"
               label="ردیف تعداد عصر"
-              placeholder="26"
+              placeholder="24"
               defaultValue={summaryRow("COVERAGE_E")}
               numeric
             />
@@ -575,7 +626,7 @@ export function ExcelTemplateManager({
               id={ids.coverageN}
               name="coverageNRow"
               label="ردیف تعداد شب"
-              placeholder="27"
+              placeholder="25"
               defaultValue={summaryRow("COVERAGE_N")}
               numeric
             />
@@ -583,13 +634,70 @@ export function ExcelTemplateManager({
               id={ids.clearRows}
               name="clearRows"
               label="ردیف‌های خلاصه پاک‌شونده"
-              placeholder="28"
+              placeholder="26"
               defaultValue={(m?.summaryRows ?? [])
                 .filter((r) => r.statistic === "CLEAR")
                 .map((r) => r.row)
                 .join(", ")}
               list
               numeric
+            />
+          </div>
+        </fieldset>
+        <fieldset className="space-y-3 rounded-lg border p-3">
+          <legend className="px-1 text-sm font-medium">
+            تقویم ماه و رنگ جمعه (اختیاری)
+          </legend>
+          <p className="text-sm text-muted-foreground">
+            در هر خروجی عنوان ماه و سال، شماره روزها و روزهای هفته از روی تاریخ
+            برنامه نوشته می‌شود و روزهای پس از پایان ماه خالی می‌مانند. برای رنگ
+            جمعه، یک خانه با رنگ جمعه قالب (مثلاً خانه روزانه یک جمعه) و یک ستون
+            روز عادی را تعیین کنید: در هر ماه فقط رنگ زمینه خانه‌های روزانه
+            دوباره تعیین می‌شود و کادر، قلم و تنظیمات چاپ دست نمی‌خورند.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatField
+              id={ids.weekdays}
+              name="weekdayRow"
+              label="ردیف روزهای هفته"
+              placeholder="5"
+              defaultValue={m?.weekdayRow ?? ""}
+              numeric
+            />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={ids.weekdayFormat}>شکل روز هفته</Label>
+              <select
+                id={ids.weekdayFormat}
+                name="weekdayFormat"
+                defaultValue={m?.weekdayFormat ?? "LONG"}
+                className="min-h-9 rounded-md border border-input bg-background px-2 text-sm pointer-coarse:min-h-11 pointer-coarse:text-base"
+              >
+                <option value="LONG">نام کامل (چهارشنبه)</option>
+                <option value="NARROW">یک‌حرفی برای ستون باریک (چ)</option>
+              </select>
+            </div>
+            <StatField
+              id={ids.monthHeading}
+              name="monthHeadingCell"
+              label="خانه عنوان ماه"
+              placeholder="U3"
+              defaultValue={m?.monthHeadingCell ?? ""}
+              cell
+            />
+            <StatField
+              id={ids.holidayFill}
+              name="holidayFillCell"
+              label="خانه رنگ جمعه"
+              placeholder="P7"
+              defaultValue={m?.holidayFillCell ?? ""}
+              cell
+            />
+            <StatField
+              id={ids.normalFill}
+              name="normalFillColumn"
+              label="ستون رنگ روز عادی"
+              placeholder="O"
+              defaultValue={m?.normalFillColumn ?? ""}
             />
           </div>
         </fieldset>

@@ -1,3 +1,5 @@
+import { holidayKindOf } from "../calendar/holiday-kind";
+import type { IsoDate } from "../shared/dates";
 import { ValidationError } from "../shared/errors";
 import { err, ok, type Result } from "../shared/result";
 import type { AssignmentCode } from "../shifts/shift-type";
@@ -26,7 +28,31 @@ export interface ExcelTemplateMapping {
   readonly statisticColumns?: readonly StatisticColumn[];
   /** Optional daily summary rows written in the 31 day columns. */
   readonly summaryRows?: readonly SummaryRow[];
+  /**
+   * Optional row whose 31 day cells get each day's Persian weekday; blank
+   * past the period's end.
+   */
+  readonly weekdayRow?: number | null;
+  /** How the weekday is written (default LONG). */
+  readonly weekdayFormat?: WeekdayFormat;
+  /** Optional cell that gets the schedule's Jalali month and year, e.g. `U3`. */
+  readonly monthHeadingCell?: string | null;
+  /**
+   * Holiday highlighting, set together or not at all: a cell whose fill is
+   * the template's holiday (Friday) fill, e.g. `P7`, and a day column whose
+   * cells show each written row's normal-day fill, e.g. `O`. Only the fill
+   * of the written day cells changes; borders, fonts and the rest stay.
+   */
+  readonly holidayFillCell?: string | null;
+  readonly normalFillColumn?: string | null;
 }
+
+/**
+ * LONG: the full name («چهارشنبه»); NARROW: the one-letter form calendars
+ * print in narrow day columns («چ»).
+ */
+export const WEEKDAY_FORMATS = ["LONG", "NARROW"] as const;
+export type WeekdayFormat = (typeof WEEKDAY_FORMATS)[number];
 
 /**
  * What a per-person statistic column holds (D124). Only figures the system
@@ -108,6 +134,31 @@ export function columnLetters(index: number): string {
 export const cellAddress = (column: number, row: number): string =>
   `${columnLetters(column)}${row}`;
 
+/** `u3` → column 21, row 3; null for anything that is not one Excel cell. */
+export function parseCellAddress(
+  text: string,
+): { column: number; row: number } | null {
+  const m = /^([A-Z]{1,3})([1-9]\d{0,6})$/.exec(text.trim().toUpperCase());
+  const column = m ? columnIndex(m[1]!) : null;
+  const row = m ? Number(m[2]) : 0;
+  return column !== null && row <= EXCEL_MAX_ROW ? { column, row } : null;
+}
+
+/** A single mapped cell, with its coordinates. */
+export interface MappedCell {
+  /** Normalized address, e.g. `U3`. */
+  readonly cell: string;
+  readonly column: number;
+  readonly row: number;
+}
+
+/** Where the holiday and normal-day fills of written day cells come from. */
+export interface HolidayFillSource {
+  readonly holidayCell: MappedCell;
+  readonly normalColumn: string;
+  readonly normalColumnIndex: number;
+}
+
 /** A mapping whose coordinates are known to be inside the grid and consistent. */
 export interface ResolvedTemplateMapping extends ExcelTemplateMapping {
   readonly personnelColumnIndex: number;
@@ -116,6 +167,10 @@ export interface ResolvedTemplateMapping extends ExcelTemplateMapping {
   readonly dayHeaderRow: number | null;
   readonly statisticColumns: readonly ResolvedStatisticColumn[];
   readonly summaryRows: readonly SummaryRow[];
+  readonly weekdayRow: number | null;
+  readonly weekdayFormat: WeekdayFormat;
+  readonly monthHeading: MappedCell | null;
+  readonly holidayFill: HolidayFillSource | null;
 }
 
 export interface ResolvedStatisticColumn extends StatisticColumn {
@@ -213,7 +268,76 @@ export function resolveTemplateMapping(
         "ردیف خلاصه روزانه نباید همان ردیف عنوان روزها باشد.";
     else if (summaryRows.some((r) => r.row === entry.row))
       errors.summaryRows = `ردیف خلاصه ${entry.row} تکرار شده است.`;
+    else if (entry.row === input.weekdayRow)
+      errors.summaryRows =
+        "ردیف خلاصه روزانه نباید همان ردیف روزهای هفته باشد.";
     else summaryRows.push({ row: entry.row, statistic: entry.statistic });
+  }
+
+  const weekdayRow = input.weekdayRow ?? null;
+  if (weekdayRow !== null) {
+    if (!rowValid(weekdayRow))
+      errors.weekdayRow = "ردیف روزهای هفته باید عدد صحیح مثبت باشد.";
+    else if (inPersonnelRows(weekdayRow))
+      errors.weekdayRow = "ردیف روزهای هفته نباید داخل ردیف‌های پرسنل باشد.";
+    else if (weekdayRow === dayHeaderRow)
+      errors.weekdayRow = "ردیف روزهای هفته نباید همان ردیف شماره روزها باشد.";
+  }
+  const weekdayFormat = input.weekdayFormat ?? "LONG";
+  if (!WEEKDAY_FORMATS.includes(weekdayFormat))
+    errors.weekdayFormat = "شکل نوشتن روز هفته معتبر نیست.";
+
+  const inDayColumns = (column: number) =>
+    firstDay !== null && column >= firstDay && column <= lastDay!;
+  let monthHeading: MappedCell | null = null;
+  if (input.monthHeadingCell) {
+    const at = parseCellAddress(input.monthHeadingCell);
+    if (!at)
+      errors.monthHeadingCell =
+        "خانه عنوان ماه باید نشانی یک خانه Excel باشد (مثلاً U3).";
+    else if (inPersonnelRows(at.row))
+      errors.monthHeadingCell =
+        "خانه عنوان ماه نباید داخل ردیف‌های پرسنل باشد.";
+    else if (
+      inDayColumns(at.column) &&
+      [dayHeaderRow, weekdayRow, ...summaryRows.map((r) => r.row)].includes(
+        at.row,
+      )
+    )
+      errors.monthHeadingCell =
+        "خانه عنوان ماه نباید روی ردیف شماره روزها، روزهای هفته یا خلاصه روزانه باشد.";
+    else
+      monthHeading = {
+        cell: cellAddress(at.column, at.row),
+        column: at.column,
+        row: at.row,
+      };
+  }
+
+  let holidayFill: HolidayFillSource | null = null;
+  const holidayText = input.holidayFillCell?.trim() || null;
+  const normalText = input.normalFillColumn?.trim() || null;
+  if (holidayText || normalText) {
+    const holiday = holidayText ? parseCellAddress(holidayText) : null;
+    const normal = normalText ? columnIndex(normalText) : null;
+    if (!holiday)
+      errors.holidayFillCell =
+        "خانه رنگ تعطیل باید نشانی یک خانه Excel باشد (مثلاً P7).";
+    if (normal === null)
+      errors.normalFillColumn = "ستون رنگ روز عادی باید حرف ستون Excel باشد.";
+    else if (!inDayColumns(normal))
+      errors.normalFillColumn =
+        "ستون رنگ روز عادی باید یکی از ۳۱ ستون روزانه باشد.";
+    if (holiday && normal !== null && inDayColumns(normal))
+      holidayFill = {
+        holidayCell: {
+          cell: cellAddress(holiday.column, holiday.row),
+          column: holiday.column,
+          row: holiday.row,
+        },
+        normalColumn: columnLetters(normal),
+        normalColumnIndex: normal,
+      };
   }
 
   if (Object.keys(errors).length > 0) return err(errors);
@@ -229,6 +353,14 @@ export function resolveTemplateMapping(
     dayHeaderRow,
     statisticColumns,
     summaryRows,
+    weekdayRow,
+    weekdayFormat,
+    // The normalized inputs too, so resolving a resolved mapping is a no-op.
+    monthHeadingCell: monthHeading?.cell ?? null,
+    holidayFillCell: holidayFill?.holidayCell.cell ?? null,
+    normalFillColumn: holidayFill?.normalColumn ?? null,
+    monthHeading,
+    holidayFill,
   });
 }
 
@@ -251,6 +383,11 @@ export function storedTemplateMapping(
       row,
       statistic,
     })),
+    weekdayRow: mapping.weekdayRow,
+    weekdayFormat: mapping.weekdayFormat,
+    monthHeadingCell: mapping.monthHeading?.cell ?? null,
+    holidayFillCell: mapping.holidayFill?.holidayCell.cell ?? null,
+    normalFillColumn: mapping.holidayFill?.normalColumn ?? null,
   };
 }
 
@@ -320,10 +457,35 @@ export function exportDayValues(
   });
 }
 
-/** The day-heading values: 1 … `dayCount`, blank past the period's end. */
-export function exportDayHeaderValues(dayCount: number): ExportCellValue[] {
+/**
+ * The 31 values of a calendar row (day numbers, weekdays): `valueOf` for
+ * each day of the period (index 0 is its first day), blank past its end, so
+ * a shorter month never keeps a heading of the template's longer one.
+ */
+export function exportPeriodRow(
+  dayCount: number,
+  valueOf: (dayIndex: number) => ExportCellValue,
+): ExportCellValue[] {
   requireDayCount(dayCount);
   return Array.from({ length: EXCEL_TEMPLATE_DAY_COLUMNS }, (_, i) =>
-    i < dayCount ? i + 1 : null,
+    i < dayCount ? valueOf(i) : null,
+  );
+}
+
+/**
+ * Which of the 31 day columns are printed as holidays: the days of the
+ * period (`dates`, in order) that `holidayKindOf` classifies (Fridays and,
+ * once connected, official holidays). Days past the period are never
+ * highlighted, so a column highlighted in another month is restored.
+ */
+export function exportHolidayColumns(
+  dates: readonly IsoDate[],
+  officialHolidays: ReadonlySet<IsoDate> = new Set(),
+): boolean[] {
+  requireDayCount(dates.length);
+  return Array.from(
+    { length: EXCEL_TEMPLATE_DAY_COLUMNS },
+    (_, i) =>
+      i < dates.length && holidayKindOf(dates[i]!, officialHolidays) !== null,
   );
 }

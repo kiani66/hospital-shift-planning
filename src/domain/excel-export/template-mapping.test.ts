@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { addDays, isoDate } from "../shared/dates";
 import { ValidationError } from "../shared/errors";
 import type { AssignmentCode } from "../shifts/shift-type";
 import {
@@ -8,8 +9,10 @@ import {
   cellAddress,
   columnIndex,
   columnLetters,
-  exportDayHeaderValues,
   exportDayValues,
+  exportHolidayColumns,
+  exportPeriodRow,
+  parseCellAddress,
   requireTemplateMapping,
   resolveTemplateMapping,
   storedTemplateMapping,
@@ -67,53 +70,120 @@ describe("resolveTemplateMapping", () => {
         dayHeaderRow: null,
         statisticColumns: [],
         summaryRows: [],
+        weekdayRow: null,
+        weekdayFormat: "LONG",
+        monthHeadingCell: null,
+        holidayFillCell: null,
+        normalFillColumn: null,
+        monthHeading: null,
+        holidayFill: null,
       },
     });
   });
 
-  /** The NICU print layout (D124): totals in I–K, summaries under the people. */
+  /**
+   * The NICU print layout (D124): numbers in B, totals in J–L, days N–AR,
+   * weekdays on row 5, day numbers on row 6, summaries under the people.
+   */
   const nicu: ExcelTemplateMapping = {
     sheetName: "Sheet2",
-    personnelColumn: "BL",
+    personnelColumn: "B",
     firstRow: 7,
-    lastRow: 23,
-    firstDayColumn: "M",
+    lastRow: 22,
+    firstDayColumn: "N",
     dayHeaderRow: 6,
     statisticColumns: [
-      { column: "i", statistic: "CLEAR" },
-      { column: "J", statistic: "LEAVE_DAYS" },
-      { column: "K", statistic: "SHIFT_COUNT" },
+      { column: "j", statistic: "CLEAR" },
+      { column: "K", statistic: "LEAVE_DAYS" },
+      { column: "L", statistic: "SHIFT_COUNT" },
     ],
     summaryRows: [
-      { row: 22, statistic: "CLEAR" },
-      { row: 25, statistic: "COVERAGE_M" },
+      { row: 21, statistic: "CLEAR" },
+      { row: 23, statistic: "COVERAGE_M" },
     ],
+    weekdayRow: 5,
+    weekdayFormat: "NARROW",
+    monthHeadingCell: "u3",
+    holidayFillCell: "p7",
+    normalFillColumn: "o",
   };
 
-  it("resolves statistic columns, summary rows and the heading row", () => {
+  it("resolves statistics, summaries, calendar rows, heading and fills", () => {
     const resolved = requireTemplateMapping(nicu);
-    expect(resolved.lastDayColumnIndex).toBe(columnIndex("AQ"));
+    expect(resolved.lastDayColumnIndex).toBe(columnIndex("AR"));
     expect(resolved.dayHeaderRow).toBe(6);
     expect(resolved.statisticColumns).toEqual([
-      { column: "I", statistic: "CLEAR", columnIndex: 9 },
-      { column: "J", statistic: "LEAVE_DAYS", columnIndex: 10 },
-      { column: "K", statistic: "SHIFT_COUNT", columnIndex: 11 },
+      { column: "J", statistic: "CLEAR", columnIndex: 10 },
+      { column: "K", statistic: "LEAVE_DAYS", columnIndex: 11 },
+      { column: "L", statistic: "SHIFT_COUNT", columnIndex: 12 },
     ]);
-    // A summary row may sit inside the personnel block (row 22).
-    expect(resolved.summaryRows.map((r) => r.row)).toEqual([22, 25]);
+    // A summary row may sit inside the personnel block (row 21).
+    expect(resolved.summaryRows.map((r) => r.row)).toEqual([21, 23]);
+    expect(resolved.weekdayRow).toBe(5);
+    expect(resolved.weekdayFormat).toBe("NARROW");
+    expect(resolved.monthHeading).toEqual({ cell: "U3", column: 21, row: 3 });
+    expect(resolved.holidayFill).toEqual({
+      holidayCell: { cell: "P7", column: 16, row: 7 },
+      normalColumn: "O",
+      normalColumnIndex: 15,
+    });
     expect(storedTemplateMapping(resolved)).toEqual({
       ...nicu,
       statisticColumns: [
-        { column: "I", statistic: "CLEAR" },
-        { column: "J", statistic: "LEAVE_DAYS" },
-        { column: "K", statistic: "SHIFT_COUNT" },
+        { column: "J", statistic: "CLEAR" },
+        { column: "K", statistic: "LEAVE_DAYS" },
+        { column: "L", statistic: "SHIFT_COUNT" },
       ],
+      monthHeadingCell: "U3",
+      holidayFillCell: "P7",
+      normalFillColumn: "O",
     });
+  });
+
+  it("resolves a resolved mapping to the same mapping (the export re-checks it)", () => {
+    const resolved = requireTemplateMapping(nicu);
+    expect(requireTemplateMapping(resolved)).toEqual(resolved);
+  });
+
+  it("defaults the weekday format and leaves the calendar features off", () => {
+    const resolved = requireTemplateMapping(mapping);
+    expect(storedTemplateMapping(resolved)).toMatchObject({
+      weekdayRow: null,
+      weekdayFormat: "LONG",
+      monthHeadingCell: null,
+      holidayFillCell: null,
+      normalFillColumn: null,
+    });
+    expect(
+      requireTemplateMapping({
+        ...mapping,
+        monthHeadingCell: "",
+        holidayFillCell: " ",
+        normalFillColumn: null,
+      }).holidayFill,
+    ).toBeNull();
   });
 
   it.each<[Partial<ExcelTemplateMapping>, keyof ExcelTemplateMapping]>([
     [{ dayHeaderRow: 0 }, "dayHeaderRow"],
     [{ dayHeaderRow: 7 }, "dayHeaderRow"],
+    [{ weekdayRow: 0 }, "weekdayRow"],
+    [{ weekdayRow: 8 }, "weekdayRow"],
+    [{ weekdayRow: 6 }, "weekdayRow"],
+    [{ weekdayFormat: "SHORT" as never }, "weekdayFormat"],
+    [{ summaryRows: [{ row: 5, statistic: "COVERAGE_M" }] }, "summaryRows"],
+    [{ monthHeadingCell: "U" }, "monthHeadingCell"],
+    [{ monthHeadingCell: "U0" }, "monthHeadingCell"],
+    [{ monthHeadingCell: "C9" }, "monthHeadingCell"],
+    [{ monthHeadingCell: "P6" }, "monthHeadingCell"],
+    [{ monthHeadingCell: "P5" }, "monthHeadingCell"],
+    [{ monthHeadingCell: "P23" }, "monthHeadingCell"],
+    [{ holidayFillCell: null }, "holidayFillCell"],
+    [{ holidayFillCell: "P" }, "holidayFillCell"],
+    [{ normalFillColumn: null }, "normalFillColumn"],
+    [{ normalFillColumn: "M" }, "normalFillColumn"],
+    [{ normalFillColumn: "AS" }, "normalFillColumn"],
+    [{ normalFillColumn: "7" }, "normalFillColumn"],
     [
       { statisticColumns: [{ column: "1", statistic: "CLEAR" }] },
       "statisticColumns",
@@ -127,11 +197,11 @@ describe("resolveTemplateMapping", () => {
       "statisticColumns",
     ],
     [
-      { statisticColumns: [{ column: "BL", statistic: "CLEAR" }] },
+      { statisticColumns: [{ column: "B", statistic: "CLEAR" }] },
       "statisticColumns",
     ],
     [
-      { statisticColumns: [{ column: "AQ", statistic: "CLEAR" }] },
+      { statisticColumns: [{ column: "AR", statistic: "CLEAR" }] },
       "statisticColumns",
     ],
     [
@@ -253,7 +323,7 @@ describe("exportDayValues", () => {
 
   it.each([0, 32, 1.5])("refuses %d days", (days) => {
     expect(() => exportDayValues(days, decisions)).toThrow(ValidationError);
-    expect(() => exportDayHeaderValues(days)).toThrow(ValidationError);
+    expect(() => exportPeriodRow(days, (i) => i + 1)).toThrow(ValidationError);
   });
 
   it("maps the approved conventions", () => {
@@ -267,11 +337,40 @@ describe("exportDayValues", () => {
     });
   });
 
-  it.each([29, 30, 31])("numbers the headings of a %i-day month", (days) => {
-    const values = exportDayHeaderValues(days);
+  it.each([29, 30, 31])("fills a calendar row of a %i-day month", (days) => {
+    const values = exportPeriodRow(days, (i) => i + 1);
     expect(values).toHaveLength(31);
-    expect(values.filter((v) => v !== null)).toEqual(
+    expect(values.slice(0, days)).toEqual(
       Array.from({ length: days }, (_, i) => i + 1),
     );
+    expect(values.slice(days).every((v) => v === null)).toBe(true);
+  });
+
+  it("highlights the period's Fridays only, never a day past its end", () => {
+    // Mehr 1405 starts on Wednesday 2026-09-23: Fridays are days 3, 10, 17, 24.
+    const mehr = Array.from({ length: 30 }, (_, i) =>
+      addDays(isoDate("2026-09-23"), i),
+    );
+    const flags = exportHolidayColumns(mehr);
+    expect(flags).toHaveLength(31);
+    expect(flags.flatMap((f, i) => (f ? [i + 1] : []))).toEqual([
+      3, 10, 17, 24,
+    ]);
+    // An official holiday shares the presentation.
+    const withOfficial = exportHolidayColumns(mehr, new Set([mehr[0]!]));
+    expect(withOfficial.flatMap((f, i) => (f ? [i + 1] : []))).toEqual([
+      1, 3, 10, 17, 24,
+    ]);
+    expect(() => exportHolidayColumns([])).toThrow(ValidationError);
+  });
+
+  it("parses single cell addresses", () => {
+    expect(parseCellAddress(" u3 ")).toEqual({ column: 21, row: 3 });
+    expect(parseCellAddress("XFD1048576")).toEqual({
+      column: 16_384,
+      row: 1_048_576,
+    });
+    for (const bad of ["", "U", "3", "U0", "A1:B2", "XFE1", "A1048577"])
+      expect(parseCellAddress(bad)).toBeNull();
   });
 });

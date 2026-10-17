@@ -105,9 +105,16 @@ export async function provisionExcelExport() {
       secretary,
       template: Buffer.from(await template([secretary, nurse, head])),
       replacement: Buffer.from(await template([nurse, head, secretary])),
-      /** The sanitized NICU workbook as received: names, no personnel numbers. */
+      /** The sanitized NICU workbook: the people's recorded numbers printed in B. */
       nicu: Buffer.from(
-        await nicuTemplate({ peopleRows: [7, 8, NICU_SECRETARY_ROW] }),
+        await nicuTemplate({
+          peopleRows: [7, 8, NICU_SECRETARY_ROW],
+          numbers: new Map([
+            [7, head.personnelNumber!],
+            [8, nurse.personnelNumber!],
+            [NICU_SECRETARY_ROW, secretary.personnelNumber!],
+          ]),
+        }),
       ),
     };
   } finally {

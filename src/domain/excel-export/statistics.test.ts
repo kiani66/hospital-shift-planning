@@ -30,6 +30,25 @@ describe("personStatistic", () => {
     expect(personStatistic("LEAVE_DAYS", 30, complete)).toBe(2);
   });
 
+  it("counts ME as exactly one shift, never one per covered period", () => {
+    const allMe = month(Array<AssignmentCode>(10).fill("ME"));
+    expect(personStatistic("SHIFT_COUNT", 10, allMe)).toBe(10);
+    const mixed = month(["ME", "M", "E", "N", "H", "OFF"]);
+    expect(personStatistic("SHIFT_COUNT", 6, mixed)).toBe(4);
+    expect(personStatistic("LEAVE_DAYS", 6, mixed)).toBe(1);
+  });
+
+  it("keeps H, OFF and undecided distinct", () => {
+    const rest = month(["OFF", "OFF"]);
+    const leave = month(["H", "H"]);
+    const open = month(["OFF", null]);
+    expect(personStatistic("SHIFT_COUNT", 2, rest)).toBe(0);
+    expect(personStatistic("LEAVE_DAYS", 2, rest)).toBe(0);
+    expect(personStatistic("SHIFT_COUNT", 2, leave)).toBe(0);
+    expect(personStatistic("LEAVE_DAYS", 2, leave)).toBe(2);
+    expect(personStatistic("SHIFT_COUNT", 2, open)).toBe("?");
+  });
+
   it("ignores decisions past the period", () => {
     const withExtra = new Map(complete).set(31, "N");
     expect(personStatistic("SHIFT_COUNT", 30, withExtra)).toBe(7);
@@ -65,6 +84,13 @@ describe("dailyStatistic", () => {
     expect(m.slice(0, 4)).toEqual([1, 2, 0, 0]);
     expect(e.slice(0, 4)).toEqual([1, 1, 0, 0]);
     expect(n.slice(0, 4)).toEqual([0, 0, 2, 1]);
+  });
+
+  it("counts one ME toward both Morning and Evening, not Night", () => {
+    const me = [month(["ME"]), month(["N"])];
+    expect(dailyStatistic("COVERAGE_M", 1, me)[0]).toBe(1);
+    expect(dailyStatistic("COVERAGE_E", 1, me)[0]).toBe(1);
+    expect(dailyStatistic("COVERAGE_N", 1, me)[0]).toBe(1);
   });
 
   it("is ? on a day someone counted is undecided, blank past the period", () => {

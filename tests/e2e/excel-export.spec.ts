@@ -167,7 +167,7 @@ test("an invalid mapping shows the cell reference and cannot be saved", async ({
   ).toBeDisabled();
 });
 
-test("NICU workbook: personnel numbers from the records, statistics and print layout", async ({
+test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics and print layout", async ({
   page,
 }) => {
   const fixture = await provisionExcelExport();
@@ -175,74 +175,45 @@ test("NICU workbook: personnel numbers from the records, statistics and print la
   await signInAndWait(page, fixture.head.email!);
   await page.goto(`/departments/${code}/settings`);
 
-  // 1. Prepare the hidden personnel-number column from the system's records.
-  await page
-    .getByText("ساخت ستون شماره پرسنلی پنهان از روی پرونده پرسنل")
-    .click();
-  const prepare = page.getByRole("form", { name: "ساخت ستون شماره پرسنلی" });
-  await prepare.getByLabel("فایل Excel بیمارستان").setInputFiles({
-    name: "nicu.xlsx",
+  // 1. Upload and validate the workbook with the NICU mapping as approved.
+  const form = mappingForm(page);
+  await form.getByLabel("فایل قالب Excel").setInputFiles({
+    name: "Template_Export.xlsx",
     mimeType: XLSX,
     buffer: fixture.nicu,
   });
-  await prepare.getByLabel("نام Sheet").fill("Sheet2");
-  await prepare.getByLabel("ردیف شروع پرسنل").fill("7");
-  await prepare.getByLabel("ردیف پایان پرسنل").fill("23");
-  await prepare.getByLabel("ستون روز اول").fill("M");
-  await prepare.getByLabel("ستون خالی برای شماره پرسنلی").fill("BL");
-  await prepare.getByRole("button", { name: "خواندن ردیف‌ها" }).click();
-  await expect(prepare.getByRole("table")).toContainText("سرپرستار");
-  await prepare.getByLabel("فرد ردیف ۷").selectOption(fixture.head.id);
-  await prepare.getByLabel("فرد ردیف ۸").selectOption(fixture.nurse.id);
-  await prepare.getByLabel("فرد ردیف ۲۳").selectOption(fixture.secretary.id);
-  await prepare
-    .getByRole("button", { name: "ساخت فایل با ستون شماره پرسنلی" })
-    .click();
-  const preparedDownload = page.waitForEvent("download");
-  await prepare.getByRole("link", { name: "دانلود فایل آماده" }).click();
-  const prepared = await readFile((await (await preparedDownload).path())!);
-  const preparedSheet = (
-    await readWorkbook(new Uint8Array(prepared))
-  ).getWorksheet("Sheet2")!;
-  expect(preparedSheet.getCell("BL7").value).toBe(fixture.head.personnelNumber);
-  expect(preparedSheet.getCell("BL23").value).toBe(
-    fixture.secretary.personnelNumber,
-  );
-  expect(preparedSheet.getColumn("BL").hidden).toBe(true);
-
-  // 2. Upload and validate it with the NICU mapping and statistics.
-  const form = mappingForm(page);
-  await form.getByLabel("فایل قالب Excel").setInputFiles({
-    name: "nicu-prepared.xlsx",
-    mimeType: XLSX,
-    buffer: prepared,
-  });
   await form.getByLabel("نام Sheet").fill("Sheet2");
-  await form.getByLabel("ستون شماره پرسنلی").fill("BL");
+  await form.getByLabel("ستون شماره پرسنلی").fill("B");
   await form.getByLabel("ردیف شروع پرسنل").fill("7");
-  await form.getByLabel("ردیف پایان پرسنل").fill("23");
-  await form.getByLabel("ستون روز اول").fill("M");
+  await form.getByLabel("ردیف پایان پرسنل").fill("22");
+  await form.getByLabel("ستون روز اول").fill("N");
   await form.getByLabel("ردیف عنوان روزها").fill("6");
-  await form.getByLabel("ستون تعداد شیفت").fill("K");
-  await form.getByLabel("ستون روزهای مرخصی (H)").fill("J");
-  await form.getByLabel("ستون‌های پاک‌شونده").fill("I");
-  await form.getByLabel("ردیف تعداد صبح").fill("25");
-  await form.getByLabel("ردیف تعداد عصر").fill("26");
-  await form.getByLabel("ردیف تعداد شب").fill("27");
+  await form.getByLabel("ستون تعداد شیفت").fill("L");
+  await form.getByLabel("ستون روزهای مرخصی (H)").fill("K");
+  await form.getByLabel("ستون‌های پاک‌شونده").fill("J");
+  await form.getByLabel("ردیف تعداد صبح").fill("23");
+  await form.getByLabel("ردیف تعداد عصر").fill("24");
+  await form.getByLabel("ردیف تعداد شب").fill("25");
+  await form.getByLabel("ردیف روزهای هفته").fill("5");
+  await form.getByLabel("شکل روز هفته").selectOption("NARROW");
+  await form.getByLabel("خانه عنوان ماه").fill("U3");
+  await form.getByLabel("خانه رنگ جمعه").fill("P7");
+  await form.getByLabel("ستون رنگ روز عادی").fill("O");
   await form.getByRole("button", { name: "بررسی قالب" }).click();
   const summary = page.getByRole("region", { name: "خلاصه نگاشت" });
   await expect(summary).toContainText("قالب قابل فعال‌سازی است");
-  await expect(summary).toContainText("(ستون پنهان)");
+  await expect(summary).toContainText("B7:B22");
+  await expect(summary).not.toContainText("(ستون پنهان)");
   await expect(summary).toContainText(fixture.nurse.displayName);
-  await expect(summary).toContainText("A1:AP31");
-  // Day 31 (AQ) is outside the print area as found: a warning, not an error.
-  await expect(summary).toContainText("خارج از ناحیه چاپ");
+  await expect(summary).toContainText("A1:AS31");
+  // The header rows already carry the holiday fill on every day.
+  await expect(summary).toContainText("همان رنگ تعطیل است");
   await form.getByRole("button", { name: "بارگذاری قالب" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "قالب بارگذاری و فعال شد" }),
   ).toBeVisible();
 
-  // 3. Export the partially planned Mehr 1405 DRAFT.
+  // 2. Export the partially planned Mehr 1405 DRAFT.
   await page.goto(`/departments/${code}/schedule?month=1405-07`);
   const exported = page.waitForEvent("download");
   await page.getByRole("button", { name: "خروجی اکسل" }).click();
@@ -252,18 +223,27 @@ test("NICU workbook: personnel numbers from the records, statistics and print la
     )
   ).getWorksheet("Sheet2")!;
   const day = (row: number, d: number) =>
-    sheet.getCell(row, 12 + d).value ?? null;
+    sheet.getCell(row, 13 + d).value ?? null;
   expect([day(8, 1), day(8, 2), day(8, 3)]).toEqual(["N", null, "?"]);
-  expect([day(23, 1), day(23, 2), day(23, 3)]).toEqual(["M", "?", "H"]);
+  expect([day(22, 1), day(22, 2), day(22, 3)]).toEqual(["M", "?", "H"]);
   expect(day(7, 1)).toBe("?");
   expect(day(8, 31)).toBeNull(); // Mehr has 30 days.
-  expect(["I8", "J8", "K8"].map((a) => sheet.getCell(a).value ?? null)).toEqual(
+  expect(["J8", "K8", "L8"].map((a) => sheet.getCell(a).value ?? null)).toEqual(
     [null, "?", "?"],
   );
-  expect(day(25, 1)).toBe("?");
-  expect(sheet.getCell("AP6").value).toBe(30);
-  expect(sheet.getCell("AQ6").value ?? null).toBeNull();
-  expect(sheet.getCell("C30").value).toBe("امضای سرپرستار");
+  expect(day(23, 1)).toBe("?");
+  // Calendar: 1 Mehr 1405 is a Wednesday; Fridays are 3, 10, 17 and 24.
+  expect(sheet.getCell("U3").value).toBe("مهر\u200cماه 1405");
+  expect([day(5, 1), day(5, 2), day(5, 3)]).toEqual(["چ", "پ", "ج"]);
+  expect([day(6, 30), day(6, 31)]).toEqual([30, null]);
+  expect(day(5, 31)).toBeNull();
+  const theme = (address: string) =>
+    (sheet.getCell(address).fill as { fgColor?: { theme?: number } })?.fgColor
+      ?.theme;
+  expect(["P8", "W8", "AD8", "AK8"].map(theme)).toEqual([3, 3, 3, 3]);
+  expect(["N8", "O8", "Q8", "AR8"].map(theme)).toEqual([0, 0, 0, 0]);
+  expect(sheet.getCell("V28").value).toBe("مهر و امضاء سرپرستار");
+  expect(sheet.getCell("B8").value).toBe(fixture.nurse.personnelNumber);
   expect(sheet.pageSetup.orientation).toBe("landscape");
-  expect(sheet.pageSetup.fitToWidth).toBe(1);
+  expect(sheet.pageSetup.scale).toBe(89);
 });

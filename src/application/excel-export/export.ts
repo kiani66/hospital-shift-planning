@@ -5,13 +5,15 @@ import {
   type DayDecisions,
 } from "../../domain/excel-export/statistics";
 import {
-  exportDayHeaderValues,
   exportDayValues,
+  exportHolidayColumns,
+  exportPeriodRow,
   requireTemplateMapping,
   type ExportCellValue,
+  type WeekdayFormat,
 } from "../../domain/excel-export/template-mapping";
 import type { ScheduleStatus } from "../../domain/schedule/status";
-import { daysBetween } from "../../domain/shared/dates";
+import { daysBetween, type IsoDate } from "../../domain/shared/dates";
 import { ValidationError } from "../../domain/shared/errors";
 import { periodDays, type DatePeriod } from "../../domain/shared/period";
 import type { AssignmentCode } from "../../domain/shifts/shift-type";
@@ -25,6 +27,7 @@ import {
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
 import { findScheduleById } from "../../infrastructure/repositories/schedules";
 import { listVersionAssignments } from "../../infrastructure/repositories/versions";
+import { NO_HOLIDAY_DATA } from "../calendar/holidays";
 import { NotFoundError } from "../errors";
 import type { AppContext } from "../use-case";
 import {
@@ -43,8 +46,23 @@ import {
  * explicitly asks for the unapproved revision draft. Rest (OFF) is a blank
  * cell, leave is H, and an undecided day is `?`, never blank (D100). The
  * mapped statistics are recalculated from the same decisions, never copied
- * from the template.
+ * from the template. The calendar headings (day numbers, weekdays, month)
+ * and the holiday highlighting follow the schedule's own dates.
  */
+
+/**
+ * Calendar presentation, handed in by the adapter (the Jalali adapter): this
+ * layer only sees ISO dates, so no conversion depends on it or on the
+ * server's timezone.
+ */
+export interface ExcelExportCalendar {
+  /** The day of the month printed over a date's column (Jalali). */
+  dayNumber(date: IsoDate): number;
+  /** The Persian weekday of a date. */
+  weekday(date: IsoDate, format: WeekdayFormat): string;
+  /** The month and year printed in the heading cell, e.g. «مهرماه 1405». */
+  monthHeading(period: DatePeriod): string;
+}
 
 /** `DEFAULT`: official data; `REVISION_DRAFT`: an open revision's working copy, explicitly. */
 export type ExcelExportSource = "DEFAULT" | "REVISION_DRAFT";
@@ -110,7 +128,11 @@ const fail = (message: string, reason: string): never => {
 
 export async function exportScheduleToExcel(
   ctx: AppContext,
-  input: { scheduleId: string; source?: ExcelExportSource },
+  input: {
+    scheduleId: string;
+    source?: ExcelExportSource;
+    calendar: ExcelExportCalendar;
+  },
 ): Promise<ScheduleExcelExport> {
   return ctx.db.transaction(
     async (tx) => {
@@ -143,7 +165,8 @@ export async function exportScheduleToExcel(
         listExportRoster(tx, schedule.id),
       ]);
 
-      const dayCount = periodDays(schedule.period).length;
+      const dates = periodDays(schedule.period);
+      const dayCount = dates.length;
       const decisions = new Map<string, Map<number, AssignmentCode>>();
       for (const a of assignments) {
         const day = daysBetween(schedule.period.start, a.date) + 1;
@@ -206,6 +229,12 @@ export async function exportScheduleToExcel(
       const staffing = required
         .filter((r) => r.role !== "SECRETARY")
         .map((r) => decisions.get(r.userId) ?? none);
+      // Fridays, and official holidays once a master calendar is connected
+      // (none until then, D41), share one presentation.
+      const official = await (
+        ctx.holidays ?? NO_HOLIDAY_DATA
+      ).listOfficialHolidays(schedule.period);
+      const { calendar } = input;
       const bytes = populateExcelTemplate(template!.content, mapping, values, {
         statistics,
         summaries: new Map(
@@ -214,7 +243,17 @@ export async function exportScheduleToExcel(
             dailyStatistic(s.statistic, dayCount, staffing),
           ]),
         ),
-        dayHeader: exportDayHeaderValues(dayCount),
+        dayHeader: exportPeriodRow(dayCount, (i) =>
+          calendar.dayNumber(dates[i]!),
+        ),
+        weekdays: exportPeriodRow(dayCount, (i) =>
+          calendar.weekday(dates[i]!, mapping.weekdayFormat),
+        ),
+        monthHeading: calendar.monthHeading(schedule.period),
+        holidays: exportHolidayColumns(
+          dates,
+          new Set(official.map((h) => h.date)),
+        ),
       });
       return {
         bytes,

@@ -100,6 +100,15 @@ const statisticsOf = (form: FormData) => ({
   ],
 });
 
+/** The calendar part of the form: weekday row, month heading and holiday fills (D124). */
+const calendarOf = (form: FormData) => ({
+  weekdayRow: single(form, "weekdayRow")[0] ?? null,
+  weekdayFormat: form.get("weekdayFormat") === "NARROW" ? "NARROW" : "LONG",
+  monthHeadingCell: single(form, "monthHeadingCell")[0] ?? null,
+  holidayFillCell: single(form, "holidayFillCell")[0] ?? null,
+  normalFillColumn: single(form, "normalFillColumn")[0] ?? null,
+});
+
 const mappingOf = (form: FormData) =>
   templateMappingInput.safeParse({
     sheetName: form.get("sheetName"),
@@ -108,6 +117,7 @@ const mappingOf = (form: FormData) =>
     lastRow: form.get("lastRow"),
     firstDayColumn: form.get("firstDayColumn"),
     ...statisticsOf(form),
+    ...calendarOf(form),
   });
 
 const failure = (error: unknown) => {

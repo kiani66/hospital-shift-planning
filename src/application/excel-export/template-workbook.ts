@@ -406,13 +406,29 @@ function openWorkbook(bytes: Uint8Array): Workbook {
   };
 }
 
-/** Which cellXfs entries are locked (Excel's default for a protected sheet). */
-function lockedStyles(workbook: Workbook): (index: number) => boolean {
+/** One `<xf>` of `<cellXfs>`: a cell format, referenced by its index from `s`. */
+interface CellFormat {
+  readonly attrs: Map<string, string>;
+  readonly inner: string | null;
+}
+
+/** The cell formats of `styles.xml`, in index order. */
+function cellFormats(workbook: Workbook): CellFormat[] {
   const styles = workbook.stylesPart
     ? text(workbook.parts, workbook.stylesPart)
     : null;
   const cellXfs = styles ? elements(styles, "cellXfs")[0]?.inner : undefined;
-  const locked = (cellXfs ? elements(cellXfs, "xf") : []).map((xf) => {
+  return (cellXfs ? elements(cellXfs, "xf") : []).map((xf) => ({
+    attrs: attributes(xf.attrs),
+    inner: xf.inner,
+  }));
+}
+
+/** Which cellXfs entries are locked (Excel's default for a protected sheet). */
+function lockedStyles(
+  formats: readonly CellFormat[],
+): (index: number) => boolean {
+  const locked = formats.map((xf) => {
     const protection = xf.inner ? elements(xf.inner, "protection")[0] : null;
     const value = protection
       ? attributes(protection.attrs).get("locked")
@@ -420,6 +436,91 @@ function lockedStyles(workbook: Workbook): (index: number) => boolean {
     return !(value === "0" || value === "false");
   });
   return (index) => locked[index] ?? true;
+}
+
+/** The fill (`fillId`) a cell format paints; 0 is no fill. */
+const fillOf = (formats: readonly CellFormat[], index: number): number =>
+  Number(formats[index]?.attrs.get("fillId") ?? 0) || 0;
+
+/** Attributes and children of a format, comparable regardless of attribute order. */
+const formatKey = (attrs: Map<string, string>, inner: string | null) =>
+  JSON.stringify([
+    [...attrs].sort(([a], [b]) => a.localeCompare(b)),
+    inner ?? "",
+  ]);
+
+/**
+ * Cell formats that differ from existing ones only in their fill (D124
+ * holiday highlighting). A cell keeps its own number format, font, border,
+ * alignment and protection; only `fillId` changes. An identical format
+ * already in the workbook is reused (the template's own holiday formats
+ * usually exist), and a missing one is appended to `<cellXfs>`, so
+ * `styles.xml` changes only when a new combination is needed.
+ */
+class FillFormats {
+  private readonly keys = new Map<string, number>();
+  private readonly added: string[] = [];
+  private readonly cache = new Map<string, number>();
+
+  constructor(private readonly formats: readonly CellFormat[]) {
+    formats.forEach((f, i) => {
+      const key = formatKey(f.attrs, f.inner);
+      if (!this.keys.has(key)) this.keys.set(key, i);
+    });
+  }
+
+  /** The index of `style` painted with `fill`. */
+  withFill(style: number, fill: number): number {
+    const base = this.formats[style];
+    if (!base || fillOf(this.formats, style) === fill) return style;
+    const cached = this.cache.get(`${style}:${fill}`);
+    if (cached !== undefined) return cached;
+    const attrs = new Map(base.attrs);
+    attrs.set("fillId", String(fill));
+    if (fill !== 0) attrs.set("applyFill", "1");
+    const key = formatKey(attrs, base.inner);
+    let index = this.keys.get(key);
+    if (index === undefined) {
+      index = this.formats.length + this.added.length;
+      const attrText = [...attrs]
+        .map(([name, value]) => ` ${name}="${escapeXml(value)}"`)
+        .join("");
+      this.added.push(
+        base.inner === null
+          ? `<xf${attrText}/>`
+          : `<xf${attrText}>${base.inner}</xf>`,
+      );
+      this.keys.set(key, index);
+    }
+    this.cache.set(`${style}:${fill}`, index);
+    return index;
+  }
+
+  /** `styles.xml` with the new formats appended, or null when none was needed. */
+  patch(stylesXml: string): string | null {
+    if (this.added.length === 0) return null;
+    const cellXfs =
+      /<((?:[\w.-]+:)?)cellXfs\b([^>]*?)>([\s\S]*?)<\/\1cellXfs\s*>/.exec(
+        stylesXml,
+      );
+    if (!cellXfs) return null;
+    const p = cellXfs[1]!;
+    const count = this.formats.length + this.added.length;
+    const attrs = /\scount\s*=/.test(cellXfs[2]!)
+      ? cellXfs[2]!.replace(
+          /\scount\s*=\s*("[^"]*"|'[^']*')/,
+          ` count="${count}"`,
+        )
+      : `${cellXfs[2]} count="${count}"`;
+    const added = this.added.map((xf) =>
+      xf.replace(/^<xf/, `<${p}xf`).replace(/<\/xf>$/, `</${p}xf>`),
+    );
+    return (
+      stylesXml.slice(0, cellXfs.index) +
+      `<${p}cellXfs${attrs}>${cellXfs[3]}${added.join("")}</${p}cellXfs>` +
+      stylesXml.slice(cellXfs.index + cellXfs[0].length)
+    );
+  }
 }
 
 /**
@@ -617,7 +718,42 @@ interface Analysis extends TemplateInspection {
   readonly workbook: Workbook | null;
   readonly sheet: Sheet | null;
   readonly model: SheetModel | null;
+  readonly formats: readonly CellFormat[];
+  /** Holiday highlighting: the holiday fill and each written row's normal fill. */
+  readonly fills: {
+    readonly holiday: number;
+    readonly normalByRow: ReadonlyMap<number, number>;
+  } | null;
 }
+
+/** What a cell shows, for the content checks. */
+const shownText = (value: CellValue): string =>
+  value.kind === "text"
+    ? value.text.trim()
+    : value.kind === "number"
+      ? value.raw
+      : "";
+
+const PERSIAN_DIGITS = /[۰-۹]/g;
+const latinDigits = (value: string) =>
+  value.replace(PERSIAN_DIGITS, (d) => String(d.charCodeAt(0) - 0x06f0));
+
+/** A day number from a previous month (1–31), as a number or digits. */
+const isDayNumber = (shown: string) => {
+  const n = Number(latinDigits(shown));
+  return /^\d{1,2}$/.test(latinDigits(shown)) && n >= 1 && n <= 31;
+};
+/** A figure, `?` or nothing: what a statistic or summary cell may hold. */
+const isFigure = (shown: string) =>
+  shown === EXCEL_UNDECIDED_VALUE || /^[\d.,:٫/\s-]*$/.test(latinDigits(shown));
+/** A weekday name of a previous export: a short word without digits. */
+const isWeekdayText = (shown: string) =>
+  /^[^\d]{1,12}$/.test(latinDigits(shown));
+/** A month heading of a previous month: short text with a four-digit year. */
+const isMonthHeading = (shown: string) =>
+  shown.length <= 60 && /\d{4}/.test(latinDigits(shown));
+
+const FIGURE = { test: isFigure, what: "عدد یا «?»" };
 
 const MAX_SAFE_DIGITS = 15;
 
@@ -630,10 +766,13 @@ function analyse(
   const sheetNames = workbook.sheets.map((s) => s.name);
   const errors: TemplateIssue[] = [];
   const warnings: TemplateIssue[] = [];
+  const formats = cellFormats(workbook);
   const empty = {
     workbook,
     sheet: null,
     model: null,
+    formats,
+    fills: null,
     sheetNames,
     personnel: [],
     personnelRange: null,
@@ -704,10 +843,18 @@ function analyse(
       const range = ref ? parseRef(ref) : null;
       return ref && range ? [{ ref, range }] : [];
     });
-  /** Write targets must be plain cells: nothing spans, protects or computes them. */
-  const checkSpans = (area: Range, label: string) => {
+  /**
+   * Write targets must be plain cells: nothing spans, protects or computes
+   * them. `anchorOnly`: a single cell that may be the top-left cell of a
+   * merge (where Excel keeps a merged cell's value), e.g. a month title.
+   */
+  const checkSpans = (area: Range, label: string, anchorOnly = false) => {
     for (const { ref, range } of merges)
-      if (range && intersects(range, area))
+      if (
+        range &&
+        intersects(range, area) &&
+        !(anchorOnly && range.top === area.top && range.left === area.left)
+      )
         add(errors, {
           cell: ref,
           message: `خانه‌های ادغام‌شده ${ref} با ${label} هم‌پوشانی دارد؛ ادغام را از محدوده نگاشت بردارید.`,
@@ -738,7 +885,7 @@ function analyse(
     ? attributes(protection.attrs).get("sheet")
     : undefined;
   const isLocked =
-    sheetValue === "1" || sheetValue === "true" ? lockedStyles(workbook) : null;
+    sheetValue === "1" || sheetValue === "true" ? lockedStyles(formats) : null;
 
   const rowsByNumber = new Map(
     model.rows.filter((r) => r.row !== null).map((r) => [r.row!, r]),
@@ -764,15 +911,31 @@ function analyse(
     parsedRows.set(row, parsed);
     return parsed;
   };
-  /** A statistic, summary or heading cell: overwritten whatever static value it holds. */
-  const checkWritable = (row: number, column: number, label: string) => {
+  /**
+   * A statistic, summary, heading or title cell. It is overwritten, so it may
+   * hold only what that cell itself writes (`expected`, e.g. a figure or a
+   * day number from another month): hospital text, a signature or a wrong
+   * mapping is never silently replaced.
+   */
+  const checkWritable = (
+    row: number,
+    column: number,
+    label: string,
+    expected: { test: (shown: string) => boolean; what: string },
+  ) => {
     const { token, byColumn } = rowCells(row);
     const address = cellAddress(column, row);
     const value = cellValue(byColumn.get(column), workbook.sharedStrings);
+    const shown = shownText(value);
     if (value.kind === "unsafe")
       add(errors, {
         cell: address,
         message: `${label} ${address} ${value.what} دارد و بازنویسی آن مجاز نیست؛ مقدار ساده یا خانه خالی بگذارید.`,
+      });
+    else if (shown !== "" && !expected.test(shown))
+      add(errors, {
+        cell: address,
+        message: `${label} ${address} مقدار «${shown.slice(0, 30)}» دارد که ${expected.what} نیست و بازنویسی نمی‌شود؛ نگاشت را بررسی یا خانه را خالی کنید.`,
       });
     else if (
       isLocked?.(effectiveStyle(model, token, byColumn.get(column), column))
@@ -904,18 +1067,34 @@ function analyse(
         { top: person.row, bottom: person.row, left: index, right: index },
         label,
       );
-      checkWritable(person.row, index, label);
+      checkWritable(person.row, index, label, FIGURE);
     }
   const dayRows = [
+    ...(mapping.weekdayRow === null
+      ? []
+      : [
+          {
+            row: mapping.weekdayRow,
+            label: "ردیف روزهای هفته",
+            expected: { test: isWeekdayText, what: "نام روز هفته" },
+          },
+        ]),
     ...(mapping.dayHeaderRow === null
       ? []
-      : [{ row: mapping.dayHeaderRow, label: "ردیف عنوان روزها" }]),
+      : [
+          {
+            row: mapping.dayHeaderRow,
+            label: "ردیف عنوان روزها",
+            expected: { test: isDayNumber, what: "شماره روز (۱ تا ۳۱)" },
+          },
+        ]),
     ...mapping.summaryRows.map((r) => ({
       row: r.row,
       label: `ردیف خلاصه ${r.row}`,
+      expected: FIGURE,
     })),
   ];
-  for (const { row, label } of dayRows) {
+  for (const { row, label, expected } of dayRows) {
     checkSpans(
       {
         top: row,
@@ -930,7 +1109,113 @@ function analyse(
       column <= mapping.lastDayColumnIndex;
       column++
     )
-      checkWritable(row, column, label);
+      checkWritable(row, column, label, expected);
+  }
+  if (mapping.monthHeading) {
+    const { cell, column, row } = mapping.monthHeading;
+    const label = "خانه عنوان ماه";
+    checkSpans(
+      { top: row, bottom: row, left: column, right: column },
+      label,
+      true,
+    );
+    checkWritable(row, column, label, {
+      test: isMonthHeading,
+      what: "عنوان ماه با سال (مثلاً «مهرماه 1405»)",
+    });
+    if (
+      mapping.statisticColumns.some((c) => c.columnIndex === column) &&
+      personnel.some((p) => p.row === row)
+    )
+      add(errors, {
+        cell,
+        message: `خانه عنوان ماه ${cell} روی ستون آمار است.`,
+      });
+  }
+
+  // Holiday highlighting: the fills come from the template itself.
+  const styleAt = (column: number, row: number) => {
+    const { token, byColumn } = rowCells(row);
+    return effectiveStyle(model, token, byColumn.get(column), column);
+  };
+  const painted = new Set([
+    ...dayRows.map((r) => r.row),
+    ...personnel.map((p) => p.row),
+  ]);
+  // A filled row of the table that nobody holds is repainted too (its day
+  // cells are empty), so no saved Friday survives in it; unformatted rows
+  // stay as they are.
+  if (mapping.holidayFill)
+    for (let row = mapping.firstRow; row <= mapping.lastRow; row++)
+      for (
+        let column = mapping.firstDayColumnIndex;
+        column <= mapping.lastDayColumnIndex && !painted.has(row);
+        column++
+      )
+        if (fillOf(formats, styleAt(column, row)) !== 0) painted.add(row);
+  const writtenRows = [...painted].sort((a, b) => a - b);
+  let fills: Analysis["fills"] = null;
+  if (mapping.holidayFill) {
+    const { holidayCell, normalColumn, normalColumnIndex } =
+      mapping.holidayFill;
+    const holiday = fillOf(
+      formats,
+      styleAt(holidayCell.column, holidayCell.row),
+    );
+    const normalByRow = new Map(
+      writtenRows.map((row) => [
+        row,
+        fillOf(formats, styleAt(normalColumnIndex, row)),
+      ]),
+    );
+    if (holiday === 0)
+      add(errors, {
+        cell: holidayCell.cell,
+        message: `خانه رنگ تعطیل ${holidayCell.cell} رنگ زمینه ندارد؛ خانه‌ای را انتخاب کنید که رنگ جمعه قالب را دارد (مثلاً خانه روزانه یک جمعه).`,
+      });
+    else {
+      const same = [...normalByRow]
+        .filter(([, fill]) => fill === holiday)
+        .map(([row]) => row);
+      // The shift cells must tell a holiday apart: a holiday cell that is not
+      // highlighted in this file (e.g. last month's export, uploaded again)
+      // would silently drop every Friday.
+      if (
+        personnel.length > 0 &&
+        personnel.every((p) => normalByRow.get(p.row) === holiday)
+      )
+        add(errors, {
+          cell: holidayCell.cell,
+          message: `رنگ خانه ${holidayCell.cell} با رنگ ستون روز عادی ${normalColumn} در ردیف‌های پرسنل یکی است؛ خانه رنگ تعطیل باید در همین فایل رنگ جمعه را داشته باشد و ستون روز عادی جمعه نباشد.`,
+        });
+      else if (same.length > 0)
+        add(warnings, {
+          message: `در ردیف‌های ${same.join("، ")} رنگ روز عادی (ستون ${normalColumn}) همان رنگ تعطیل است؛ جمعه‌ها در این ردیف‌ها رنگ متفاوتی نمی‌گیرند.`,
+        });
+      fills = { holiday, normalByRow };
+    }
+  } else if (personnel[0]) {
+    // Without a holiday fill, the saved month's highlighted columns stay put.
+    const row = personnel[0].row;
+    const byColumn = new Map<number, number>();
+    for (
+      let c = mapping.firstDayColumnIndex;
+      c <= mapping.lastDayColumnIndex;
+      c++
+    )
+      byColumn.set(c, fillOf(formats, styleAt(c, row)));
+    const counts = new Map<number, number>();
+    for (const fill of byColumn.values())
+      counts.set(fill, (counts.get(fill) ?? 0) + 1);
+    const common = [...counts].sort((a, b) => b[1] - a[1])[0]![0];
+    const marked = [...byColumn]
+      .filter(([, f]) => f !== common)
+      .map(([c]) => columnLetters(c));
+    if (marked.length > 0)
+      add(warnings, {
+        cell: cellAddress(columnIndex(marked[0]!)!, row),
+        message: `ستون‌های روز ${marked.join("، ")} رنگ زمینه دیگری دارند (احتمالاً جمعه‌های ماهی که قالب در آن ذخیره شده)؛ تا «خانه رنگ تعطیل» و «ستون رنگ روز عادی» تعیین نشود، این رنگ‌ها در همه ماه‌ها همان‌جا می‌مانند.`,
+      });
   }
 
   if (personnel.length === 0 && errors.length === 0)
@@ -968,6 +1253,7 @@ function analyse(
         message: `ستون روزهای ${unprintedDays.join("، ")} خارج از ناحیه چاپ (${printAreas.map(rangeRef).join("، ")}) است و چاپ نمی‌شود؛ در ماه‌هایی که این روزها را دارند ناحیه چاپ را در Excel گسترش دهید.`,
       });
     const unprintedRows = [
+      ...(mapping.weekdayRow === null ? [] : [mapping.weekdayRow]),
       ...personnel.map((p) => p.row),
       ...mapping.summaryRows.map((r) => r.row),
     ].filter((row) => !printed(mapping.firstDayColumnIndex, row));
@@ -983,6 +1269,12 @@ function analyse(
       add(warnings, {
         message: `ستون آمار ${unprintedStatistics.map((c) => c.column).join("، ")} خارج از ناحیه چاپ است و چاپ نمی‌شود.`,
       });
+    const heading = mapping.monthHeading;
+    if (heading && !printed(heading.column, heading.row))
+      add(warnings, {
+        cell: heading.cell,
+        message: `خانه عنوان ماه ${heading.cell} خارج از ناحیه چاپ است و چاپ نمی‌شود.`,
+      });
   }
 
   const personnelColumnHidden = model.columns.some(
@@ -995,6 +1287,8 @@ function analyse(
     workbook,
     sheet,
     model,
+    formats,
+    fills,
     valid: errors.length === 0,
     mapping,
     sheetNames,
@@ -1066,10 +1360,25 @@ export interface TemplateExtras {
   readonly summaries?: ReadonlyMap<number, readonly ExportCellValue[]>;
   /** The 31 day-heading values, written when the mapping has a heading row. */
   readonly dayHeader?: readonly ExportCellValue[];
+  /** The 31 weekday values, written when the mapping has a weekday row. */
+  readonly weekdays?: readonly ExportCellValue[];
+  /** The month and year, written when the mapping has a month heading cell. */
+  readonly monthHeading?: string | null;
+  /**
+   * Which of the 31 day columns are holidays, applied when the mapping has
+   * holiday highlighting; every other day column gets its normal fill.
+   */
+  readonly holidays?: readonly boolean[];
 }
 
-/** Cell edits by row, then column; null empties a cell and keeps its style. */
-type SheetEdits = Map<number, Map<number, ExportCellValue>>;
+/** One cell's new value (null empties it) and, when restyled, its new format. */
+interface CellEdit {
+  readonly value: ExportCellValue;
+  readonly style?: number;
+}
+
+/** Cell edits by row, then column. */
+type SheetEdits = Map<number, Map<number, CellEdit>>;
 
 const dayValues = (values: readonly ExportCellValue[] | undefined) => {
   const all =
@@ -1105,12 +1414,16 @@ export function populateExcelTemplate(
   const m = analysis.mapping!;
   for (const v of values.values()) dayValues(v);
   const edits: SheetEdits = new Map();
-  const dayRow = (row: number, cells: readonly ExportCellValue[]) => {
-    const edit = edits.get(row) ?? new Map<number, ExportCellValue>();
-    dayValues(cells).forEach((value, i) =>
-      edit.set(m.firstDayColumnIndex + i, value),
-    );
+  const rowEdits = (row: number) => {
+    const edit = edits.get(row) ?? new Map<number, CellEdit>();
     edits.set(row, edit);
+    return edit;
+  };
+  const dayRow = (row: number, cells: readonly ExportCellValue[]) => {
+    const edit = rowEdits(row);
+    dayValues(cells).forEach((value, i) =>
+      edit.set(m.firstDayColumnIndex + i, { value }),
+    );
     return edit;
   };
   for (const person of analysis.personnel) {
@@ -1120,15 +1433,60 @@ export function populateExcelTemplate(
     );
     const statistics = extras.statistics?.get(person.personnelNumber);
     for (const { column, columnIndex: index } of m.statisticColumns)
-      edit.set(index, statistics?.get(column) ?? null);
+      edit.set(index, { value: statistics?.get(column) ?? null });
   }
   for (const { row } of m.summaryRows)
     dayRow(row, dayValues(extras.summaries?.get(row)));
   if (m.dayHeaderRow !== null && extras.dayHeader)
     dayRow(m.dayHeaderRow, extras.dayHeader);
+  // Calendar headings are rewritten every time: a shorter month never keeps
+  // the 30th or 31st of the month the template was saved in.
+  if (m.weekdayRow !== null) dayRow(m.weekdayRow, dayValues(extras.weekdays));
+  if (m.monthHeading)
+    rowEdits(m.monthHeading.row).set(m.monthHeading.column, {
+      value: extras.monthHeading ?? null,
+    });
+
+  const output = new Map(workbook!.parts);
+  if (analysis.fills) {
+    // Every written day cell is repainted from the stored template's own
+    // fills, so highlighting never accumulates across months: a holiday gets
+    // the holiday fill, any other day its row's normal fill. Only `fillId`
+    // changes; the cell's border, font, alignment and number format stay.
+    const holidays = extras.holidays ?? [];
+    if (holidays.length !== 0 && holidays.length !== EXCEL_TEMPLATE_DAY_COLUMNS)
+      throw new RangeError("Holidays need 31 day flags");
+    const formats = new FillFormats(analysis.formats);
+    const rows = new Map(model!.rows.map((r) => [r.row, r]));
+    for (const [row, normal] of analysis.fills.normalByRow) {
+      // A table row nobody holds has empty day cells (validated): repainted only.
+      const edit =
+        edits.get(row) ??
+        (row >= m.firstRow && row <= m.lastRow ? rowEdits(row) : null);
+      if (!edit) continue;
+      const token = rows.get(row);
+      const cells = new Map(
+        cellTokens(token?.inner ?? "").map((c) => [c.column, c]),
+      );
+      for (let i = 0; i < EXCEL_TEMPLATE_DAY_COLUMNS; i++) {
+        const column = m.firstDayColumnIndex + i;
+        const base = effectiveStyle(model!, token, cells.get(column), column);
+        const fill = holidays[i] ? analysis.fills.holiday : normal;
+        edit.set(column, {
+          value: edit.get(column)?.value ?? null,
+          style: formats.withFill(base, fill),
+        });
+      }
+    }
+    const stylesXml = workbook!.stylesPart
+      ? text(workbook!.parts, workbook!.stylesPart)
+      : null;
+    const styles = stylesXml === null ? null : formats.patch(stylesXml);
+    if (styles !== null)
+      output.set(workbook!.stylesPart!, encoder.encode(styles));
+  }
 
   const sheetXml = patchSheet(model!, edits);
-  const output = new Map(workbook!.parts);
   output.set(sheet!.part, encoder.encode(sheetXml));
   // Summaries the hospital keeps as formulas must never show the template's
   // stale results: a viewer that does not recalculate (Protected View,
@@ -1210,7 +1568,7 @@ function withDimension(xml: string, edits: SheetEdits): string {
   if (!dimension || !range) return xml;
   const written = [...edits].flatMap(([row, cells]) =>
     [...cells]
-      .filter(([, v]) => v !== null)
+      .filter(([, edit]) => edit.value !== null)
       .map(([column]) => ({ row, column })),
   );
   const wider: Range = {
@@ -1248,7 +1606,7 @@ function cellXml(
 function rewriteRow(
   model: SheetModel,
   row: RowToken,
-  edits: ReadonlyMap<number, ExportCellValue>,
+  edits: ReadonlyMap<number, CellEdit>,
 ): string {
   const p = row.prefix;
   const inner = row.inner ?? "";
@@ -1278,23 +1636,25 @@ function rewriteRow(
 
   const kept = tokens.filter((t) => !(t.cell && edits.has(t.column!)));
   let inserted = false;
-  for (const [column, value] of [...edits].sort(([a], [b]) => a - b)) {
+  for (const [column, { value, style: restyled }] of [...edits].sort(
+    ([a], [b]) => a - b,
+  )) {
     const cell = existing.get(column);
     const ref = `${columnLetters(column)}${row.row}`;
+    // A new cell takes the style Excel itself would give it (row, then column).
+    const inherited = cell
+      ? cell.attrs.get("s")
+      : String(effectiveStyle(model, row, undefined, column));
+    const style = restyled === undefined ? inherited : String(restyled);
     let xml: string | null;
     if (value === null)
-      // A cleared cell keeps its own style; an absent one stays absent.
-      xml = cell
-        ? `<${p}c r="${ref}"${cell.attrs.get("s") ? ` s="${cell.attrs.get("s")}"` : ""}/>`
-        : null;
-    else {
-      // A new cell takes the style Excel itself would give it (row, then column).
-      const style = cell
-        ? cell.attrs.get("s")
-        : String(effectiveStyle(model, row, undefined, column));
-      if (!cell) inserted = true;
-      xml = cellXml(p, ref, style, value);
-    }
+      // A cleared cell keeps its style; an absent one stays absent unless restyled.
+      xml =
+        cell || (style ?? "0") !== (inherited ?? "0")
+          ? `<${p}c r="${ref}"${style && style !== "0" ? ` s="${style}"` : ""}/>`
+          : null;
+    else xml = cellXml(p, ref, style, value);
+    if (xml !== null && !cell) inserted = true;
     if (xml === null) continue;
     // Cells stay in column order: before the first kept cell to the right.
     const after = kept.findIndex((t) => t.cell && t.column! > column);
@@ -1417,7 +1777,7 @@ export function writePersonnelColumn(
   for (const [row, number] of input.numbers) {
     if (!Number.isInteger(row) || row < 1 || row > EXCEL_MAX_ROW)
       fail("ردیف انتخاب‌شده معتبر نیست.");
-    edits.set(row, new Map([[column!, number]]));
+    edits.set(row, new Map([[column!, { value: number }]]));
   }
   const output = new Map(workbook.parts);
   output.set(

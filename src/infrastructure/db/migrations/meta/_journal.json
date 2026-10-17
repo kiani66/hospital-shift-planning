@@ -127,6 +127,13 @@
       "when": 1792218374450,
       "tag": "0017_excel_template_statistics",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792223187862,
+      "tag": "0018_excel_template_calendar",
+      "breakpoints": true
     }
   ]
 }

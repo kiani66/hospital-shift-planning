@@ -238,8 +238,8 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label, 0013 reset records,
     // 0014 leave day (H)
     // 0015 secretary role, 0016 department Excel export templates,
-    // 0017 Excel template statistics mapping
-    expect(before).toBe(18);
+    // 0017 Excel template statistics mapping, 0018 Excel template calendar mapping
+    expect(before).toBe(19);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

@@ -16,6 +16,7 @@ import {
   uploadExcelTemplate,
 } from "../../src/application/excel-export/templates";
 import { NotFoundError } from "../../src/application/errors";
+import { jalaliExportCalendar as calendar } from "../../src/features/excel-export/calendar";
 import { executeFullReset } from "../../src/application/reset/execute";
 import { previewFullReset } from "../../src/application/reset/preview";
 import { FULL_OPERATIONAL_CATEGORIES } from "../../src/domain/reset/categories";
@@ -145,9 +146,9 @@ const assign = (
 
 async function exported(
   ctx: AppContext,
-  input: Parameters<typeof exportScheduleToExcel>[1],
+  input: Omit<Parameters<typeof exportScheduleToExcel>[1], "calendar">,
 ) {
-  const result = await exportScheduleToExcel(ctx, input);
+  const result = await exportScheduleToExcel(ctx, { ...input, calendar });
   const sheet = (await readWorkbook(result.bytes)).getWorksheet(SHEET)!;
   const row = (r: number) =>
     Array.from({ length: 31 }, (_, d) => sheet.getCell(r, 6 + d).value ?? null);
@@ -333,11 +334,12 @@ describe("template management (D124)", () => {
       { id: second.templateId, isActive: true, fileName: "new.xlsx" },
     ]);
     // The next export uses the new template at once.
-    const { sheet } = await exportScheduleToExcel(head, { scheduleId: S }).then(
-      async (r) => ({
-        sheet: (await readWorkbook(r.bytes)).getWorksheet("Sheet2"),
-      }),
-    );
+    const { sheet } = await exportScheduleToExcel(head, {
+      scheduleId: S,
+      calendar,
+    }).then(async (r) => ({
+      sheet: (await readWorkbook(r.bytes)).getWorksheet("Sheet2"),
+    }));
     expect(sheet).toBeDefined();
   });
 
@@ -403,7 +405,7 @@ describe("schedule export (D124)", () => {
       revisionDraftAvailable: false,
     });
     await expect(
-      exportScheduleToExcel(head, { scheduleId: S }),
+      exportScheduleToExcel(head, { scheduleId: S, calendar }),
     ).rejects.toThrow(ValidationError);
   });
 
@@ -473,7 +475,7 @@ describe("schedule export (D124)", () => {
       ),
     );
     await expect(
-      exportScheduleToExcel(head, { scheduleId: S }),
+      exportScheduleToExcel(head, { scheduleId: S, calendar }),
     ).rejects.toThrow(new RegExp(`${U.icuNurse2.personnelNumber}`));
   });
 
@@ -485,7 +487,7 @@ describe("schedule export (D124)", () => {
       .set({ personnelNumber: "5555" })
       .where(eq(users.id, U.icuNurse4.id));
     await expect(
-      exportScheduleToExcel(head, { scheduleId: S }),
+      exportScheduleToExcel(head, { scheduleId: S, calendar }),
     ).rejects.toThrow(/5555/);
     const rows = ICU_ROWS.map((r) =>
       r.number === U.icuNurse4.personnelNumber ? { ...r, number: "5555" } : r,
@@ -505,21 +507,27 @@ describe("schedule export (D124)", () => {
   it("isolates departments and follows schedule visibility", async () => {
     ok(await upload(head, await icuTemplate()));
     await expect(
-      exportScheduleToExcel(erHead, { scheduleId: S }),
+      exportScheduleToExcel(erHead, { scheduleId: S, calendar }),
     ).rejects.toThrow(NotFoundError);
     const supervisor = as(await load(U.supervisor.id));
     // A Supervisor sees the grid only from FINALIZED (D12).
     await expect(
-      exportScheduleToExcel(supervisor, { scheduleId: S }),
+      exportScheduleToExcel(supervisor, { scheduleId: S, calendar }),
     ).rejects.toThrow(NotFoundError);
     await expect(
-      exportScheduleToExcel(as(await load(U.icuNurse1.id)), { scheduleId: S }),
+      exportScheduleToExcel(as(await load(U.icuNurse1.id)), {
+        scheduleId: S,
+        calendar,
+      }),
     ).rejects.toThrow(NotFoundError);
     await expect(
-      exportScheduleToExcel(as(await load(secretaryId)), { scheduleId: S }),
+      exportScheduleToExcel(as(await load(secretaryId)), {
+        scheduleId: S,
+        calendar,
+      }),
     ).rejects.toThrow(NotFoundError);
     await expect(
-      exportScheduleToExcel(admin, { scheduleId: S }),
+      exportScheduleToExcel(admin, { scheduleId: S, calendar }),
     ).rejects.toThrow(NotFoundError);
   });
 

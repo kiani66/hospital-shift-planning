@@ -2228,8 +2228,13 @@ its mapped day cells are written. Paths are relative to `src/`.
   personnel-number column may be hidden. One universal 31-day template serves every month.
   Optional (migration 0017): a day-heading row, per-person statistic columns and daily summary
   rows (below). A summary row may sit inside the personnel block; it must hold no personnel number.
-- **Personnel-number column from the records.** A hospital workbook without numbers (the NICU
-  file) is prepared in «ساخت ستون شماره پرسنلی پنهان»: the user assigns each printed row to a
+  Optional (migration 0018): a weekday row and its form (LONG «چهارشنبه» or NARROW «چ» for narrow
+  day columns), a month-heading cell, and the holiday highlighting (a holiday fill cell and a
+  normal-day column, both or neither); see «Calendar headings and holiday highlighting».
+- **Personnel-number column from the records.** Not needed for the NICU file, which prints its
+  personnel numbers in column B («شماره سیستم»); those printed numbers are matched as they are and
+  nothing is added. A hospital workbook without numbers can be prepared in
+  «ساخت ستون شماره پرسنلی پنهان»: the user assigns each printed row to a
   current or future member of the department (active account); the server writes those members'
   recorded numbers, as text, into a column that holds no value in any row and crosses no merge,
   and hides it. Nothing is inserted or moved; only that sheet part changes (cells, one `<col>`,
@@ -2252,10 +2257,14 @@ its mapped day cells are written. Paths are relative to `src/`.
   of personnel rows must be empty or hold a code from a previous export (M, E, N, ME, OFF, H or
   `?`; anything else usually means a wrong first-day column). Every other written cell
   (statistics of personnel rows, summary and heading rows) may hold any static value but no
-  formula, error, boolean, date, rich value, merge, shared formula, table or lock. A mapped cell
-  outside the sheet's print area is a warning (the NICU file prints A1:AP, so day 31 in AQ would
-  not print until the print area is widened in Excel; the system never edits print settings).
-  Messages name the Excel cell.
+  formula, error, boolean, date, rich value, merge, shared formula, table or lock, and it must
+  already hold what the export writes there or nothing: a figure or `?` (statistics, summaries), a
+  day number 1–31 (day headings), a short word without digits (weekdays), a heading with a
+  four-digit year (month heading). Hospital text, a signature or a wrong mapping is therefore never
+  silently overwritten. The month heading may be the top-left cell of a merge (where Excel keeps
+  the merged value); any other merge over a written cell is rejected. A mapped cell outside the
+  sheet's print area is a warning (the system never edits print settings; the NICU file prints
+  A1:AS31, which includes day 31 in AR). Messages name the Excel cell.
 - **Export.** One repeatable-read, read-only transaction: authorize, load the active template and
   mapping, the roster and decisions. DRAFT … RETURNED write the working copy; an approved schedule
   (APPROVED, or REVISING / a revision's SUBMITTED / RETURNED) writes the latest approved version
@@ -2276,13 +2285,44 @@ its mapped day cells are written. Paths are relative to `src/`.
   staffing counts it: `coverageOf`, ME toward M and E, secretaries excluded, D119), the day
   headings 1…N, and `CLEAR` for a figure the system cannot calculate (required/contractual hours,
   leave balances, contract), which is emptied. A figure that depends on an undecided day is `?`.
-  Working-hour and coverage semantics are unchanged; no hours are written. NICU proposal (pending
-  product approval): I «ساعت موظفی» CLEAR, J «مرخصی» LEAVE_DAYS, K «تعداد شیفت» SHIFT_COUNT,
-  heading row 6, summary rows as COVERAGE_M/E/N once their meaning is confirmed.
+  Working-hour and coverage semantics are unchanged; no hours are written. Approved by the product
+  owner: **ME is exactly one shift** in `SHIFT_COUNT` and contributes one person to both Morning
+  and Evening coverage; the shift count is never multiplied by covered periods. H, OFF and an
+  undecided day stay distinct (H counts as leave, OFF as neither, undecided makes the figure `?`).
+- **NICU mapping (verified against the approved `Template_Export.xlsx`).** `Sheet2`; personnel
+  numbers in B, rows 7–21 nurses and 22 the secretary; days N–AR; weekdays row 5 (NARROW: the day
+  columns are about three characters wide, full names are clipped); day numbers row 6; month
+  heading U3 («مهرماه 1405»); J «ساعت موظفی» CLEAR (contractual, until authoritative data exists),
+  K «مرخصی» LEAVE_DAYS, L «تعداد شیفت» SHIFT_COUNT (I is «سابقه کار-ماه» and is not written); rows
+  23, 24, 25 COVERAGE_M, _E, _N (the rows carry no label in the file; the order is the product
+  owner's and must be confirmed on the real file); holiday fill from P7 (a Friday of the saved
+  month), normal days like column O. Static figures the system does not model (A2/A3, F26, F27,
+  N27, G29) are left as they are.
+- **Calendar headings and holiday highlighting.** Jalali conversion stays in the presentation
+  adapter (`features/calendar/jalali.ts`): the export use case receives an `ExcelExportCalendar`
+  (day number, weekday, month heading per ISO date) from the route, so no conversion depends on
+  the application layer or the server's timezone. Every export rewrites the mapped weekday and
+  day-number cells for the period's days and blanks the rest (29- and 30-day months clear 30–31),
+  and writes «<ماه>‌ماه <سال>» (both months for a period across a month boundary). Holidays are
+  classified once (`domain/calendar/holiday-kind.ts`): every Friday (`WEEKLY_REST`) and, once a
+  master calendar is connected through `HolidayCalendar`, official holidays (`OFFICIAL`, none
+  today); the classification is presentation only and does not make Friday a staffing HOLIDAY
+  (D41 unchanged). With highlighting mapped, every written day cell (weekday and day-number rows,
+  personnel rows, summary rows and filled empty rows of the personnel block) gets the holiday fill
+  on a holiday and its row's normal fill (read from the normal-day column of the stored template)
+  otherwise. Only the cell's `fillId` changes: its border, font, alignment, number format and
+  protection stay, the same format is reused when the workbook has it, and a missing combination
+  is appended to `<cellXfs>`. Fills always come from the stored template, so highlights never
+  accumulate across months, and the month the file was saved in reproduces the file's own styles.
+  The holiday fill cell must show the holiday fill in the uploaded file; a holiday fill that equals
+  the normal fill in every personnel row is rejected, and in other rows (the NICU header rows
+  5–6, filled on every day) it is a warning. Without highlighting mapped, fills are untouched and a
+  template whose day columns differ in fill gets a warning that they will stay put.
 - **Preservation.** The workbook is patched at the ZIP/XML level: every part except the mapped
-  worksheet is copied byte for byte, and in that worksheet only the `<c>` elements of the mapped
-  day cells of matched rows change (inline strings, the cell's own style kept). Fonts, borders,
-  fills, merges, hidden columns, row heights, column widths, print area, margins, orientation,
+  worksheet (and, for a new fill combination, `styles.xml`, where formats are only appended) is
+  copied byte for byte, and in that worksheet only the `<c>` elements of the mapped cells change
+  (inline strings; the cell's own style kept, or the same style with the holiday or normal fill).
+  Fonts, borders, merges, hidden columns, row heights, column widths, print area, margins, orientation,
   headers/footers, drawings, formulas and totals are untouched. A library round trip (ExcelJS)
   was rejected because it re-serializes the whole workbook and drops features it does not model.
   When the workbook contains formulas, their cached results are dropped (the formulas themselves
@@ -2292,15 +2332,18 @@ its mapped day cells are written. Paths are relative to `src/`.
 - **Download.** `GET /api/schedules/[scheduleId]/excel` (`?source=revision-draft`) and
   `GET /api/departments/[code]/excel-template`, authorized on every request, `private, no-store`,
   the xlsx content type and an attachment named from the schedule month only, e.g.
-  `NICU-schedule-1405-07.xlsx`; the month printed inside the template is not edited in V1.
+  `NICU-schedule-1405-07.xlsx`; the month inside the workbook is written only when a month-heading
+  cell is mapped.
   Server Actions accept up to 3 MB (`serverActions.bodySizeLimit`) for the upload.
 - **Out of scope (V1):** non-consecutive day columns, several active templates, version-history
-  UI, editing headings, totals or formulas, and any change to Excel import.
+  UI, editing formulas or unmapped totals, the official-holiday master calendar (a separate change:
+  no holiday table, migration, admin UI or external source here), and any change to Excel import.
 
 Enforced in `domain/excel-export/template-mapping.ts`, `domain/excel-export/statistics.ts`,
 `domain/authz/policies.ts`, `application/excel-export/`,
 `infrastructure/repositories/excel-templates.ts`, migrations `0016_excel_export_templates` and
-`0017_excel_template_statistics`, `features/excel-export/` and
+`0017_excel_template_statistics`, `0018_excel_template_calendar`, `domain/calendar/holiday-kind.ts`,
+`features/excel-export/` (with `calendar.ts`, the Jalali adapter of the export) and
 `app/(app)/departments/[code]/settings/page.tsx`; the sanitized NICU equivalent is
 `tests/support/nicu-template.ts`.
 

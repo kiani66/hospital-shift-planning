@@ -3,6 +3,7 @@ import { exportScheduleToExcel } from "@/application/excel-export/export";
 import { XLSX_CONTENT_TYPE } from "@/application/excel-export/template-workbook";
 import { ValidationError } from "@/domain/shared/errors";
 import { requireRequestContext } from "@/features/auth/guards";
+import { jalaliExportCalendar } from "@/features/excel-export/calendar";
 import {
   attachmentDisposition,
   scheduleExportFileName,
@@ -33,6 +34,7 @@ export async function GET(
     const result = await exportScheduleToExcel(app, {
       scheduleId,
       source: draft ? "REVISION_DRAFT" : "DEFAULT",
+      calendar: jalaliExportCalendar,
     });
     return new Response(Buffer.from(result.bytes), {
       headers: {

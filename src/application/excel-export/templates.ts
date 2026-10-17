@@ -6,6 +6,7 @@ import { decide } from "../../domain/authz/policies";
 import {
   DAILY_STATISTICS,
   PERSON_STATISTICS,
+  WEEKDAY_FORMATS,
   requireTemplateMapping,
   storedTemplateMapping,
   type ExcelTemplateMapping,
@@ -68,6 +69,11 @@ export const templateMappingInput = z.object({
     )
     .max(16)
     .default([]),
+  weekdayRow: z.coerce.number().int().nullable().default(null),
+  weekdayFormat: z.enum(WEEKDAY_FORMATS).default("LONG"),
+  monthHeadingCell: z.string().trim().max(12).nullable().default(null),
+  holidayFillCell: z.string().trim().max(12).nullable().default(null),
+  normalFillColumn: z.string().trim().max(8).nullable().default(null),
 });
 
 export type { TemplatePersonnelEntry };

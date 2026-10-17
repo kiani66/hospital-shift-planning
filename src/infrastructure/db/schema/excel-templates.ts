@@ -15,6 +15,7 @@ import {
 import type {
   StatisticColumn,
   SummaryRow,
+  WeekdayFormat,
 } from "../../../domain/excel-export/template-mapping";
 import { createdAt, id, instant } from "./columns";
 import { departments } from "./identity";
@@ -71,6 +72,14 @@ export const departmentExcelTemplates = pgTable(
       .$type<readonly SummaryRow[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /** Optional row that gets each day's weekday (migration 0018). */
+    weekdayRow: integer(),
+    weekdayFormat: text().$type<WeekdayFormat>().notNull().default("LONG"),
+    /** Optional cell that gets the Jalali month and year, e.g. `U3`. */
+    monthHeadingCell: text(),
+    /** Holiday highlighting: the holiday fill cell and the normal-day column, both or neither. */
+    holidayFillCell: text(),
+    normalFillColumn: text(),
     /** Optimistic-concurrency counter, bumped by every mapping change. */
     revision: integer().notNull().default(0),
     uploadedBy: uuid().notNull(),
@@ -101,6 +110,14 @@ export const departmentExcelTemplates = pgTable(
     check(
       "department_excel_templates_statistics_check",
       sql`jsonb_typeof(${t.statisticColumns}) = 'array' and jsonb_typeof(${t.summaryRows}) = 'array'`,
+    ),
+    check(
+      "department_excel_templates_calendar_check",
+      sql`(${t.weekdayRow} is null or ${t.weekdayRow} >= 1) and ${t.weekdayFormat} in ('LONG', 'NARROW') and (${t.monthHeadingCell} is null or ${t.monthHeadingCell} ~ '^[A-Z]{1,3}[1-9][0-9]{0,6}$')`,
+    ),
+    check(
+      "department_excel_templates_holiday_fill_check",
+      sql`(${t.holidayFillCell} is null) = (${t.normalFillColumn} is null) and (${t.holidayFillCell} is null or ${t.holidayFillCell} ~ '^[A-Z]{1,3}[1-9][0-9]{0,6}$') and (${t.normalFillColumn} is null or ${t.normalFillColumn} ~ '^[A-Z]{1,3}$')`,
     ),
     check(
       "department_excel_templates_columns_check",

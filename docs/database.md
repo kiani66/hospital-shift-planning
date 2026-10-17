@@ -32,7 +32,7 @@ TypeScript schema.
 | Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                                    |
 | Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                                     |
 | Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                                       |
-| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migrations 0016–0017, D124)                                                                                                                                              |
+| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migrations 0016–0018, D124)                                                                                                                                              |
 | Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                                      |
 
 ## Where each rule is enforced
@@ -232,3 +232,10 @@ Migration `0017_excel_template_statistics` adds the optional mapping parts to th
 `day_header_row` (nullable, `>= 1`), `statistic_columns` and `summary_rows` (`jsonb` arrays,
 default `[]`, validated by the domain mapping before every write). Existing templates keep their
 behaviour with empty lists. No other table changes.
+
+Migration `0018_excel_template_calendar` adds the calendar mapping to the same table:
+`weekday_row` (nullable, `>= 1`), `weekday_format` (`LONG` or `NARROW`, default `LONG`),
+`month_heading_cell`, `holiday_fill_cell` (nullable cell addresses) and `normal_fill_column`
+(nullable column letters; set together with `holiday_fill_cell` or not at all, enforced by a check
+constraint). Existing templates keep their behaviour: no weekday row, heading or highlighting. No
+other table changes; no holiday data is stored (official holidays remain a separate change).

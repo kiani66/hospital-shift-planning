@@ -2,22 +2,41 @@ import { strFromU8, unzipSync } from "fflate";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
-  exportDayHeaderValues,
+  dailyStatistic,
+  personStatistic,
+} from "../../domain/excel-export/statistics";
+import {
+  columnLetters,
   exportDayValues,
+  exportHolidayColumns,
+  exportPeriodRow,
+  type ExcelTemplateMapping,
   type ExportCellValue,
 } from "../../domain/excel-export/template-mapping";
-import type { AssignmentCode } from "../../domain/shifts/shift-type";
+import {
+  addDays,
+  dayOfWeek,
+  isoDate,
+  type IsoDate,
+} from "../../domain/shared/dates";
 import { ValidationError } from "../../domain/shared/errors";
+import type { AssignmentCode } from "../../domain/shifts/shift-type";
 import {
   patchXlsx,
   readWorkbook,
   sheetPart,
 } from "../../../tests/support/excel-templates";
 import {
+  NICU_DAY_ROW,
+  NICU_FIRST_DAY,
   NICU_MAPPING,
   NICU_PERSONNEL_ROWS,
+  NICU_SAVED_FRIDAYS,
   NICU_SECRETARY_ROW,
   NICU_SHEET,
+  NICU_SUMMARY_ROWS,
+  NICU_WEEKDAY_ROW,
+  nicuNumber,
   nicuTemplate,
 } from "../../../tests/support/nicu-template";
 import {
@@ -28,108 +47,639 @@ import {
 } from "./template-workbook";
 
 /**
- * The sanitized NICU print workbook end to end (D124): the personnel-number
- * column is added from the system's numbers, the prepared file validates
- * against the NICU mapping, and exports keep the print layout.
+ * The sanitized NICU print workbook end to end (D124), built to the hospital
+ * file's verified structure: personnel numbers in B, days in N–AR, weekdays
+ * on row 5, day numbers on row 6, statistics in J–L, coverage on rows 23–25,
+ * Mehr 1405's Fridays highlighted. The calendar values here come from ISO
+ * dates; the Jalali adapter itself is tested in `features/excel-export`.
  */
 
-const ROWS = [...NICU_PERSONNEL_ROWS, NICU_SECRETARY_ROW];
-/** Fictional numbers, as text with leading zeros. */
-const NUMBERS = new Map(ROWS.map((row, i) => [row, `00${7100 + i}`]));
-const numberOf = (row: number) => NUMBERS.get(row)!;
-
-let original: Uint8Array;
-let prepared: Uint8Array;
-
+let template: Uint8Array;
 beforeAll(async () => {
-  original = await nicuTemplate();
-  prepared = writePersonnelColumn(original, {
-    sheetName: NICU_SHEET,
-    column: "BL",
-    numbers: NUMBERS,
-  });
+  template = await nicuTemplate();
 });
 
 const sheetXml = (bytes: Uint8Array) =>
   strFromU8(unzipSync(bytes)[sheetPart(bytes, NICU_SHEET)]!);
 
-describe("the NICU workbook as received", () => {
-  it("has no personnel numbers, so it cannot be activated as is", () => {
-    const inspection = inspectExcelTemplate(original, NICU_MAPPING);
-    expect(inspection.valid).toBe(false);
-    // Last month's codes sit in rows that have no personnel number yet.
-    expect(inspection.errors[0]).toMatchObject({
-      cell: "M7",
-      message: expect.stringContaining("شماره پرسنلی ندارد"),
+/** Whole Jalali months by their first ISO day (verified with ICU). */
+const MONTHS = {
+  esfand1404: { start: isoDate("2026-02-20"), days: 29 },
+  farvardin1405: { start: isoDate("2026-03-21"), days: 31 },
+  mehr1405: { start: isoDate("2026-09-23"), days: 30 },
+  aban1405: { start: isoDate("2026-10-23"), days: 30 },
+  ordibehesht1406: { start: isoDate("2027-04-21"), days: 31 },
+} as const;
+type Month = (typeof MONTHS)[keyof typeof MONTHS];
+
+/** Persian weekday initials by `dayOfWeek` (0 = Sunday). */
+const INITIAL = ["ی", "د", "س", "چ", "پ", "ج", "ش"];
+const datesOf = (month: Month): IsoDate[] =>
+  Array.from({ length: month.days }, (_, i) => addDays(month.start, i));
+const fridaysOf = (month: Month) =>
+  datesOf(month).flatMap((d, i) => (dayOfWeek(d) === 5 ? [i + 1] : []));
+
+/** A month of decisions: index 0 is day 1; null is undecided. */
+const plan = (codes: readonly (AssignmentCode | null)[]) =>
+  new Map(
+    codes.flatMap((code, i) => (code === null ? [] : [[i + 1, code] as const])),
+  );
+const CYCLE = ["M", "E", "N", "OFF", "ME", "H"] as const;
+const full = plan(Array.from({ length: 31 }, (_, i) => CYCLE[i % 6]!));
+
+/** What the export use case writes, from decisions by template row. */
+function exportMonth(
+  month: Month,
+  people: ReadonlyMap<number, ReadonlyMap<number, AssignmentCode>> = new Map(
+    NICU_PERSONNEL_ROWS.map((row) => [row, full]),
+  ),
+  options: { bytes?: Uint8Array; mapping?: ExcelTemplateMapping } = {},
+) {
+  const mapping = options.mapping ?? NICU_MAPPING;
+  const dates = datesOf(month);
+  const n = month.days;
+  const staffing = [...people]
+    .filter(([row]) => row !== NICU_SECRETARY_ROW)
+    .map(([, days]) => days);
+  return populateExcelTemplate(
+    options.bytes ?? template,
+    mapping,
+    new Map(
+      [...people].map(([row, days]) => [
+        nicuNumber(row),
+        exportDayValues(n, days),
+      ]),
+    ),
+    {
+      statistics: new Map(
+        [...people].map(([row, days]) => [
+          nicuNumber(row),
+          new Map(
+            (mapping.statisticColumns ?? []).map((c) => [
+              c.column,
+              personStatistic(c.statistic, n, days),
+            ]),
+          ),
+        ]),
+      ),
+      summaries: new Map(
+        (mapping.summaryRows ?? []).map((s) => [
+          s.row,
+          dailyStatistic(s.statistic, n, staffing),
+        ]),
+      ),
+      dayHeader: exportPeriodRow(n, (i) => i + 1),
+      weekdays: exportPeriodRow(n, (i) => INITIAL[dayOfWeek(dates[i]!)]!),
+      monthHeading: "ماه آزمایشی 1405",
+      holidays: exportHolidayColumns(dates),
+    },
+  );
+}
+
+const read = async (bytes: Uint8Array) =>
+  (await readWorkbook(bytes)).getWorksheet(NICU_SHEET)!;
+type Sheet = Awaited<ReturnType<typeof read>>;
+const days = (sheet: Sheet, row: number) =>
+  Array.from(
+    { length: 31 },
+    (_, i) => sheet.getCell(row, NICU_FIRST_DAY + i).value ?? null,
+  );
+/** The theme colour of a cell's fill: 3 is the holiday fill, 0 white. */
+const fillTheme = (sheet: Sheet, row: number, column: number) =>
+  (
+    (sheet.getCell(row, column).fill as { fgColor?: { theme?: number } })
+      ?.fgColor ?? {}
+  ).theme;
+/** The days of `row` painted with the holiday fill. */
+const highlighted = (sheet: Sheet, row: number) =>
+  Array.from({ length: 31 }, (_, i) => i + 1).filter(
+    (day) => fillTheme(sheet, row, NICU_FIRST_DAY + day - 1) === 3,
+  );
+const BODY_ROWS = [...NICU_PERSONNEL_ROWS, ...NICU_SUMMARY_ROWS];
+
+describe("the NICU template as approved", () => {
+  it("validates with personnel matched strictly from column B", () => {
+    const inspection = inspectExcelTemplate(template, NICU_MAPPING);
+    expect(inspection.errors).toEqual([]);
+    expect(inspection.valid).toBe(true);
+    expect(
+      inspection.personnel.map((p) => [p.cell, p.personnelNumber]),
+    ).toEqual(NICU_PERSONNEL_ROWS.map((row) => [`B${row}`, nicuNumber(row)]));
+    expect(inspection.personnelColumnHidden).toBe(false);
+    expect(inspection.dayRange).toBe("N7:AR22");
+    // Day 31 (AR) is inside A1:AS31: the only notice is about the header fill.
+    expect(inspection.printArea).toBe("A1:AS31");
+    expect(inspection.warnings).toEqual([
+      {
+        message: expect.stringContaining("در ردیف‌های 5، 6 رنگ روز عادی"),
+      },
+    ]);
+  });
+
+  it("warns that day 31 does not print when the print area stops at AQ", async () => {
+    const narrow = await nicuTemplate({ printArea: "A1:AQ31" });
+    const inspection = inspectExcelTemplate(narrow, NICU_MAPPING);
+    expect(inspection.valid).toBe(true);
+    expect(inspection.warnings).toContainEqual({
+      cell: "AR6",
+      message: expect.stringContaining("روزهای 31"),
     });
+  });
+
+  it("warns that the saved month's Fridays stay put without a holiday fill", () => {
+    const inspection = inspectExcelTemplate(template, {
+      ...NICU_MAPPING,
+      holidayFillCell: null,
+      normalFillColumn: null,
+    });
+    expect(inspection.valid).toBe(true);
+    expect(inspection.warnings).toEqual([
+      {
+        cell: "P7",
+        message: expect.stringContaining("P، W، AD، AK"),
+      },
+    ]);
+  });
+
+  const patched = (edit: (xml: string) => string) =>
+    patchXlsx(template, {
+      [sheetPart(template, NICU_SHEET)]: edit(sheetXml(template)),
+    });
+  const withMerge = (ref: string) => (xml: string) =>
+    xml.includes("<mergeCells")
+      ? xml.replace("</mergeCells>", `<mergeCell ref="${ref}"/></mergeCells>`)
+      : xml.replace(
+          "</sheetData>",
+          `</sheetData><mergeCells count="1"><mergeCell ref="${ref}"/></mergeCells>`,
+        );
+  const cellValue = (address: string, inner: string) => (xml: string) =>
+    xml.replace(
+      new RegExp(`<c r="${address}"([^>]*?)(?:/>|>.*?</c>)`),
+      `<c r="${address}"$1${inner}`,
+    );
+
+  it.each<
+    [string, (xml: string) => string, Partial<ExcelTemplateMapping>, string]
+  >([
+    [
+      "a formula in a statistic cell",
+      cellValue("L9", "><f>SUM(N9:AR9)</f><v>3</v></c>"),
+      {},
+      "L9",
+    ],
+    ["a merge over a summary row", withMerge("N24:O24"), {}, "N24:O24"],
+    ["a merge over the weekday row", withMerge("Q5:R5"), {}, "Q5:R5"],
+    [
+      "a formula in the weekday row",
+      cellValue("S5", "><f>TODAY()</f><v>1</v></c>"),
+      {},
+      "S5",
+    ],
+    [
+      "a number in the weekday row",
+      cellValue("S5", ' t="inlineStr"><is><t>12</t></is></c>'),
+      {},
+      "S5",
+    ],
+    [
+      "text in the day-number row",
+      cellValue("S6", ' t="inlineStr"><is><t>روز</t></is></c>'),
+      {},
+      "S6",
+    ],
+    [
+      "a signature as the month heading",
+      (x) => x,
+      { monthHeadingCell: "V28" },
+      "V28",
+    ],
+    [
+      "the hospital title as the month heading",
+      (x) => x,
+      { monthHeadingCell: "X1" },
+      "X1",
+    ],
+    [
+      "the contract column (text) as a statistic",
+      (x) => x,
+      { statisticColumns: [{ column: "M", statistic: "CLEAR" }] },
+      "M7",
+    ],
+    [
+      "a holiday fill cell without a fill",
+      (x) => x,
+      { holidayFillCell: "A1" },
+      "A1",
+    ],
+    [
+      "a normal column that is itself a Friday",
+      (x) => x,
+      { normalFillColumn: "P" },
+      "P7",
+    ],
+  ])("rejects %s", (_, edit, patch, cell) => {
+    const inspection = inspectExcelTemplate(patched(edit), {
+      ...NICU_MAPPING,
+      ...patch,
+    });
+    expect(inspection.valid).toBe(false);
+    expect(inspection.errors[0]).toMatchObject({ cell });
+  });
+
+  it("allows a month heading at the top-left of a merge, never inside one", () => {
+    const anchored = patched(withMerge("U3:AA3"));
+    expect(inspectExcelTemplate(anchored, NICU_MAPPING).errors).toEqual([]);
+    const inside = patched(withMerge("T3:AA3"));
+    expect(inspectExcelTemplate(inside, NICU_MAPPING).errors).toEqual([
+      expect.objectContaining({ cell: "T3:AA3" }),
+    ]);
+  });
+
+  it("refuses a summary row that holds a personnel number", () => {
+    const inspection = inspectExcelTemplate(template, {
+      ...NICU_MAPPING,
+      summaryRows: [{ row: 8, statistic: "COVERAGE_M" }],
+    });
+    expect(inspection.errors).toEqual([
+      expect.objectContaining({ cell: "B8" }),
+    ]);
+  });
+});
+
+describe("exporting into the NICU template", () => {
+  it("writes M/E/N/ME/H, OFF blank, undecided ?, the secretary and the statistics", async () => {
+    const people = new Map(NICU_PERSONNEL_ROWS.map((row) => [row, full]));
+    people.set(8, plan(["ME", null, "OFF", "H", "ME"]));
+    const sheet = await read(exportMonth(MONTHS.mehr1405, people));
+    expect(days(sheet, 7).slice(0, 7)).toEqual([
+      "M",
+      "E",
+      "N",
+      null,
+      "ME",
+      "H",
+      "M",
+    ]);
+    expect(days(sheet, 7)[30]).toBeNull(); // Mehr has 30 days.
+    expect(days(sheet, 8).slice(0, 6)).toEqual([
+      "ME",
+      "?",
+      null,
+      "H",
+      "ME",
+      "?",
+    ]);
+    expect(days(sheet, NICU_SECRETARY_ROW).slice(0, 3)).toEqual([
+      "M",
+      "E",
+      "N",
+    ]);
+    // J (contractual hours) cleared; K leave days; L shifts with ME counted once.
+    const fullMonth = Array.from({ length: 30 }, (_, i) => CYCLE[i % 6]!);
+    expect(
+      ["J7", "K7", "L7"].map((a) => sheet.getCell(a).value ?? null),
+    ).toEqual([
+      null,
+      fullMonth.filter((c) => c === "H").length,
+      fullMonth.filter((c) => c !== "OFF" && c !== "H").length,
+    ]);
+    expect(sheet.getCell("L7").value).toBe(20); // 5 each of M, E, N, ME.
+    expect(
+      ["J8", "K8", "L8"].map((a) => sheet.getCell(a).value ?? null),
+    ).toEqual([null, "?", "?"]);
+    // Coverage rows: ? while someone counted is undecided, ME toward M and E.
+    expect(days(sheet, 23)[1]).toBe("?");
+    expect(days(sheet, 23)[0]).toBe(15); // Fourteen nurses on M plus one ME.
+    expect(days(sheet, 24)[0]).toBe(1); // The ME.
+    expect(days(sheet, 25)[30]).toBeNull();
+  });
+
+  it.each([
+    ["Esfand 1404", MONTHS.esfand1404, "ج ش ی د س چ پ"],
+    ["Mehr 1405", MONTHS.mehr1405, "چ پ ج ش ی د س"],
+    ["Farvardin 1405", MONTHS.farvardin1405, "ش ی د س چ پ ج"],
+  ] as const)(
+    "%s: day numbers, weekdays and heading stop at the month's end",
+    async (_, month, firstWeek) => {
+      const sheet = await read(exportMonth(month));
+      expect(sheet.getCell("U3").value).toBe("ماه آزمایشی 1405");
+      expect(days(sheet, NICU_DAY_ROW).filter((v) => v !== null)).toEqual(
+        Array.from({ length: month.days }, (_, i) => i + 1),
+      );
+      expect(days(sheet, NICU_WEEKDAY_ROW).slice(0, 7).join(" ")).toBe(
+        firstWeek,
+      );
+      for (const row of [NICU_WEEKDAY_ROW, NICU_DAY_ROW, ...BODY_ROWS]) {
+        expect(days(sheet, row).slice(month.days), `row ${row}`).toEqual(
+          Array(31 - month.days).fill(null),
+        );
+        expect(days(sheet, row)[month.days - 1], `row ${row}`).not.toBeNull();
+      }
+      // The template's day 31 heading and its stale day-31 counts are gone.
+      if (month.days < 31) expect(sheet.getCell("AR6").value).toBeNull();
+    },
+  );
+
+  it.each([
+    ["Mehr 1405 (the saved month)", MONTHS.mehr1405],
+    ["Aban 1405", MONTHS.aban1405],
+    ["Esfand 1404", MONTHS.esfand1404],
+    ["Ordibehesht 1406 (Friday the 31st)", MONTHS.ordibehesht1406],
+  ] as const)(
+    "%s: exactly its Fridays get the holiday fill",
+    async (_, month) => {
+      const sheet = await read(exportMonth(month));
+      const fridays = fridaysOf(month);
+      for (const row of BODY_ROWS)
+        expect(highlighted(sheet, row), `row ${row}`).toEqual(fridays);
+      // The weekday is Friday wherever the fill is.
+      for (const day of fridays)
+        expect(days(sheet, NICU_WEEKDAY_ROW)[day - 1]).toBe("ج");
+      // The header rows have the holiday fill on every day in this template.
+      for (const row of [NICU_WEEKDAY_ROW, NICU_DAY_ROW])
+        expect(highlighted(sheet, row)).toHaveLength(31);
+    },
+  );
+
+  it("never carries the saved month's Fridays into another month", async () => {
+    const sheet = await read(exportMonth(MONTHS.aban1405));
+    expect(fridaysOf(MONTHS.aban1405)).toEqual([1, 8, 15, 22, 29]);
+    for (const day of NICU_SAVED_FRIDAYS)
+      for (const row of BODY_ROWS)
+        expect(fillTheme(sheet, row, NICU_FIRST_DAY + day - 1)).toBe(0);
+    // A 29-day month: day 30 and 31 columns get the normal fill too.
+    const esfand = await read(exportMonth(MONTHS.esfand1404));
+    expect(highlighted(esfand, 7)).toEqual([1, 8, 15, 22, 29]);
+  });
+
+  it("changes only fills: borders, fonts, alignment and every other part stay", async () => {
+    const before = await read(template);
+    for (const month of [MONTHS.aban1405, MONTHS.esfand1404]) {
+      const bytes = exportMonth(month);
+      const after = await read(bytes);
+      for (const row of [NICU_WEEKDAY_ROW, NICU_DAY_ROW, ...BODY_ROWS])
+        for (let day = 1; day <= 31; day++) {
+          const a = after.getCell(row, NICU_FIRST_DAY + day - 1);
+          const b = before.getCell(row, NICU_FIRST_DAY + day - 1);
+          const where = `${columnLetters(NICU_FIRST_DAY + day - 1)}${row}`;
+          expect(a.border, where).toEqual(b.border);
+          expect(a.font, where).toEqual(b.font);
+          expect(a.alignment, where).toEqual(b.alignment);
+          expect(a.numFmt, where).toEqual(b.numFmt);
+        }
+      // Only the worksheet and, for new fill combinations, styles.xml change.
+      const parts = unzipSync(bytes);
+      const source = unzipSync(template);
+      const changed = Object.keys(source).filter(
+        (name) => strFromU8(parts[name]!) !== strFromU8(source[name]!),
+      );
+      expect(changed.filter((n) => n !== "xl/styles.xml")).toEqual([
+        sheetPart(template, NICU_SHEET),
+      ]);
+      // styles.xml: formats are only appended to <cellXfs>.
+      if (changed.includes("xl/styles.xml")) {
+        const strip = (xml: string) =>
+          xml.replace(
+            /<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/,
+            (_m, inner: string) =>
+              inner.slice(
+                0,
+                strFromU8(source["xl/styles.xml"]!).match(
+                  /<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/,
+                )![1]!.length,
+              ),
+          );
+        expect(strip(strFromU8(parts["xl/styles.xml"]!))).toBe(
+          strip(strFromU8(source["xl/styles.xml"]!)),
+        );
+      }
+    }
+  });
+
+  it("reproduces the saved month's own styles exactly (styles.xml untouched)", () => {
+    const parts = unzipSync(exportMonth(MONTHS.mehr1405));
+    expect(parts["xl/styles.xml"]).toEqual(
+      unzipSync(template)["xl/styles.xml"],
+    );
+  });
+
+  it("keeps the print layout, titles, notes, signatures and stray cells", async () => {
+    const bytes = exportMonth(MONTHS.farvardin1405);
+    const before = await read(template);
+    const after = await read(bytes);
+    expect(after.pageSetup).toEqual(before.pageSetup);
+    expect(after.views).toEqual(before.views);
+    expect(sheetXml(bytes)).toContain(
+      '<colBreaks count="1" manualBreakCount="1"><brk id="51" max="1048575" man="1"/></colBreaks>',
+    );
+    for (const c of [
+      1,
+      2,
+      3,
+      NICU_FIRST_DAY,
+      NICU_FIRST_DAY + 30,
+      47,
+      49,
+      50,
+    ]) {
+      expect(after.getColumn(c).width).toBe(before.getColumn(c).width);
+      expect(after.getColumn(c).hidden).toBe(before.getColumn(c).hidden);
+    }
+    for (const r of [1, 3, 5, 6, 7, 22, 25])
+      expect(after.getRow(r).height).toBe(before.getRow(r).height);
+    for (const address of [
+      "X1",
+      "A2",
+      "A3",
+      "N3",
+      "AM3",
+      "C24",
+      "C25",
+      "C26",
+      "F26",
+      "G26",
+      "C27",
+      "F27",
+      "N27",
+      "G29",
+      "V28",
+      "AD28",
+      "AK28",
+      "AZ23",
+      "BA42",
+      "A7",
+      "B7",
+      "C7",
+      "D7",
+      "E22",
+      "H7",
+      "I7",
+      "M7",
+    ])
+      expect(after.getCell(address).value, address).toEqual(
+        before.getCell(address).value,
+      );
+  });
+
+  it("is deterministic: the same month exported twice is byte for byte equal", () => {
+    expect(exportMonth(MONTHS.aban1405)).toEqual(exportMonth(MONTHS.aban1405));
+  });
+
+  it("clears a template row whose person is not exported", async () => {
+    const people = new Map(
+      NICU_PERSONNEL_ROWS.filter((r) => r !== 21).map((r) => [r, full]),
+    );
+    const sheet = await read(exportMonth(MONTHS.mehr1405, people));
+    expect(days(sheet, 21).every((v) => v === null)).toBe(true);
+    expect(
+      ["J21", "K21", "L21"].map((a) => sheet.getCell(a).value ?? null),
+    ).toEqual([null, null, null]);
+    // Its cells still follow the month's Fridays.
+    expect(highlighted(sheet, 21)).toEqual(fridaysOf(MONTHS.mehr1405));
+  });
+
+  it("accepts last month's export as a template only while its holiday cell is highlighted", () => {
+    const bytes = exportMonth(
+      MONTHS.mehr1405,
+      new Map(NICU_PERSONNEL_ROWS.map((r) => [r, plan(["M", null, "H"])])),
+    );
+    expect(inspectExcelTemplate(bytes, NICU_MAPPING).errors).toEqual([]);
+    // The holiday fill cell must hold the holiday fill in the uploaded file:
+    // in Aban's export P7 (day 3) is a working day.
+    const aban = exportMonth(MONTHS.aban1405);
+    expect(inspectExcelTemplate(aban, NICU_MAPPING).errors).toEqual([
+      expect.objectContaining({ cell: "P7" }),
+    ]);
+  });
+
+  it("repaints the table's empty rows, never an unformatted one", async () => {
+    const few = await nicuTemplate({ peopleRows: [7, 8, NICU_SECRETARY_ROW] });
+    const part = sheetPart(few, NICU_SHEET);
+    // Row 21 removed altogether: nothing may be painted where nothing was.
+    const bytes = patchXlsx(few, {
+      [part]: sheetXml(few).replace(/<row r="21"[\s\S]*?<\/row>/, ""),
+    });
+    const people = new Map(
+      [7, 8, NICU_SECRETARY_ROW].map((row) => [row, full] as const),
+    );
+    const exported = exportMonth(MONTHS.aban1405, people, { bytes });
+    expect(sheetXml(exported)).not.toContain('<row r="21"');
+    const sheet = await read(exported);
+    for (const row of [9, 15, 20])
+      expect(highlighted(sheet, row), `row ${row}`).toEqual(
+        fridaysOf(MONTHS.aban1405),
+      );
+    expect(days(sheet, 15).every((v) => v === null)).toBe(true);
+  });
+
+  it("leaves fills alone when the mapping has no holiday fill", async () => {
+    const mapping = {
+      ...NICU_MAPPING,
+      holidayFillCell: null,
+      normalFillColumn: null,
+    };
+    const sheet = await read(
+      exportMonth(MONTHS.aban1405, undefined, { mapping }),
+    );
+    expect(highlighted(sheet, 7)).toEqual([...NICU_SAVED_FRIDAYS]);
+  });
+
+  it("refuses holiday flags that are not 31 days", () => {
+    expect(() =>
+      populateExcelTemplate(template, NICU_MAPPING, new Map(), {
+        holidays: [true],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it("creates a mapped summary row the sheet does not have yet, in row order", async () => {
+    const bytes = populateExcelTemplate(
+      template,
+      { ...NICU_MAPPING, summaryRows: [{ row: 30, statistic: "COVERAGE_N" }] },
+      new Map(),
+      { summaries: new Map([[30, Array<ExportCellValue>(31).fill(2)]]) },
+    );
+    const xml = sheetXml(bytes);
+    expect(xml.indexOf('<row r="30">')).toBeGreaterThan(
+      xml.indexOf('<row r="29"'),
+    );
+    expect(xml.indexOf('<row r="30">')).toBeLessThan(
+      xml.indexOf('<row r="42"'),
+    );
+    const sheet = await read(bytes);
+    expect(sheet.getCell("N30").value).toBe(2);
+    expect(sheet.getCell("AR30").value).toBe(2);
+  });
+});
+
+describe("a workbook without personnel numbers (preparation tool)", () => {
+  let bare: Uint8Array;
+  beforeAll(async () => {
+    bare = await nicuTemplate({ numbers: false });
+  });
+  const numbers = new Map(
+    NICU_PERSONNEL_ROWS.map((row) => [row, nicuNumber(row)]),
+  );
+  const BL = { ...NICU_MAPPING, personnelColumn: "BL" };
+
+  it("cannot be activated as is", () => {
+    const inspection = inspectExcelTemplate(bare, NICU_MAPPING);
+    expect(inspection.valid).toBe(false);
     expect(inspection.personnel).toEqual([]);
   });
 
   it("lists each row's printed text for choosing its person (never matched by name)", () => {
-    const labels = templateRowLabels(original, NICU_MAPPING);
-    expect(labels.map((l) => l.row)).toEqual([...NICU_PERSONNEL_ROWS, 22, 23]);
-    expect(labels[0]!.label).toContain("نام1 · خانوادگی نمونه 1 · سرپرستار");
-    expect(labels.find((l) => l.row === 22)!.label).toBe("منشی");
-    // Nothing from the day columns.
-    expect(labels.every((l) => !/\b(ME|N)\b/.test(l.label))).toBe(true);
+    const labels = templateRowLabels(bare, NICU_MAPPING);
+    expect(labels.map((l) => l.row)).toEqual([...NICU_PERSONNEL_ROWS]);
+    expect(labels[0]!.label).toContain("نام1 · خانوادگی1 · سرپرستار");
   });
-});
 
-describe("writePersonnelColumn", () => {
   it("writes the numbers as text in a hidden column without moving anything", async () => {
-    const inspection = inspectExcelTemplate(prepared, NICU_MAPPING);
+    const prepared = writePersonnelColumn(bare, {
+      sheetName: NICU_SHEET,
+      column: "BL",
+      numbers,
+    });
+    const inspection = inspectExcelTemplate(prepared, BL);
     expect(inspection.errors).toEqual([]);
-    expect(inspection.valid).toBe(true);
-    expect(inspection.personnel.map((p) => [p.row, p.personnelNumber])).toEqual(
-      ROWS.map((row) => [row, numberOf(row)]),
-    );
     expect(inspection.personnelColumnHidden).toBe(true);
-
-    const before = unzipSync(original);
+    const before = unzipSync(bare);
     const after = unzipSync(prepared);
-    const part = sheetPart(original, NICU_SHEET);
-    expect(Object.keys(after).sort()).toEqual(Object.keys(before).sort());
+    const part = sheetPart(bare, NICU_SHEET);
     for (const name of Object.keys(before))
       if (name !== part) expect(after[name], name).toEqual(before[name]);
-
-    // Only the BL cells, the hidden <col> and the dimension differ.
     const strip = (xml: string) =>
       xml
         .replace(/<c r="BL\d+"[^>]*>.*?<\/c>/g, "")
         .replace(/<col min="64" max="64"[^>]*\/>/, "")
         .replace(/<dimension ref="[^"]*"\/>/, "")
         .replace(/<row r="(\d+)"[^>]*>/g, '<row r="$1">');
-    expect(strip(sheetXml(prepared))).toBe(strip(sheetXml(original)));
-    expect(sheetXml(prepared)).toContain('<dimension ref="A1:BL128"/>');
-    expect(sheetXml(prepared)).toMatch(
-      /<col min="64" max="64"[^>]* hidden="1"\/>/,
-    );
-
-    const sheet = (await readWorkbook(prepared)).getWorksheet(NICU_SHEET)!;
-    expect(sheet.getCell("BL7").value).toBe("007100");
+    expect(strip(sheetXml(prepared))).toBe(strip(sheetXml(bare)));
+    const sheet = await read(prepared);
+    expect(sheet.getCell("BL22").value).toBe("07022");
     expect(sheet.getColumn("BL").hidden).toBe(true);
   });
 
   it("splits a <col> range that spans the column", () => {
-    const part = sheetPart(original, NICU_SHEET);
-    const xml = sheetXml(original).replace(
+    const part = sheetPart(bare, NICU_SHEET);
+    const xml = sheetXml(bare).replace(
       /<cols>[\s\S]*?<\/cols>/,
-      '<cols><col min="44" max="46" width="9" style="3" customWidth="1"/></cols>',
+      '<cols><col min="54" max="56" width="9" style="3" customWidth="1"/></cols>',
     );
-    const bytes = writePersonnelColumn(patchXlsx(original, { [part]: xml }), {
+    const bytes = writePersonnelColumn(patchXlsx(bare, { [part]: xml }), {
       sheetName: NICU_SHEET,
-      column: "AS",
+      column: "BC",
       numbers: new Map([[7, "1"]]),
     });
     expect(sheetXml(bytes)).toContain(
-      '<cols><col min="44" max="44" width="9" style="3" customWidth="1"/><col min="45" max="45" width="9" style="3" customWidth="1" hidden="1"/><col min="46" max="46" width="9" style="3" customWidth="1"/></cols>',
+      '<cols><col min="54" max="54" width="9" style="3" customWidth="1"/><col min="55" max="55" width="9" style="3" customWidth="1" hidden="1"/><col min="56" max="56" width="9" style="3" customWidth="1"/></cols>',
     );
   });
 
   it("adds <cols> when the sheet has none", () => {
-    const part = sheetPart(original, NICU_SHEET);
-    const xml = sheetXml(original).replace(/<cols>[\s\S]*?<\/cols>/, "");
-    const bytes = writePersonnelColumn(patchXlsx(original, { [part]: xml }), {
+    const part = sheetPart(bare, NICU_SHEET);
+    const xml = sheetXml(bare).replace(/<cols>[\s\S]*?<\/cols>/, "");
+    const bytes = writePersonnelColumn(patchXlsx(bare, { [part]: xml }), {
       sheetName: NICU_SHEET,
       column: "BL",
       numbers: new Map([[7, "1"]]),
@@ -140,16 +690,16 @@ describe("writePersonnelColumn", () => {
   });
 
   it.each([
-    ["C", "خالی نیست"], // It holds the last names.
-    ["AQ", "ادغام"], // Empty, but crossed by the merge added below.
+    ["C", "خالی نیست"], // It holds the first names.
+    ["BE", "ادغام"], // Empty, but crossed by the merge added below.
   ])("refuses column %s (%s)", (column, message) => {
-    const part = sheetPart(original, NICU_SHEET);
-    const xml = sheetXml(original).replace(
-      "</mergeCells>",
-      '<mergeCell ref="AP40:AR40"/></mergeCells>',
+    const part = sheetPart(bare, NICU_SHEET);
+    const xml = sheetXml(bare).replace(
+      "</sheetData>",
+      '</sheetData><mergeCells count="1"><mergeCell ref="BD40:BF40"/></mergeCells>',
     );
     expect(() =>
-      writePersonnelColumn(patchXlsx(original, { [part]: xml }), {
+      writePersonnelColumn(patchXlsx(bare, { [part]: xml }), {
         sheetName: NICU_SHEET,
         column,
         numbers: new Map([[7, "1"]]),
@@ -159,7 +709,7 @@ describe("writePersonnelColumn", () => {
 
   it("refuses an unknown sheet, a bad column and no rows", () => {
     const write = (sheetName: string, column: string, rows = 1) =>
-      writePersonnelColumn(original, {
+      writePersonnelColumn(bare, {
         sheetName,
         column,
         numbers: new Map(rows ? [[7, "1"]] : []),
@@ -167,256 +717,5 @@ describe("writePersonnelColumn", () => {
     expect(() => write("Sheet9", "BL")).toThrow(ValidationError);
     expect(() => write(NICU_SHEET, "7")).toThrow(ValidationError);
     expect(() => write(NICU_SHEET, "BL", 0)).toThrow(ValidationError);
-  });
-});
-
-describe("validation of the prepared NICU template", () => {
-  it("warns that day 31 (AQ) is outside the print area as found", () => {
-    const inspection = inspectExcelTemplate(prepared, NICU_MAPPING);
-    expect(inspection.printArea).toBe("A1:AP31");
-    expect(inspection.warnings).toEqual([
-      expect.objectContaining({
-        cell: "AQ6",
-        message: expect.stringContaining("روزهای 31"),
-      }),
-    ]);
-  });
-
-  it("has no print warning once the print area includes AQ", async () => {
-    const wide = writePersonnelColumn(
-      await nicuTemplate({ printArea: "A1:AQ31" }),
-      { sheetName: NICU_SHEET, column: "BL", numbers: NUMBERS },
-    );
-    expect(inspectExcelTemplate(wide, NICU_MAPPING).warnings).toEqual([]);
-  });
-
-  it("checks every mapped statistic, summary and heading cell", () => {
-    const part = sheetPart(prepared, NICU_SHEET);
-    const xml = sheetXml(prepared)
-      // A formula in a statistic cell, a merge over a summary row.
-      .replace(
-        /<c r="K9"([^>]*?)(?:\/>|>.*?<\/c>)/,
-        '<c r="K9"$1><f>SUM(M9:AP9)</f><v>3</v></c>',
-      )
-      .replace("</mergeCells>", '<mergeCell ref="N26:O26"/></mergeCells>');
-    const inspection = inspectExcelTemplate(
-      patchXlsx(prepared, { [part]: xml }),
-      NICU_MAPPING,
-    );
-    expect(inspection.valid).toBe(false);
-    expect(inspection.errors.map((e) => e.cell)).toEqual(["K9", "N26:O26"]);
-  });
-
-  it("refuses a summary row that holds a personnel number", () => {
-    const inspection = inspectExcelTemplate(prepared, {
-      ...NICU_MAPPING,
-      summaryRows: [{ row: 8, statistic: "COVERAGE_M" }],
-    });
-    expect(inspection.errors).toEqual([
-      expect.objectContaining({ cell: "BL8" }),
-    ]);
-  });
-});
-
-/** A month of decisions: index 0 is day 1; null is undecided. */
-const plan = (codes: readonly (AssignmentCode | null)[]) =>
-  new Map(
-    codes.flatMap((code, i) => (code === null ? [] : [[i + 1, code] as const])),
-  );
-
-function exportMonth(
-  dayCount: number,
-  people: ReadonlyMap<number, ReadonlyMap<number, AssignmentCode>>,
-  statistics: ReadonlyMap<number, Record<string, ExportCellValue>> = new Map(),
-  summaries: ReadonlyMap<number, ExportCellValue[]> = new Map(),
-) {
-  return populateExcelTemplate(
-    prepared,
-    NICU_MAPPING,
-    new Map(
-      [...people].map(([row, days]) => [
-        numberOf(row),
-        exportDayValues(dayCount, days),
-      ]),
-    ),
-    {
-      statistics: new Map(
-        [...statistics].map(([row, values]) => [
-          numberOf(row),
-          new Map(Object.entries(values)),
-        ]),
-      ),
-      summaries,
-      dayHeader: exportDayHeaderValues(dayCount),
-    },
-  );
-}
-
-describe("exporting into the NICU template", () => {
-  const full = plan(
-    Array.from(
-      { length: 31 },
-      (_, i) => (["M", "E", "N", "OFF", "ME", "H"] as const)[i % 6]!,
-    ),
-  );
-
-  it("writes M/E/N/ME/H, OFF blank, undecided ?, the secretary, and the statistics", async () => {
-    const partial = plan(["M", null, "OFF", "H", null]);
-    const people = new Map(ROWS.map((row) => [row, full]));
-    people.set(8, partial);
-    const bytes = exportMonth(
-      30,
-      people,
-      new Map([
-        [7, { J: 5, K: 20 }],
-        [8, { J: "?", K: "?" }],
-      ]),
-      new Map([
-        [25, Array.from({ length: 31 }, (_, i) => (i < 30 ? i % 4 : null))],
-      ]),
-    );
-    const sheet = (await readWorkbook(bytes)).getWorksheet(NICU_SHEET)!;
-    const row = (r: number) =>
-      Array.from({ length: 31 }, (_, i) => sheet.getCell(r, 13 + i).value);
-    expect(row(7).slice(0, 7)).toEqual(["M", "E", "N", null, "ME", "H", "M"]);
-    expect(row(7)[30]).toBeNull(); // AQ: Mehr has 30 days.
-    expect(row(8).slice(0, 6)).toEqual(["M", "?", null, "H", "?", "?"]);
-    expect(
-      row(8)
-        .slice(5, 30)
-        .every((v) => v === "?"),
-    ).toBe(true);
-    expect(row(NICU_SECRETARY_ROW).slice(0, 3)).toEqual(["M", "E", "N"]);
-    // Row 22 (the «منشی» caption) is not touched.
-    expect(row(22).every((v) => v === null)).toBe(true);
-    expect(sheet.getCell("A22").value).toBe("منشی");
-
-    // I (required hours) cleared, J/K recalculated, ? where unknown.
-    expect(
-      [7, 8, 9].map((r) =>
-        ["I", "J", "K"].map((c) => sheet.getCell(`${c}${r}`).value),
-      ),
-    ).toEqual([
-      [null, 5, 20],
-      [null, "?", "?"],
-      [null, null, null], // No statistic given: never last month's figure.
-    ]);
-    // Summary rows: given values, otherwise cleared; headings 1–30.
-    expect(row(25).slice(0, 5)).toEqual([0, 1, 2, 3, 0]);
-    expect(row(26).every((v) => v === null)).toBe(true);
-    expect(row(6).slice(28)).toEqual([29, 30, null]);
-  });
-
-  it.each([
-    [29, [28, 29, null, null]],
-    [30, [28, 29, 30, null]],
-    [31, [28, 29, 30, 31]],
-  ] as const)(
-    "a %i-day month fills exactly its days",
-    async (dayCount, headings) => {
-      const bytes = exportMonth(dayCount, new Map(ROWS.map((r) => [r, full])));
-      const sheet = (await readWorkbook(bytes)).getWorksheet(NICU_SHEET)!;
-      expect(
-        [27, 28, 29, 30].map((i) => sheet.getCell(6, 13 + i).value),
-      ).toEqual(headings);
-      const last = Array.from(
-        { length: 31 },
-        (_, i) => sheet.getCell(7, 13 + i).value,
-      );
-      expect(last.slice(dayCount).every((v) => v === null)).toBe(true);
-      expect(last[dayCount - 1]).toBe(
-        ["M", "E", "N", null, "ME", "H"][(dayCount - 1) % 6],
-      );
-    },
-  );
-
-  it("keeps the print layout: merges, print setup, widths, heights, styles, signatures", async () => {
-    const bytes = exportMonth(31, new Map(ROWS.map((r) => [r, full])));
-    const before = (await readWorkbook(prepared)).getWorksheet(NICU_SHEET)!;
-    const after = (await readWorkbook(bytes)).getWorksheet(NICU_SHEET)!;
-    expect(after.pageSetup).toEqual(before.pageSetup);
-    expect(after.headerFooter).toEqual(before.headerFooter);
-    expect(after.views).toEqual(before.views);
-    expect(Object.keys(after.model.merges ?? {}).sort()).toEqual(
-      Object.keys(before.model.merges ?? {}).sort(),
-    );
-    expect(after.model.merges).toEqual(before.model.merges);
-    for (const c of [2, 3, 13, 43, 64]) {
-      expect(after.getColumn(c).width).toBe(before.getColumn(c).width);
-      expect(after.getColumn(c).hidden).toBe(before.getColumn(c).hidden);
-    }
-    for (const r of [1, 6, 7, 23, 30])
-      expect(after.getRow(r).height).toBe(before.getRow(r).height);
-    for (const address of ["M7", "AQ7", "K7", "N25", "AQ6"]) {
-      expect(after.getCell(address).style).toEqual(
-        before.getCell(address).style,
-      );
-    }
-    for (const address of [
-      "M1",
-      "T3",
-      "AL3",
-      "C30",
-      "T30",
-      "AH30",
-      "B7",
-      "C23",
-      "D23",
-    ])
-      expect(after.getCell(address).value).toEqual(
-        before.getCell(address).value,
-      );
-
-    // Every part but the worksheet is byte for byte the prepared template's.
-    const parts = unzipSync(bytes);
-    const source = unzipSync(prepared);
-    const part = sheetPart(prepared, NICU_SHEET);
-    for (const name of Object.keys(source))
-      if (name !== part) expect(parts[name], name).toEqual(source[name]);
-  });
-
-  it("clears a template row whose person is not exported", async () => {
-    const people = new Map(ROWS.filter((r) => r !== 21).map((r) => [r, full]));
-    const sheet = (await readWorkbook(exportMonth(30, people))).getWorksheet(
-      NICU_SHEET,
-    )!;
-    expect(
-      Array.from(
-        { length: 31 },
-        (_, i) => sheet.getCell(21, 13 + i).value,
-      ).every((v) => v === null),
-    ).toBe(true);
-    expect(["I21", "J21", "K21"].map((a) => sheet.getCell(a).value)).toEqual([
-      null,
-      null,
-      null,
-    ]);
-  });
-
-  it("accepts last month's export, with its ?, as a template", () => {
-    const bytes = exportMonth(
-      30,
-      new Map(ROWS.map((r) => [r, plan(["M", null, "H"])])),
-    );
-    expect(inspectExcelTemplate(bytes, NICU_MAPPING).errors).toEqual([]);
-  });
-
-  it("creates a mapped summary row the sheet does not have yet, in row order", async () => {
-    const bytes = populateExcelTemplate(
-      prepared,
-      { ...NICU_MAPPING, summaryRows: [{ row: 28, statistic: "COVERAGE_N" }] },
-      new Map(),
-      { summaries: new Map([[28, Array<ExportCellValue>(31).fill(2)]]) },
-    );
-    const xml = sheetXml(bytes);
-    expect(xml.indexOf('<row r="28">')).toBeGreaterThan(
-      xml.indexOf('<row r="27"'),
-    );
-    expect(xml.indexOf('<row r="28">')).toBeLessThan(
-      xml.indexOf('<row r="30"'),
-    );
-    const sheet = (await readWorkbook(bytes)).getWorksheet(NICU_SHEET)!;
-    expect(sheet.getCell("M28").value).toBe(2);
-    expect(sheet.getCell("AQ28").value).toBe(2);
   });
 });
