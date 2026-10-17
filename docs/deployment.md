@@ -7,8 +7,10 @@ GitHub ──PR──▶ Vercel Preview ──▶ Neon branch (one per preview, 
 
 The Vercel build runs `pnpm vercel-build`: it applies database migrations
 (`scripts/db-migrate.ts`, using `DATABASE_URL_UNPOOLED`) and then runs `next build`.
-A deployment therefore never goes live on an older schema, and a build fails fast if
-the database variables are missing.
+A Production deployment therefore never goes live on an older schema, and a Production
+build fails fast if the database variables are missing. **Preview builds do not migrate
+unless their destination database was approved explicitly** (see
+[Preview deployments](#preview-deployments-migration-guard)).
 
 ## One-time setup (manual)
 
@@ -22,8 +24,9 @@ the database variables are missing.
    connect the existing Neon project. Enable **Create a database branch for each preview
    deployment**. The integration sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED` per
    environment.
-   - Without preview branching, preview builds would run their migrations against the
-     production database. Do not skip this, or give Preview its own database URLs.
+   - Preview builds never migrate on their own (migration guard below), but a Preview
+     still _serves_ whatever `DATABASE_URL` its scope holds. Give Preview an isolated
+     database (a Neon branch), never the Production one.
 4. **Function region**: Vercel project → Settings → Functions → Function Region. Pick the
    region matching the Neon region (for example `fra1` for Frankfurt).
 5. **Deploy**: push to `main` (or open a PR for a preview). Then check
@@ -32,16 +35,72 @@ the database variables are missing.
 
 ## Environment variables
 
-| Variable                | Where                            | Purpose                                                  |
-| ----------------------- | -------------------------------- | -------------------------------------------------------- |
-| `DATABASE_URL`          | Vercel (Neon integration), CI    | Pooled connection for the running app                    |
-| `DATABASE_URL_UNPOOLED` | Vercel (Neon integration), CI    | Direct connection for migrations                         |
-| `SKIP_DB_MIGRATIONS`    | Vercel (optional)                | `1` skips migrations in `vercel-build` (emergency only)  |
-| `AUTH_SECRET`           | Vercel (Production, Preview), CI | Session encryption (`openssl rand -base64 32`); required |
-| `AUTH_TRUST_HOST`       | Local and CI only                | `true`; not needed on Vercel (trusted automatically)     |
+| Variable                     | Where                                     | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
+| `DATABASE_URL`               | Vercel (Neon integration), CI             | Pooled connection for the running app                                   |
+| `DATABASE_URL_UNPOOLED`      | Vercel (Neon integration), CI             | Direct connection for migrations                                        |
+| `SKIP_DB_MIGRATIONS`         | Vercel (optional)                         | `1` skips migrations in `vercel-build` (emergency only)                 |
+| `PREVIEW_MIGRATION_APPROVAL` | Vercel Preview, one git branch (optional) | `<git branch>@<host[:port]/database>` approval to migrate (guard below) |
+| `AUTH_SECRET`                | Vercel (Production, Preview), CI          | Session encryption (`openssl rand -base64 32`); required                |
+| `AUTH_TRUST_HOST`            | Local and CI only                         | `true`; not needed on Vercel (trusted automatically)                    |
 
 Never prefix secrets with `NEXT_PUBLIC_`. Local values go in `.env.local` (gitignored); see
 `.env.example`.
+
+## Preview deployments (migration guard)
+
+Preview databases stay Neon-managed: the integration creates one branch per preview and sets
+`DATABASE_URL` and `DATABASE_URL_UNPOOLED` for it. Nothing here replaces those variables or
+creates branches. `scripts/db-migrate.ts` only decides, before it connects, whether the
+migration may run (`decideMigration`, `src/infrastructure/config/migration-guard.ts`):
+
+| Build                                             | Migrations                                         |
+| ------------------------------------------------- | -------------------------------------------------- |
+| Local, CI (no `VERCEL`/`VERCEL_ENV`)              | run (unchanged)                                    |
+| Vercel `VERCEL_ENV=production`                    | run (unchanged)                                    |
+| `SKIP_DB_MIGRATIONS=1`, any environment           | skipped (unchanged)                                |
+| Any other Vercel build (Preview, custom, unknown) | **skipped** unless an operator approved this build |
+
+**What the approval is, and is not.** `PREVIEW_MIGRATION_APPROVAL` must equal
+`<git branch>@<host[:port]/database>` exactly (`VERCEL_GIT_COMMIT_REF` and the migration URL,
+without credentials). It is bound to one Preview branch and one destination, so it does not carry
+over to another PR or to a recreated Neon branch (a stale value skips). It is **not** verification
+that the endpoint is a Preview branch: a hostname does not establish which Neon branch or project
+an endpoint belongs to, and a Production endpoint would match just as well if someone copied it. The
+guard only guarantees that no Preview migrates without a deliberate, branch-scoped human decision.
+The authoritative check (Neon branch id and parent via the Neon API, or Vercel OIDC) is not used;
+if it is ever wanted, it replaces this approval.
+
+Skipped builds still deploy; the log prints `[db:migrate] skipped: ...` with the destination and
+branch. A Preview with no database configured is also a skip.
+
+Bringing up a Preview without touching Production data:
+
+1. Keep the Neon integration's Preview branching and Preview-scoped database variables as they
+   are. Open the Preview deployment's build log and read the skipped line for the destination.
+2. In the Neon console, confirm that the endpoint host belongs to the preview branch created for
+   this git branch, and that it is not the primary/Production branch or endpoint. Check the branch
+   name and its parent, not only the host text.
+3. Only then add `PREVIEW_MIGRATION_APPROVAL` in Vercel, **Preview scope restricted to that git
+   branch**, with the value `<git branch>@<host>/<database>`. Do not add it to all Previews.
+4. Redeploy. The Preview build applies the pending migrations to that branch only. Alternatively
+   run once by hand: `DATABASE_URL_UNPOOLED=<preview branch direct URL> pnpm db:migrate`.
+5. Remove the approval when the PR is closed.
+
+A Neon preview branch is a copy-on-write fork of its parent. If the parent is Production, the
+Preview contains a copy of staff data; use a sanitized parent when that matters. Vercel's Build
+Command must stay the default (`vercel-build`); a custom command that bypasses
+`scripts/db-migrate.ts` also bypasses this guard.
+
+### Migration history is append-only
+
+drizzle runs a migration when its journal timestamp is newer than the newest applied one and never
+compares file contents. Rewriting a released migration (or its timestamp) makes databases that
+already applied it re-run it and fail with `relation ... already exists`, which is how PR #35's
+Preview stalled. `tests/unit/migration-history.test.ts` pins every released migration's timestamp
+and SHA-256; fix mistakes in a new migration instead (`0019_excel_template_department_fk` adds the
+department foreign key and is a no-op where it already exists).
+`tests/integration/excel-template-migration-history.test.ts` upgrades each published history.
 
 ## Auth setup (manual, once)
 

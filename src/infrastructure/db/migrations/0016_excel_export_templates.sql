@@ -23,5 +23,4 @@ CREATE TABLE "department_excel_templates" (
 	CONSTRAINT "department_excel_templates_columns_check" CHECK ("department_excel_templates"."personnel_column" ~ '^[A-Z]{1,3}$' and "department_excel_templates"."first_day_column" ~ '^[A-Z]{1,3}$')
 );
 --> statement-breakpoint
-ALTER TABLE "department_excel_templates" ADD CONSTRAINT "department_excel_templates_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "department_excel_templates_one_active_key" ON "department_excel_templates" USING btree ("department_id") WHERE "department_excel_templates"."is_active";

@@ -117,7 +117,7 @@
     {
       "idx": 16,
       "version": "7",
-      "when": 1791999828297,
+      "when": 1791995851701,
       "tag": "0016_excel_export_templates",
       "breakpoints": true
     },
@@ -133,6 +133,13 @@
       "version": "7",
       "when": 1792223187862,
       "tag": "0018_excel_template_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792238878670,
+      "tag": "0019_excel_template_department_fk",
       "breakpoints": true
     }
   ]
