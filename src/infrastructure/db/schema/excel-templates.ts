@@ -4,6 +4,7 @@ import {
   check,
   customType,
   integer,
+  jsonb,
   pgTable,
   text,
   unique,
@@ -11,6 +12,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type {
+  StatisticColumn,
+  SummaryRow,
+} from "../../../domain/excel-export/template-mapping";
 import { createdAt, id, instant } from "./columns";
 import { departments } from "./identity";
 
@@ -54,6 +59,18 @@ export const departmentExcelTemplates = pgTable(
     firstRow: integer().notNull(),
     lastRow: integer().notNull(),
     firstDayColumn: text().notNull(),
+    /** Optional row that gets the period's day numbers (migration 0017). */
+    dayHeaderRow: integer(),
+    /** Per-person statistic columns (validated by the domain mapping). */
+    statisticColumns: jsonb()
+      .$type<readonly StatisticColumn[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Daily summary rows (validated by the domain mapping). */
+    summaryRows: jsonb()
+      .$type<readonly SummaryRow[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     /** Optimistic-concurrency counter, bumped by every mapping change. */
     revision: integer().notNull().default(0),
     uploadedBy: uuid().notNull(),
@@ -76,6 +93,14 @@ export const departmentExcelTemplates = pgTable(
     check(
       "department_excel_templates_rows_check",
       sql`${t.firstRow} >= 1 and ${t.lastRow} >= ${t.firstRow}`,
+    ),
+    check(
+      "department_excel_templates_day_header_row_check",
+      sql`${t.dayHeaderRow} is null or ${t.dayHeaderRow} >= 1`,
+    ),
+    check(
+      "department_excel_templates_statistics_check",
+      sql`jsonb_typeof(${t.statisticColumns}) = 'array' and jsonb_typeof(${t.summaryRows}) = 'array'`,
     ),
     check(
       "department_excel_templates_columns_check",

@@ -407,7 +407,7 @@ describe("schedule export (D124)", () => {
     ).rejects.toThrow(ValidationError);
   });
 
-  it("exports a partial DRAFT: decisions as codes, undecided days blank, secretary included", async () => {
+  it("exports a partial DRAFT: shifts and H as codes, OFF blank, undecided ?, secretary included", async () => {
     const template = await icuTemplate();
     ok(await upload(head, template));
     expect(
@@ -433,27 +433,27 @@ describe("schedule export (D124)", () => {
       department: { code: "icu" },
       templateVersion: 1,
     });
-    expect(row(11).slice(0, 7)).toEqual([
-      "M",
-      "E",
-      "N",
-      "OFF",
-      "ME",
-      "H",
-      null,
-    ]);
+    expect(row(11).slice(0, 7)).toEqual(["M", "E", "N", null, "ME", "H", "?"]);
+    // Undecided is never printed as rest (blank): every open day is ?.
     expect(
       row(11)
-        .slice(6)
-        .every((v) => v === null),
+        .slice(6, 30)
+        .every((v) => v === "?"),
     ).toBe(true);
     expect(row(8)[9]).toBe("M"); // 1 Nov is day 10.
-    expect(row(12).slice(0, 3)).toEqual(["M", "H", null]); // The secretary.
-    // People without decisions, and the template's extra person, stay blank.
-    for (const r of [7, 13, 14, 15, 16])
-      expect(row(r).every((v) => v === null)).toBe(true);
+    expect(row(8)[0]).toBe("?");
+    expect(row(12).slice(0, 3)).toEqual(["M", "H", "?"]); // The secretary.
+    // Rostered people without decisions: undecided all month.
+    for (const r of [7, 13, 14, 15])
+      expect(
+        row(r)
+          .slice(0, 30)
+          .every((v) => v === "?"),
+      ).toBe(true);
+    // The template's extra person (not on the roster) is cleared.
+    expect(row(16).every((v) => v === null)).toBe(true);
     // Aban has 30 days: day 31 is blank even if a stale value was there.
-    expect(row(11)[30]).toBeNull();
+    for (const r of [7, 8, 11, 12, 13, 14, 15]) expect(row(r)[30]).toBeNull();
     expect(sheet.getCell("B12").value).toBe(7700);
     expect(sheet.getColumn(2).hidden).toBe(true);
     // The stored template is unchanged.
@@ -544,11 +544,11 @@ describe("schedule export (D124)", () => {
         await assign(
           U.icuNurse1.id,
           addDays(period.start, d),
-          "OFF",
+          "H",
           created.scheduleId,
         );
       const { row } = await exported(head, { scheduleId: created.scheduleId });
-      expect(row(11).filter((v) => v === "OFF")).toHaveLength(days);
+      expect(row(11).filter((v) => v === "H")).toHaveLength(days);
       expect(
         row(11)
           .slice(days)
@@ -586,13 +586,18 @@ describe("schedule export (D124)", () => {
       const approved = await exported(head, { scheduleId: S });
       expect(approved.result.source).toBe("APPROVED_VERSION");
       expect(approved.row(11)[2]).toBe("M");
-      // A complete approved month has no blank day for a rostered person.
-      expect(
-        approved
-          .row(12)
-          .slice(0, 30)
-          .every((v) => v !== null),
-      ).toBe(true);
+      // A complete approved month has no undecided day; OFF is blank.
+      for (const r of [7, 8, 11, 12, 13, 14, 15])
+        expect(
+          approved
+            .row(r)
+            .slice(0, 30)
+            .every(
+              (v) =>
+                v === null || ["M", "E", "N", "ME", "H"].includes(String(v)),
+            ),
+        ).toBe(true);
+      expect(approved.row(11).slice(0, 30)).toContain(null);
 
       ok(
         await adjustSchedule(head, {

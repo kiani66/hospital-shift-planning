@@ -120,6 +120,13 @@
       "when": 1791999828297,
       "tag": "0016_excel_export_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792218374450,
+      "tag": "0017_excel_template_statistics",
+      "breakpoints": true
     }
   ]
 }

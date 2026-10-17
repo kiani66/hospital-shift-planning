@@ -16,6 +16,7 @@ import {
   type UserRecord,
 } from "../../../src/infrastructure/repositories/users";
 import { syntheticTemplate } from "../../support/excel-templates";
+import { NICU_SECRETARY_ROW, nicuTemplate } from "../../support/nicu-template";
 
 /** Mehr 1405: 30 days. */
 export const MEHR_1405 = { start: "2026-09-23", end: "2026-10-22" } as const;
@@ -104,6 +105,10 @@ export async function provisionExcelExport() {
       secretary,
       template: Buffer.from(await template([secretary, nurse, head])),
       replacement: Buffer.from(await template([nurse, head, secretary])),
+      /** The sanitized NICU workbook as received: names, no personnel numbers. */
+      nicu: Buffer.from(
+        await nicuTemplate({ peopleRows: [7, 8, NICU_SECRETARY_ROW] }),
+      ),
     };
   } finally {
     await pool.end();

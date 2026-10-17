@@ -5,15 +5,16 @@ import { z } from "zod";
 
 import { NotFoundError } from "@/application/errors";
 import {
+  describeTemplateRows,
+  prepareTemplatePersonnelColumn,
   previewExcelTemplate,
   templateMappingInput,
   updateExcelTemplateMapping,
   uploadExcelTemplate,
+  type TemplatePersonnelEntry,
+  type TemplatePreview,
 } from "@/application/excel-export/templates";
-import {
-  EXCEL_TEMPLATE_LIMITS,
-  type TemplateInspection,
-} from "@/application/excel-export/template-workbook";
+import { EXCEL_TEMPLATE_LIMITS } from "@/application/excel-export/template-workbook";
 import { ValidationError } from "@/domain/shared/errors";
 import { requireRequestContext } from "@/features/auth/guards";
 
@@ -22,7 +23,7 @@ export type TemplatePreviewState =
   | { status: "error"; message: string }
   | {
       status: "preview";
-      inspection: TemplateInspection;
+      inspection: TemplatePreview;
       /** A new file was checked (replacement / first upload), not the stored one. */
       withFile: boolean;
     };
@@ -58,6 +59,47 @@ async function readFile(
   };
 }
 
+/** Comma- or space-separated column letters or row numbers; empty → none. */
+const list = (form: FormData, name: string) =>
+  String(form.get(name) ?? "")
+    .split(/[\s,،]+/)
+    .filter(Boolean);
+const single = (form: FormData, name: string) => list(form, name).slice(0, 1);
+
+/** The statistics part of the form, one field per supported figure (D124). */
+const statisticsOf = (form: FormData) => ({
+  dayHeaderRow: single(form, "dayHeaderRow")[0] ?? null,
+  statisticColumns: [
+    ...single(form, "shiftCountColumn").map((column) => ({
+      column,
+      statistic: "SHIFT_COUNT",
+    })),
+    ...single(form, "leaveDaysColumn").map((column) => ({
+      column,
+      statistic: "LEAVE_DAYS",
+    })),
+    ...list(form, "clearColumns").map((column) => ({
+      column,
+      statistic: "CLEAR",
+    })),
+  ],
+  summaryRows: [
+    ...single(form, "coverageMRow").map((row) => ({
+      row,
+      statistic: "COVERAGE_M",
+    })),
+    ...single(form, "coverageERow").map((row) => ({
+      row,
+      statistic: "COVERAGE_E",
+    })),
+    ...single(form, "coverageNRow").map((row) => ({
+      row,
+      statistic: "COVERAGE_N",
+    })),
+    ...list(form, "clearRows").map((row) => ({ row, statistic: "CLEAR" })),
+  ],
+});
+
 const mappingOf = (form: FormData) =>
   templateMappingInput.safeParse({
     sheetName: form.get("sheetName"),
@@ -65,6 +107,7 @@ const mappingOf = (form: FormData) =>
     firstRow: form.get("firstRow"),
     lastRow: form.get("lastRow"),
     firstDayColumn: form.get("firstDayColumn"),
+    ...statisticsOf(form),
   });
 
 const failure = (error: unknown) => {
@@ -84,7 +127,8 @@ export async function previewTemplateAction(
   if (!mapping.success)
     return {
       status: "error",
-      message: "همه فیلدهای نگاشت را کامل کنید؛ ردیف‌ها عدد هستند.",
+      message:
+        "همه فیلدهای نگاشت را کامل کنید؛ ردیف‌ها عدد و ستون‌ها حرف ستون Excel هستند.",
     };
   const file = await readFile(form);
   if (file.kind === "invalid")
@@ -178,4 +222,137 @@ export async function saveTemplateAction(
           ? "قالب جدید جایگزین شد و از خروجی بعدی استفاده می‌شود."
           : "قالب بارگذاری و فعال شد.",
   };
+}
+
+// ------------------------------------------- personnel-number column (D124)
+
+export type TemplateRowsState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | {
+      status: "rows";
+      rows: { row: number; label: string }[];
+      personnel: TemplatePersonnelEntry[];
+    };
+
+export type PreparedTemplateState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "ready"; fileName: string; base64: string; rows: number };
+
+const layout = z.object({
+  sheetName: z.string().trim().min(1).max(64),
+  firstRow: z.coerce.number().int().min(1),
+  lastRow: z.coerce.number().int().min(1),
+  firstDayColumn: z.string().trim().min(1).max(8),
+});
+
+/** The rows of the chosen file and the department's people; saves nothing. */
+export async function describeTemplateRowsAction(
+  form: FormData,
+): Promise<TemplateRowsState> {
+  const ids = target.safeParse(Object.fromEntries(form));
+  const fields = layout.safeParse(Object.fromEntries(form));
+  if (!ids.success) return { status: "error", message: "بخش معتبر نیست." };
+  if (!fields.success)
+    return {
+      status: "error",
+      message: "نام Sheet، ردیف‌های شروع و پایان و ستون روز اول را وارد کنید.",
+    };
+  const file = await readFile(form);
+  if (file.kind !== "file")
+    return {
+      status: "error",
+      message:
+        file.kind === "invalid"
+          ? file.message
+          : "ابتدا فایل Excel بیمارستان را انتخاب کنید.",
+    };
+  const ctx = await requireRequestContext();
+  try {
+    return {
+      status: "rows",
+      ...(await describeTemplateRows(ctx, {
+        departmentId: ids.data.departmentId,
+        content: file.bytes,
+        ...fields.data,
+      })),
+    };
+  } catch (error) {
+    return { status: "error", message: failure(error) };
+  }
+}
+
+const assignment = z.object({
+  row: z.coerce.number().int().min(1),
+  userId: z.uuid(),
+});
+
+/**
+ * Writes the chosen people's recorded personnel numbers into an empty
+ * column of the file and hides it; returns the new file for download.
+ * Nothing is stored: the user reviews it and uploads it as the template.
+ */
+export async function preparePersonnelColumnAction(
+  form: FormData,
+): Promise<PreparedTemplateState> {
+  const ids = target.safeParse(Object.fromEntries(form));
+  const sheetName = z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .safeParse(form.get("sheetName"));
+  const column = z
+    .string()
+    .trim()
+    .min(1)
+    .max(8)
+    .safeParse(form.get("targetColumn"));
+  if (!ids.success || !sheetName.success || !column.success)
+    return {
+      status: "error",
+      message: "نام Sheet و ستون شماره پرسنلی را وارد کنید.",
+    };
+  const rows = [];
+  for (const [key, value] of form.entries()) {
+    const row = /^person-(\d+)$/.exec(key)?.[1];
+    if (!row || value === "") continue;
+    const parsed = assignment.safeParse({ row, userId: value });
+    if (!parsed.success)
+      return { status: "error", message: "انتخاب فرد معتبر نیست." };
+    rows.push(parsed.data);
+  }
+  if (rows.length === 0)
+    return {
+      status: "error",
+      message: "برای دست‌کم یک ردیف فرد مربوط را انتخاب کنید.",
+    };
+  const file = await readFile(form);
+  if (file.kind !== "file")
+    return {
+      status: "error",
+      message:
+        file.kind === "invalid"
+          ? file.message
+          : "ابتدا فایل Excel بیمارستان را انتخاب کنید.",
+    };
+  const ctx = await requireRequestContext();
+  try {
+    const bytes = await prepareTemplatePersonnelColumn(ctx, {
+      departmentId: ids.data.departmentId,
+      content: file.bytes,
+      sheetName: sheetName.data,
+      column: column.data,
+      rows,
+    });
+    return {
+      status: "ready",
+      fileName: file.name.replace(/\.xlsx$/i, "") + "-personnel.xlsx",
+      base64: Buffer.from(bytes).toString("base64"),
+      rows: rows.length,
+    };
+  } catch (error) {
+    return { status: "error", message: failure(error) };
+  }
 }

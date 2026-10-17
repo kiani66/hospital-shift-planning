@@ -2226,6 +2226,17 @@ its mapped day cells are written. Paths are relative to `src/`.
 - **Mapping.** Worksheet name, personnel-number column, first and last personnel row (at most 500
   rows) and the first of 31 consecutive day columns. Nothing about a layout is hard-coded. The
   personnel-number column may be hidden. One universal 31-day template serves every month.
+  Optional (migration 0017): a day-heading row, per-person statistic columns and daily summary
+  rows (below). A summary row may sit inside the personnel block; it must hold no personnel number.
+- **Personnel-number column from the records.** A hospital workbook without numbers (the NICU
+  file) is prepared in «ساخت ستون شماره پرسنلی پنهان»: the user assigns each printed row to a
+  current or future member of the department (active account); the server writes those members'
+  recorded numbers, as text, into a column that holds no value in any row and crosses no merge,
+  and hides it. Nothing is inserted or moved; only that sheet part changes (cells, one `<col>`,
+  the dimension). Numbers never come from the workbook, typed input or names; row text is shown
+  only to recognise a row. Nothing is stored or audited: the file is downloaded, reviewed and
+  uploaded as the template. The template preview lists every matched row with the name the system
+  records for its number and warns about numbers no member of the department has.
 - **Identity.** The personnel number is the only matching key (never the name, row or database
   order), read as text so leading zeros survive; Persian digits are normalized. Numeric cells are
   accepted only as integers of at most 15 digits (Excel's exact precision). Duplicates in the
@@ -2238,20 +2249,36 @@ its mapped day cells are written. Paths are relative to `src/`.
   date or rich value in mapped cells; no merged cell, array/shared formula or Excel table over the
   mapped area; in a protected sheet the day cells must be unlocked; a row without a personnel
   number must have empty day cells (decorative and spacing rows are ignored and kept); day cells
-  of personnel rows must be empty or hold a shift code from a previous export (anything else
-  usually means a wrong first-day column). Messages name the Excel cell.
+  of personnel rows must be empty or hold a code from a previous export (M, E, N, ME, OFF, H or
+  `?`; anything else usually means a wrong first-day column). Every other written cell
+  (statistics of personnel rows, summary and heading rows) may hold any static value but no
+  formula, error, boolean, date, rich value, merge, shared formula, table or lock. A mapped cell
+  outside the sheet's print area is a warning (the NICU file prints A1:AP, so day 31 in AQ would
+  not print until the print area is widened in Excel; the system never edits print settings).
+  Messages name the Excel cell.
 - **Export.** One repeatable-read, read-only transaction: authorize, load the active template and
   mapping, the roster and decisions. DRAFT … RETURNED write the working copy; an approved schedule
   (APPROVED, or REVISING / a revision's SUBMITTED / RETURNED) writes the latest approved version
   by default, and the open revision's working copy only through the explicit «خروجی پیش‌نویس
   بازبینی (تأییدنشده)» (file name suffix `-revision-draft`), so unapproved revision changes never
-  appear in the official export (D11, D70). Codes are the project's: M, E, N, ME, OFF, H. An
-  undecided day is blank, never OFF (D100; unlike Phase 15 import, D120). Days the month lacks
-  (30–31 of a 29-day month) are blank; the length comes from the schedule's own period. Every
-  active roster member, and every roster member with a decision, needs a row: a missing number or
-  a person without a personnel number fails the export naming them. Template rows of people not
-  on the roster are cleared. Secretaries are exported like nurses (staffing rules unchanged, D119).
-  No schedule or template row is written, and no audit row is added.
+  appear in the official export (D11, D70). Approved conventions: M, E, N, ME and leave H as
+  themselves; rest (OFF) a **blank** cell, as the hospital's sheets print it (D120); an undecided
+  day **`?`**, so it is never read as rest (D100). Days the month lacks (30–31 of a 29-day month)
+  are blank; the length comes from the schedule's own period. Every active roster member, and
+  every roster member with a decision, needs a row: a missing number or a person without a
+  personnel number fails the export naming them. Template rows of people not in the export are
+  cleared (days and statistics). Secretaries are exported like nurses (staffing rules unchanged,
+  D119). No schedule or template row is written, and no audit row is added.
+- **Statistics.** The hospital's printed totals are static values from the month the file was
+  saved, so every mapped statistic cell is rewritten from the exported decisions, never kept:
+  `SHIFT_COUNT` (working shifts, ME once, `summarizeShifts`, D42), `LEAVE_DAYS` (H days of the
+  period, not a leave balance), daily `COVERAGE_M/E/N` (nursing coverage per period exactly as
+  staffing counts it: `coverageOf`, ME toward M and E, secretaries excluded, D119), the day
+  headings 1…N, and `CLEAR` for a figure the system cannot calculate (required/contractual hours,
+  leave balances, contract), which is emptied. A figure that depends on an undecided day is `?`.
+  Working-hour and coverage semantics are unchanged; no hours are written. NICU proposal (pending
+  product approval): I «ساعت موظفی» CLEAR, J «مرخصی» LEAVE_DAYS, K «تعداد شیفت» SHIFT_COUNT,
+  heading row 6, summary rows as COVERAGE_M/E/N once their meaning is confirmed.
 - **Preservation.** The workbook is patched at the ZIP/XML level: every part except the mapped
   worksheet is copied byte for byte, and in that worksheet only the `<c>` elements of the mapped
   day cells of matched rows change (inline strings, the cell's own style kept). Fonts, borders,
@@ -2270,10 +2297,12 @@ its mapped day cells are written. Paths are relative to `src/`.
 - **Out of scope (V1):** non-consecutive day columns, several active templates, version-history
   UI, editing headings, totals or formulas, and any change to Excel import.
 
-Enforced in `domain/excel-export/template-mapping.ts`, `domain/authz/policies.ts`,
-`application/excel-export/`, `infrastructure/repositories/excel-templates.ts`, migration
-`0016_excel_export_templates`, `features/excel-export/` and
-`app/(app)/departments/[code]/settings/page.tsx`.
+Enforced in `domain/excel-export/template-mapping.ts`, `domain/excel-export/statistics.ts`,
+`domain/authz/policies.ts`, `application/excel-export/`,
+`infrastructure/repositories/excel-templates.ts`, migrations `0016_excel_export_templates` and
+`0017_excel_template_statistics`, `features/excel-export/` and
+`app/(app)/departments/[code]/settings/page.tsx`; the sanitized NICU equivalent is
+`tests/support/nicu-template.ts`.
 
 ## Optional preference decisions
 

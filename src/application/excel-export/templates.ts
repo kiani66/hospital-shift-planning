@@ -4,26 +4,35 @@ import { z } from "zod";
 
 import { decide } from "../../domain/authz/policies";
 import {
+  DAILY_STATISTICS,
+  PERSON_STATISTICS,
   requireTemplateMapping,
+  storedTemplateMapping,
   type ExcelTemplateMapping,
 } from "../../domain/excel-export/template-mapping";
 import { ValidationError } from "../../domain/shared/errors";
+import { APP_TIMEZONE, todayIn } from "../../infrastructure/auth/actor";
 import { findDepartmentById } from "../../infrastructure/repositories/departments";
 import {
   findActiveTemplate,
   findActiveTemplateWithContent,
   listDepartmentTemplates,
+  listTemplatePersonnel,
   lockDepartmentForTemplate,
   replaceActiveTemplate,
   updateTemplateMapping,
   type ExcelTemplateRecord,
+  type TemplatePersonnelEntry,
 } from "../../infrastructure/repositories/excel-templates";
 import { ConflictError, NotFoundError } from "../errors";
 import { defineCommand, type AppContext } from "../use-case";
 import {
   EXCEL_TEMPLATE_LIMITS,
   inspectExcelTemplate,
+  templateRowLabels,
+  writePersonnelColumn,
   type TemplateInspection,
+  type TemplateIssue,
 } from "./template-workbook";
 
 /**
@@ -40,7 +49,28 @@ export const templateMappingInput = z.object({
   firstRow: z.coerce.number().int(),
   lastRow: z.coerce.number().int(),
   firstDayColumn: z.string().trim().min(1).max(8),
+  dayHeaderRow: z.coerce.number().int().nullable().default(null),
+  statisticColumns: z
+    .array(
+      z.object({
+        column: z.string().trim().min(1).max(8),
+        statistic: z.enum(PERSON_STATISTICS),
+      }),
+    )
+    .max(16)
+    .default([]),
+  summaryRows: z
+    .array(
+      z.object({
+        row: z.coerce.number().int(),
+        statistic: z.enum(DAILY_STATISTICS),
+      }),
+    )
+    .max(16)
+    .default([]),
 });
+
+export type { TemplatePersonnelEntry };
 
 export interface DepartmentRef {
   readonly id: string;
@@ -106,6 +136,7 @@ const inspectStored = (
       personnelRange: null,
       dayRange: null,
       personnelColumnHidden: false,
+      printArea: null,
     };
   }
 };
@@ -136,9 +167,32 @@ export async function getExcelTemplateSettings(
   };
 }
 
+/** A matched template row with the system's own record of that personnel number. */
+export interface TemplatePersonMatch {
+  readonly cell: string;
+  readonly personnelNumber: string;
+  /** null: no current member of the department has this number. */
+  readonly displayName: string | null;
+}
+
+export interface TemplatePreview extends TemplateInspection {
+  /** Every matched row checked against the department's personnel records. */
+  readonly matches: readonly TemplatePersonMatch[];
+}
+
+const personnelOf = (ctx: AppContext, departmentId: string) =>
+  listTemplatePersonnel(
+    ctx.db,
+    departmentId,
+    todayIn(APP_TIMEZONE, ctx.clock?.()),
+  );
+
 /**
  * Checks a new file, or the stored one with a new mapping, without saving
- * anything: the mapping summary shown before activation.
+ * anything: the mapping summary shown before activation. Each personnel
+ * number found is shown with the name the system records for it, so a
+ * mistyped or misplaced number is seen before the template is used; a
+ * number no member of the department has is a warning.
  */
 export async function previewExcelTemplate(
   ctx: AppContext,
@@ -147,7 +201,7 @@ export async function previewExcelTemplate(
     mapping: ExcelTemplateMapping;
     content?: Uint8Array;
   },
-): Promise<TemplateInspection> {
+): Promise<TemplatePreview> {
   const department = await managedDepartment(ctx, input.departmentId);
   const content =
     input.content ??
@@ -158,7 +212,100 @@ export async function previewExcelTemplate(
       "file",
       "EXCEL_TEMPLATE_MISSING",
     );
-  return inspectExcelTemplate(content, input.mapping);
+  const inspection = inspectExcelTemplate(content, input.mapping);
+  const byNumber = new Map(
+    (await personnelOf(ctx, department.id))
+      .filter((p) => p.personnelNumber)
+      .map((p) => [p.personnelNumber!, p.displayName]),
+  );
+  const matches = inspection.personnel.map((p) => ({
+    cell: p.cell,
+    personnelNumber: p.personnelNumber,
+    displayName: byNumber.get(p.personnelNumber) ?? null,
+  }));
+  const unknown: TemplateIssue[] = matches
+    .filter((m) => m.displayName === null)
+    .map((m) => ({
+      cell: m.cell,
+      message: `شماره پرسنلی ${m.personnelNumber} در ${m.cell} به هیچ عضو فعلی این بخش تعلق ندارد؛ شماره را بررسی کنید.`,
+    }));
+  return {
+    ...inspection,
+    warnings: [...inspection.warnings, ...unknown],
+    matches,
+  };
+}
+
+/**
+ * The rows of an uploaded workbook (their printed text, for recognition
+ * only) and the department's personnel, for choosing who each row belongs
+ * to before the personnel-number column is written. Saves nothing.
+ */
+export async function describeTemplateRows(
+  ctx: AppContext,
+  input: {
+    departmentId: string;
+    content: Uint8Array;
+    sheetName: string;
+    firstRow: number;
+    lastRow: number;
+    firstDayColumn: string;
+  },
+): Promise<{
+  rows: { row: number; label: string }[];
+  personnel: TemplatePersonnelEntry[];
+}> {
+  const department = await managedDepartment(ctx, input.departmentId);
+  return {
+    rows: templateRowLabels(input.content, input),
+    personnel: await personnelOf(ctx, department.id),
+  };
+}
+
+/**
+ * A copy of the uploaded workbook with each chosen row's personnel number
+ * written into an empty column, which is hidden (D124). The numbers come
+ * only from the system's records of the chosen people, never from the
+ * workbook or from typed input, and never from names. Nothing is stored:
+ * the person reviews the file and uploads it as the template.
+ */
+export async function prepareTemplatePersonnelColumn(
+  ctx: AppContext,
+  input: {
+    departmentId: string;
+    content: Uint8Array;
+    sheetName: string;
+    column: string;
+    rows: readonly { row: number; userId: string }[];
+  },
+): Promise<Uint8Array> {
+  const department = await managedDepartment(ctx, input.departmentId);
+  const personnel = new Map(
+    (await personnelOf(ctx, department.id)).map((p) => [p.userId, p]),
+  );
+  const invalid = (message: string): never => {
+    throw new ValidationError(message, "rows", "EXCEL_TEMPLATE_PERSONNEL");
+  };
+  const numbers = new Map<number, string>();
+  const chosen = new Set<string>();
+  for (const { row, userId } of input.rows) {
+    const person = personnel.get(userId);
+    if (!person) invalid("فرد انتخاب‌شده عضو این بخش نیست.");
+    if (chosen.has(userId))
+      invalid(`«${person!.displayName}» برای بیش از یک ردیف انتخاب شده است.`);
+    if (numbers.has(row)) invalid(`ردیف ${row} دو بار انتخاب شده است.`);
+    if (!person!.personnelNumber)
+      invalid(
+        `برای «${person!.displayName}» شماره پرسنلی ثبت نشده است؛ ابتدا شماره را در پرونده پرسنلی ثبت کنید.`,
+      );
+    chosen.add(userId);
+    numbers.set(row, person!.personnelNumber!);
+  }
+  return writePersonnelColumn(input.content, {
+    sheetName: input.sheetName,
+    column: input.column,
+    numbers,
+  });
 }
 
 /** The stored template file, unchanged, for download. */
@@ -229,13 +376,7 @@ export const uploadExcelTemplate = defineCommand({
     if (!inspection.valid) invalidTemplate(inspection);
     const sha256 = createHash("sha256").update(input.content).digest("hex");
     const fileName = templateFileName(input.fileName);
-    const stored = {
-      sheetName: mapping.sheetName,
-      personnelColumn: mapping.personnelColumn,
-      firstRow: mapping.firstRow,
-      lastRow: mapping.lastRow,
-      firstDayColumn: mapping.firstDayColumn,
-    };
+    const stored = storedTemplateMapping(mapping);
     const created = await replaceActiveTemplate(uow.tx, {
       departmentId: input.departmentId,
       fileName,
@@ -297,13 +438,7 @@ export const updateExcelTemplateMapping = defineCommand({
     const mapping = requireTemplateMapping(input.mapping);
     const inspection = inspectExcelTemplate(current.content, mapping);
     if (!inspection.valid) invalidTemplate(inspection);
-    const stored = {
-      sheetName: mapping.sheetName,
-      personnelColumn: mapping.personnelColumn,
-      firstRow: mapping.firstRow,
-      lastRow: mapping.lastRow,
-      firstDayColumn: mapping.firstDayColumn,
-    };
+    const stored = storedTemplateMapping(mapping);
     const revision = await updateTemplateMapping(uow.tx, {
       id: current.id,
       expectedRevision: input.expectedRevision,

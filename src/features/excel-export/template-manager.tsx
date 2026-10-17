@@ -11,7 +11,12 @@ import {
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
 
+import type { TemplatePreview } from "@/application/excel-export/templates";
 import type { TemplateInspection } from "@/application/excel-export/template-workbook";
+import type {
+  DailyStatistic,
+  PersonStatistic,
+} from "@/domain/excel-export/template-mapping";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -21,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { MetadataList } from "@/components/ui/metadata";
 import { faNumber } from "@/features/calendar/jalali";
 
+import { PersonnelColumnPreparer } from "./personnel-column";
 import {
   previewTemplateAction,
   saveTemplateAction,
@@ -44,9 +50,28 @@ export interface StoredTemplateView {
     readonly firstRow: number;
     readonly lastRow: number;
     readonly firstDayColumn: string;
+    readonly dayHeaderRow: number | null;
+    readonly statisticColumns: readonly {
+      column: string;
+      statistic: PersonStatistic;
+    }[];
+    readonly summaryRows: readonly { row: number; statistic: DailyStatistic }[];
   };
   readonly inspection: TemplateInspection;
 }
+
+const PERSON_STATISTIC_LABELS: Record<PersonStatistic, string> = {
+  SHIFT_COUNT: "تعداد شیفت",
+  LEAVE_DAYS: "روزهای مرخصی (H)",
+  CLEAR: "پاک می‌شود",
+};
+
+const DAILY_STATISTIC_LABELS: Record<DailyStatistic, string> = {
+  COVERAGE_M: "پوشش صبح",
+  COVERAGE_E: "پوشش عصر",
+  COVERAGE_N: "پوشش شب",
+  CLEAR: "پاک می‌شود",
+};
 
 const kib = (bytes: number) =>
   `${faNumber(Math.max(1, Math.round(bytes / 1024)))} کیلوبایت`;
@@ -72,6 +97,56 @@ function MappingSummary({ inspection }: { inspection: TemplateInspection }) {
             <bdi dir="ltr">{inspection.dayRange}</bdi> — ۳۱ ستون، روز ۱ در ستون{" "}
             <bdi dir="ltr">{m.firstDayColumn}</bdi>
           </span>,
+        ],
+        ...(m.dayHeaderRow !== null
+          ? ([
+              [
+                "عنوان روزها",
+                <span key="h">ردیف {faNumber(m.dayHeaderRow)}</span>,
+              ],
+            ] as const)
+          : []),
+        ...(m.statisticColumns.length > 0
+          ? ([
+              [
+                "آمار پرسنل",
+                <span key="st">
+                  {m.statisticColumns.map((c, i) => (
+                    <span key={c.column}>
+                      {i > 0 && "، "}
+                      <bdi dir="ltr">{c.column}</bdi>:{" "}
+                      {PERSON_STATISTIC_LABELS[c.statistic]}
+                    </span>
+                  ))}
+                </span>,
+              ],
+            ] as const)
+          : []),
+        ...(m.summaryRows.length > 0
+          ? ([
+              [
+                "خلاصه روزانه",
+                <span key="sr">
+                  {m.summaryRows.map((r, i) => (
+                    <span key={r.row}>
+                      {i > 0 && "، "}
+                      ردیف {faNumber(r.row)}:{" "}
+                      {DAILY_STATISTIC_LABELS[r.statistic]}
+                    </span>
+                  ))}
+                </span>,
+              ],
+            ] as const)
+          : []),
+        [
+          "ناحیه چاپ",
+          inspection.printArea ? (
+            <bdi key="pa" dir="ltr">
+              {inspection.printArea}
+            </bdi>
+          ) : (
+            "تعیین نشده (کل برگه)"
+          ),
         ],
         ["پرسنل یافت‌شده", faNumber(inspection.personnel.length)],
       ]}
@@ -109,7 +184,17 @@ function Issues({ inspection }: { inspection: TemplateInspection }) {
         <Callout tone="attention" icon={TriangleAlert} as="div">
           <ul className="list-inside list-disc space-y-1">
             {inspection.warnings.map((issue, i) => (
-              <li key={i}>{issue.message}</li>
+              <li key={i}>
+                {issue.cell && (
+                  <>
+                    <bdi dir="ltr" className="font-mono">
+                      {issue.cell}
+                    </bdi>
+                    {" — "}
+                  </>
+                )}
+                {issue.message}
+              </li>
             ))}
           </ul>
         </Callout>
@@ -118,25 +203,74 @@ function Issues({ inspection }: { inspection: TemplateInspection }) {
   );
 }
 
-function PersonnelList({ inspection }: { inspection: TemplateInspection }) {
-  if (inspection.personnel.length === 0) return null;
+/** Each matched row with the name the system records for its number. */
+function PersonnelList({ inspection }: { inspection: TemplatePreview }) {
+  if (inspection.matches.length === 0) return null;
   return (
-    <details className="rounded-lg border p-3 text-sm">
+    <details className="rounded-lg border p-3 text-sm" open>
       <summary className="cursor-pointer font-medium">
-        ردیف‌های پرسنل ({faNumber(inspection.personnel.length)})
+        ردیف‌های پرسنل ({faNumber(inspection.matches.length)}) — نام هر ردیف را
+        با فایل مقایسه کنید
       </summary>
-      <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
-        {inspection.personnel.map((p) => (
+      <ul className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+        {inspection.matches.map((p) => (
           <li key={p.cell}>
             <bdi dir="ltr" className="font-mono">
               {p.cell}
             </bdi>
             {": "}
             <bdi dir="ltr">{p.personnelNumber}</bdi>
+            {" — "}
+            {p.displayName ?? (
+              <span className="text-destructive">در پرسنل بخش نیست</span>
+            )}
           </li>
         ))}
       </ul>
     </details>
+  );
+}
+
+/** One optional statistics field: a column letter or a row number (or a list). */
+function StatField({
+  id,
+  name,
+  label,
+  placeholder,
+  defaultValue,
+  numeric = false,
+  list = false,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  placeholder: string;
+  defaultValue: string | number;
+  numeric?: boolean;
+  list?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        name={name}
+        dir="ltr"
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        maxLength={list ? 40 : numeric ? 7 : 3}
+        pattern={
+          list
+            ? numeric
+              ? "[0-9 ,]*"
+              : "[A-Za-z ,]*"
+            : numeric
+              ? "[0-9]*"
+              : "[A-Za-z]{0,3}"
+        }
+        inputMode={numeric ? "numeric" : undefined}
+      />
+    </div>
   );
 }
 
@@ -171,7 +305,19 @@ export function ExcelTemplateManager({
     last: useId(),
     day: useId(),
     help: useId(),
+    header: useId(),
+    shiftCount: useId(),
+    leave: useId(),
+    clear: useId(),
+    coverageM: useId(),
+    coverageE: useId(),
+    coverageN: useId(),
+    clearRows: useId(),
   };
+  const statisticColumn = (statistic: PersonStatistic) =>
+    m?.statisticColumns.find((c) => c.statistic === statistic)?.column ?? "";
+  const summaryRow = (statistic: DailyStatistic) =>
+    m?.summaryRows.find((r) => r.statistic === statistic)?.row ?? "";
   const m = template?.mapping;
   const ready = preview.status === "preview" && preview.inspection.valid;
   const replacing = ready && preview.withFile && template !== null;
@@ -364,6 +510,89 @@ export function ExcelTemplateManager({
             />
           </div>
         </div>
+        <fieldset className="space-y-3 rounded-lg border p-3">
+          <legend className="px-1 text-sm font-medium">
+            آمار ماهانه و خلاصه روزانه (اختیاری)
+          </legend>
+          <p className="text-sm text-muted-foreground">
+            آمار چاپی فایل مقدار ثابت ماه قبل است. هر ستون یا ردیفی که اینجا
+            تعیین شود در هر خروجی از روی برنامه دوباره محاسبه یا خالی می‌شود؛ تا
+            روزی نامشخص است به جای عدد «?» نوشته می‌شود. ساعت موظفی، مانده مرخصی
+            و قرارداد را سامانه نمی‌داند: ستون آن‌ها را در «ستون‌های پاک‌شونده»
+            بگذارید.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatField
+              id={ids.header}
+              name="dayHeaderRow"
+              label="ردیف عنوان روزها"
+              placeholder="6"
+              defaultValue={m?.dayHeaderRow ?? ""}
+              numeric
+            />
+            <StatField
+              id={ids.shiftCount}
+              name="shiftCountColumn"
+              label="ستون تعداد شیفت"
+              placeholder="K"
+              defaultValue={statisticColumn("SHIFT_COUNT")}
+            />
+            <StatField
+              id={ids.leave}
+              name="leaveDaysColumn"
+              label="ستون روزهای مرخصی (H)"
+              placeholder="J"
+              defaultValue={statisticColumn("LEAVE_DAYS")}
+            />
+            <StatField
+              id={ids.clear}
+              name="clearColumns"
+              label="ستون‌های پاک‌شونده"
+              placeholder="I"
+              defaultValue={(m?.statisticColumns ?? [])
+                .filter((c) => c.statistic === "CLEAR")
+                .map((c) => c.column)
+                .join(", ")}
+              list
+            />
+            <StatField
+              id={ids.coverageM}
+              name="coverageMRow"
+              label="ردیف تعداد صبح"
+              placeholder="25"
+              defaultValue={summaryRow("COVERAGE_M")}
+              numeric
+            />
+            <StatField
+              id={ids.coverageE}
+              name="coverageERow"
+              label="ردیف تعداد عصر"
+              placeholder="26"
+              defaultValue={summaryRow("COVERAGE_E")}
+              numeric
+            />
+            <StatField
+              id={ids.coverageN}
+              name="coverageNRow"
+              label="ردیف تعداد شب"
+              placeholder="27"
+              defaultValue={summaryRow("COVERAGE_N")}
+              numeric
+            />
+            <StatField
+              id={ids.clearRows}
+              name="clearRows"
+              label="ردیف‌های خلاصه پاک‌شونده"
+              placeholder="28"
+              defaultValue={(m?.summaryRows ?? [])
+                .filter((r) => r.statistic === "CLEAR")
+                .map((r) => r.row)
+                .join(", ")}
+              list
+              numeric
+            />
+          </div>
+        </fieldset>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="outline" disabled={pending}>
             {pending && operation === "preview"
@@ -416,6 +645,7 @@ export function ExcelTemplateManager({
           </p>
         )}
       </form>
+      <PersonnelColumnPreparer department={department} />
       <Dialog
         open={confirming}
         onClose={() => setConfirming(false)}

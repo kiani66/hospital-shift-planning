@@ -1,10 +1,12 @@
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, max, or, sql } from "drizzle-orm";
 
 import type { MembershipRole } from "../../domain/authz/actor";
 import type { ExcelTemplateMapping } from "../../domain/excel-export/template-mapping";
+import type { IsoDate } from "../../domain/shared/dates";
 import type { DbExecutor, Transaction } from "../db/database";
 import {
   departmentExcelTemplates as templates,
+  departmentMemberships,
   departments,
   scheduleRoster,
   users,
@@ -18,7 +20,7 @@ export interface ExcelTemplateRecord {
   readonly fileName: string;
   readonly byteSize: number;
   readonly sha256: string;
-  readonly mapping: ExcelTemplateMapping;
+  readonly mapping: StoredTemplateMapping;
   readonly revision: number;
   readonly uploadedBy: string;
   /** null when the uploader's account no longer exists. */
@@ -47,6 +49,9 @@ const metadata = {
   firstRow: templates.firstRow,
   lastRow: templates.lastRow,
   firstDayColumn: templates.firstDayColumn,
+  dayHeaderRow: templates.dayHeaderRow,
+  statisticColumns: templates.statisticColumns,
+  summaryRows: templates.summaryRows,
   revision: templates.revision,
   uploadedBy: templates.uploadedBy,
   uploadedByName: uploader,
@@ -54,7 +59,10 @@ const metadata = {
   mappingUpdatedAt: templates.mappingUpdatedAt,
 };
 
-interface MetadataRow extends ExcelTemplateMapping {
+/** A stored mapping: every optional part present (empty when unused). */
+export type StoredTemplateMapping = Required<ExcelTemplateMapping>;
+
+interface MetadataRow extends StoredTemplateMapping {
   readonly id: string;
   readonly departmentId: string;
   readonly version: number;
@@ -81,6 +89,9 @@ const toRecord = (row: MetadataRow): ExcelTemplateRecord => ({
     firstRow: row.firstRow,
     lastRow: row.lastRow,
     firstDayColumn: row.firstDayColumn,
+    dayHeaderRow: row.dayHeaderRow,
+    statisticColumns: row.statisticColumns,
+    summaryRows: row.summaryRows,
   },
   revision: row.revision,
   uploadedBy: row.uploadedBy,
@@ -165,7 +176,7 @@ export async function replaceActiveTemplate(
     fileName: string;
     content: Uint8Array;
     sha256: string;
-    mapping: ExcelTemplateMapping;
+    mapping: StoredTemplateMapping;
     uploadedBy: string;
   },
 ): Promise<{ id: string; version: number }> {
@@ -205,7 +216,7 @@ export async function updateTemplateMapping(
   input: {
     id: string;
     expectedRevision: number;
-    mapping: ExcelTemplateMapping;
+    mapping: StoredTemplateMapping;
     updatedBy: string;
     now: Date;
   },
@@ -288,4 +299,49 @@ export async function listExportRoster(
     .innerJoin(users, eq(users.id, scheduleRoster.userId))
     .where(eq(scheduleRoster.scheduleId, scheduleId))
     .orderBy(asc(users.displayName), asc(scheduleRoster.userId));
+}
+
+/** A department member as a template row can be assigned to (D124). */
+export interface TemplatePersonnelEntry {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly role: MembershipRole;
+  /** The authoritative personnel number; null when none is recorded. */
+  readonly personnelNumber: string | null;
+}
+
+/**
+ * Members of the department whose membership has not ended before `onDate`
+ * (current and future members, D19), with active accounts: the people a
+ * template's personnel rows can belong to. One row per person.
+ */
+export async function listTemplatePersonnel(
+  db: DbExecutor,
+  departmentId: string,
+  onDate: IsoDate,
+): Promise<TemplatePersonnelEntry[]> {
+  return db
+    .selectDistinctOn([users.displayName, users.id], {
+      userId: users.id,
+      displayName: users.displayName,
+      role: departmentMemberships.role,
+      personnelNumber: users.personnelNumber,
+    })
+    .from(departmentMemberships)
+    .innerJoin(users, eq(users.id, departmentMemberships.userId))
+    .where(
+      and(
+        eq(departmentMemberships.departmentId, departmentId),
+        eq(users.isActive, true),
+        or(
+          isNull(departmentMemberships.endedOn),
+          gte(departmentMemberships.endedOn, onDate),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(users.displayName),
+      asc(users.id),
+      asc(departmentMemberships.startedOn),
+    );
 }

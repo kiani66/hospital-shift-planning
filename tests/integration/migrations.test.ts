@@ -237,8 +237,9 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0008 system-level Hospital Admin flag, 0009 personnel identity (stage 1),
     // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label, 0013 reset records,
     // 0014 leave day (H)
-    // 0015 secretary role, 0016 department Excel export templates
-    expect(before).toBe(17);
+    // 0015 secretary role, 0016 department Excel export templates,
+    // 0017 Excel template statistics mapping
+    expect(before).toBe(18);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

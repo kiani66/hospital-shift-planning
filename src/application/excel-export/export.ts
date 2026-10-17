@@ -1,5 +1,15 @@
 import { decide } from "../../domain/authz/policies";
-import { exportDayValues } from "../../domain/excel-export/template-mapping";
+import {
+  dailyStatistic,
+  personStatistic,
+  type DayDecisions,
+} from "../../domain/excel-export/statistics";
+import {
+  exportDayHeaderValues,
+  exportDayValues,
+  requireTemplateMapping,
+  type ExportCellValue,
+} from "../../domain/excel-export/template-mapping";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import { daysBetween } from "../../domain/shared/dates";
 import { ValidationError } from "../../domain/shared/errors";
@@ -30,8 +40,10 @@ import {
  * Which decisions are written follows the schedule's workflow (D11, D70):
  * the working copy in DRAFT … RETURNED; for an approved schedule (APPROVED,
  * or a revision in progress) the latest approved version, unless the caller
- * explicitly asks for the unapproved revision draft. Undecided days are
- * blank, never OFF (D100); OFF and H are written like shifts.
+ * explicitly asks for the unapproved revision draft. Rest (OFF) is a blank
+ * cell, leave is H, and an undecided day is `?`, never blank (D100). The
+ * mapped statistics are recalculated from the same decisions, never copied
+ * from the template.
  */
 
 /** `DEFAULT`: official data; `REVISION_DRAFT`: an open revision's working copy, explicitly. */
@@ -173,18 +185,37 @@ export async function exportScheduleToExcel(
           "EXCEL_EXPORT_UNMATCHED",
         );
 
-      const values = new Map<string, (string | null)[]>();
-      for (const r of roster)
-        if (r.personnelNumber)
-          values.set(
-            r.personnelNumber,
-            exportDayValues(dayCount, decisions.get(r.userId) ?? new Map()),
-          );
-      const bytes = populateExcelTemplate(
-        template!.content,
-        template!.mapping,
-        values,
-      );
+      const mapping = requireTemplateMapping(template!.mapping);
+      const none: DayDecisions = new Map();
+      const values = new Map<string, ExportCellValue[]>();
+      const statistics = new Map<string, Map<string, ExportCellValue>>();
+      for (const r of required) {
+        const days = decisions.get(r.userId) ?? none;
+        values.set(r.personnelNumber!, exportDayValues(dayCount, days));
+        statistics.set(
+          r.personnelNumber!,
+          new Map(
+            mapping.statisticColumns.map((c) => [
+              c.column,
+              personStatistic(c.statistic, dayCount, days),
+            ]),
+          ),
+        );
+      }
+      // Nursing coverage counts the roster without secretaries, as staffing does (D119).
+      const staffing = required
+        .filter((r) => r.role !== "SECRETARY")
+        .map((r) => decisions.get(r.userId) ?? none);
+      const bytes = populateExcelTemplate(template!.content, mapping, values, {
+        statistics,
+        summaries: new Map(
+          mapping.summaryRows.map((s) => [
+            s.row,
+            dailyStatistic(s.statistic, dayCount, staffing),
+          ]),
+        ),
+        dayHeader: exportDayHeaderValues(dayCount),
+      });
       return {
         bytes,
         department: { code: department.code, name: department.name },

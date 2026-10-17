@@ -4,13 +4,17 @@ import { ValidationError } from "../shared/errors";
 import type { AssignmentCode } from "../shifts/shift-type";
 import {
   EXCEL_EXPORT_VALUES,
+  EXCEL_UNDECIDED_VALUE,
   cellAddress,
   columnIndex,
   columnLetters,
+  exportDayHeaderValues,
   exportDayValues,
   requireTemplateMapping,
   resolveTemplateMapping,
+  storedTemplateMapping,
   type ExcelTemplateMapping,
+  type PersonStatistic,
 } from "./template-mapping";
 
 const mapping: ExcelTemplateMapping = {
@@ -60,8 +64,127 @@ describe("resolveTemplateMapping", () => {
         personnelColumnIndex: 2,
         firstDayColumnIndex: 13,
         lastDayColumnIndex: 43,
+        dayHeaderRow: null,
+        statisticColumns: [],
+        summaryRows: [],
       },
     });
+  });
+
+  /** The NICU print layout (D124): totals in I–K, summaries under the people. */
+  const nicu: ExcelTemplateMapping = {
+    sheetName: "Sheet2",
+    personnelColumn: "BL",
+    firstRow: 7,
+    lastRow: 23,
+    firstDayColumn: "M",
+    dayHeaderRow: 6,
+    statisticColumns: [
+      { column: "i", statistic: "CLEAR" },
+      { column: "J", statistic: "LEAVE_DAYS" },
+      { column: "K", statistic: "SHIFT_COUNT" },
+    ],
+    summaryRows: [
+      { row: 22, statistic: "CLEAR" },
+      { row: 25, statistic: "COVERAGE_M" },
+    ],
+  };
+
+  it("resolves statistic columns, summary rows and the heading row", () => {
+    const resolved = requireTemplateMapping(nicu);
+    expect(resolved.lastDayColumnIndex).toBe(columnIndex("AQ"));
+    expect(resolved.dayHeaderRow).toBe(6);
+    expect(resolved.statisticColumns).toEqual([
+      { column: "I", statistic: "CLEAR", columnIndex: 9 },
+      { column: "J", statistic: "LEAVE_DAYS", columnIndex: 10 },
+      { column: "K", statistic: "SHIFT_COUNT", columnIndex: 11 },
+    ]);
+    // A summary row may sit inside the personnel block (row 22).
+    expect(resolved.summaryRows.map((r) => r.row)).toEqual([22, 25]);
+    expect(storedTemplateMapping(resolved)).toEqual({
+      ...nicu,
+      statisticColumns: [
+        { column: "I", statistic: "CLEAR" },
+        { column: "J", statistic: "LEAVE_DAYS" },
+        { column: "K", statistic: "SHIFT_COUNT" },
+      ],
+    });
+  });
+
+  it.each<[Partial<ExcelTemplateMapping>, keyof ExcelTemplateMapping]>([
+    [{ dayHeaderRow: 0 }, "dayHeaderRow"],
+    [{ dayHeaderRow: 7 }, "dayHeaderRow"],
+    [
+      { statisticColumns: [{ column: "1", statistic: "CLEAR" }] },
+      "statisticColumns",
+    ],
+    [
+      {
+        statisticColumns: [
+          { column: "K", statistic: "HOURS" as PersonStatistic },
+        ],
+      },
+      "statisticColumns",
+    ],
+    [
+      { statisticColumns: [{ column: "BL", statistic: "CLEAR" }] },
+      "statisticColumns",
+    ],
+    [
+      { statisticColumns: [{ column: "AQ", statistic: "CLEAR" }] },
+      "statisticColumns",
+    ],
+    [
+      {
+        statisticColumns: [
+          { column: "K", statistic: "CLEAR" },
+          { column: "k", statistic: "SHIFT_COUNT" },
+        ],
+      },
+      "statisticColumns",
+    ],
+    [
+      {
+        statisticColumns: Array.from({ length: 9 }, (_, i) => ({
+          column: columnLetters(i + 1),
+          statistic: "CLEAR" as const,
+        })),
+      },
+      "statisticColumns",
+    ],
+    [{ summaryRows: [{ row: 0, statistic: "CLEAR" }] }, "summaryRows"],
+    [{ summaryRows: [{ row: 6, statistic: "COVERAGE_N" }] }, "summaryRows"],
+    [
+      {
+        summaryRows: [
+          { row: 25, statistic: "COVERAGE_M" },
+          { row: 25, statistic: "COVERAGE_E" },
+        ],
+      },
+      "summaryRows",
+    ],
+    [
+      {
+        summaryRows: Array.from({ length: 9 }, (_, i) => ({
+          row: 30 + i,
+          statistic: "CLEAR" as const,
+        })),
+      },
+      "summaryRows",
+    ],
+  ])("rejects %j on %s", (patch, field) => {
+    const result = resolveTemplateMapping({ ...nicu, ...patch });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error[field]).toEqual(expect.any(String));
+  });
+
+  it("checks statistic columns even when the first day column is invalid", () => {
+    const result = resolveTemplateMapping({
+      ...nicu,
+      firstDayColumn: "?",
+      statisticColumns: [{ column: "K", statistic: "SHIFT_COUNT" }],
+    });
+    expect(result.ok ? null : result.error.statisticColumns).toBeUndefined();
   });
 
   it("allows the personnel column after the day block", () => {
@@ -112,25 +235,43 @@ describe("exportDayValues", () => {
     [31, "ME"],
   ]);
 
-  it("writes the project's codes and leaves undecided days blank", () => {
+  it("writes shifts and H, OFF as a blank and an undecided day as ?", () => {
     const values = exportDayValues(31, decisions);
     expect(values).toHaveLength(31);
-    expect(values.slice(0, 4)).toEqual(["M", "OFF", "H", null]);
+    expect(values.slice(0, 4)).toEqual(["M", null, "H", "?"]);
     expect(values.slice(29)).toEqual(["N", "ME"]);
+    // Never the same cell: an undecided day is not printed as rest.
+    expect(EXCEL_UNDECIDED_VALUE).not.toBe(EXCEL_EXPORT_VALUES.OFF);
   });
 
   it.each([29, 30])("blanks days after a %i-day month", (days) => {
     const values = exportDayValues(days, decisions);
     expect(values).toHaveLength(31);
     expect(values.slice(days).every((v) => v === null)).toBe(true);
+    expect(values[days - 2]).toBe("?");
   });
 
   it.each([0, 32, 1.5])("refuses %d days", (days) => {
     expect(() => exportDayValues(days, decisions)).toThrow(ValidationError);
+    expect(() => exportDayHeaderValues(days)).toThrow(ValidationError);
   });
 
-  it("maps every assignment code to itself", () => {
-    for (const [code, value] of Object.entries(EXCEL_EXPORT_VALUES))
-      expect(value).toBe(code);
+  it("maps the approved conventions", () => {
+    expect(EXCEL_EXPORT_VALUES).toEqual({
+      M: "M",
+      E: "E",
+      N: "N",
+      ME: "ME",
+      OFF: null,
+      H: "H",
+    });
+  });
+
+  it.each([29, 30, 31])("numbers the headings of a %i-day month", (days) => {
+    const values = exportDayHeaderValues(days);
+    expect(values).toHaveLength(31);
+    expect(values.filter((v) => v !== null)).toEqual(
+      Array.from({ length: days }, (_, i) => i + 1),
+    );
   });
 });

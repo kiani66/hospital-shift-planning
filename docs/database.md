@@ -32,7 +32,7 @@ TypeScript schema.
 | Change requests     | `shift_change_requests` (Phase 9 Shift Change Requests), `schedule_changes`, `schedule_change_cells` (changes applied after finalization)                                                                                                                                    |
 | Legacy (history)    | `legacy_shift_change_requests`, `legacy_shift_change_request_items` (Phase 2 model; see [Legacy tables](#legacy-tables))                                                                                                                                                     |
 | Messaging and audit | `notifications` (per recipient, D31–D34), `audit_events` (append-only)                                                                                                                                                                                                       |
-| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migration 0016, D124)                                                                                                                                                    |
+| Excel export        | `department_excel_templates` (one active uploaded template per department: bytes, mapping, version; migrations 0016–0017, D124)                                                                                                                                              |
 | Authentication      | `login_throttles` (failed sign-ins per hashed account id or unknown identifier, migration 0004; see `docs/security.md`)                                                                                                                                                      |
 
 ## Where each rule is enforced
@@ -227,3 +227,8 @@ category: deleting a department through the reset deletes its templates (counted
 an operational reset keeps them, and a template can never be orphaned. The reset inventory projects
 out the `content` bytes. `uploaded_by` / `mapping_updated_by` carry no foreign key. Exports only read (repeatable read, read only).
 No existing table or row changes. See D124.
+
+Migration `0017_excel_template_statistics` adds the optional mapping parts to the same table:
+`day_header_row` (nullable, `>= 1`), `statistic_columns` and `summary_rows` (`jsonb` arrays,
+default `[]`, validated by the domain mapping before every write). Existing templates keep their
+behaviour with empty lists. No other table changes.

@@ -1,0 +1,5 @@
+ALTER TABLE "department_excel_templates" ADD COLUMN "day_header_row" integer;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "statistic_columns" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD COLUMN "summary_rows" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD CONSTRAINT "department_excel_templates_day_header_row_check" CHECK ("department_excel_templates"."day_header_row" is null or "department_excel_templates"."day_header_row" >= 1);--> statement-breakpoint
+ALTER TABLE "department_excel_templates" ADD CONSTRAINT "department_excel_templates_statistics_check" CHECK (jsonb_typeof("department_excel_templates"."statistic_columns") = 'array' and jsonb_typeof("department_excel_templates"."summary_rows") = 'array');
