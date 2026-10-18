@@ -1,3 +1,4 @@
+import { FileInput } from "lucide-react";
 import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { MonthlyResetControl } from "@/features/reset/monthly-control";
 import type { Metadata, Route } from "next";
@@ -169,7 +170,8 @@ export default async function DepartmentSchedulePage({
       className={buttonClasses("outline")}
       href={`/departments/${department.code}/schedule/import`}
     >
-      ورود برنامه از Excel
+      <FileInput aria-hidden="true" className="size-5 shrink-0" />
+      ورود از اکسل
     </Link>
   ) : null;
   const createDialog = (primary: boolean, focus?: JalaliMonth) => {
@@ -296,6 +298,17 @@ export default async function DepartmentSchedulePage({
     scheduleId: selected.id,
   }).catch(orNotFound);
 
+  const lifecycleAction = (
+    <HeadNurseLifecycleAction
+      schedule={{
+        scheduleId: selected.id,
+        revision: review.month.revision,
+        label: selected.label,
+      }}
+      workflow={review.workflow}
+    />
+  );
+
   return (
     <>
       <ScheduleHeader
@@ -309,17 +322,13 @@ export default async function DepartmentSchedulePage({
           preferences: selected.preferences.state,
           editable: review.month.editable,
         }}
+        headingAction={
+          review.workflow.actions.submit ? lifecycleAction : undefined
+        }
         primaryAction={
           <>
             <PreferenceAction schedule={selected} />
-            <HeadNurseLifecycleAction
-              schedule={{
-                scheduleId: selected.id,
-                revision: review.month.revision,
-                label: selected.label,
-              }}
-              workflow={review.workflow}
-            />
+            {!review.workflow.actions.submit && lifecycleAction}
           </>
         }
         secondaryAction={
