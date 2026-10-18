@@ -54,8 +54,7 @@ export function CreateScheduleDialog({
       <Button
         // The secondary "another month" control stays quiet next to the
         // schedule's own next action (D52).
-        variant={primary ? "default" : "ghost"}
-        className={primary ? undefined : "text-brand-soft-foreground"}
+        variant={primary ? "default" : "outline"}
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
       >

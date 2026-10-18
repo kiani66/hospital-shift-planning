@@ -17,6 +17,7 @@ import type {
   ReviewDay,
   ScheduleMonthReview,
 } from "@/application/schedules/review";
+import { buttonClasses } from "@/components/ui/button";
 import type { DayState } from "@/domain/rules/validation-summary";
 import { COVERAGE_PERIODS } from "@/domain/shifts/shift-type";
 import type { IsoDate } from "@/domain/shared/dates";
@@ -67,10 +68,7 @@ export function MonthNavLink({
   // RTL: the earlier month is at the start (right), so it points right.
   const Icon = direction === "previous" ? ChevronRight : ChevronLeft;
   const text = direction === "previous" ? "ماه قبل" : "ماه بعد";
-  const base = cn(
-    "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-input md:size-9 pointer-coarse:size-11",
-    focusRing,
-  );
+  const base = buttonClasses("outline", "size-11 shrink-0 px-0");
   if (!target)
     return (
       <button
@@ -87,10 +85,7 @@ export function MonthNavLink({
       href={target.href}
       aria-label={`${text}: ${target.label}`}
       title={target.label}
-      className={cn(
-        base,
-        "bg-background text-foreground shadow-xs transition-colors hover:border-primary/40 hover:bg-accent hover:text-accent-foreground",
-      )}
+      className={base}
     >
       <Icon aria-hidden="true" className="size-5" />
     </Link>

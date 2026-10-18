@@ -77,20 +77,22 @@ export function ExcelExportButton({
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex flex-wrap gap-2">
+    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto sm:items-start">
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
         <Button
           variant="outline"
+          className="h-11 shrink-0"
           disabled={!hasTemplate || pending !== null}
           aria-describedby={!hasTemplate || error ? noteId : undefined}
           onClick={() => download(false)}
         >
-          <FileDown aria-hidden className="size-4" />
+          <FileDown aria-hidden className="size-5 shrink-0" />
           {pending === "official" ? "در حال ساخت…" : "خروجی اکسل"}
         </Button>
         {hasTemplate && revisionDraftAvailable && (
           <Button
-            variant="ghost"
+            variant="outline"
+            className="h-11 max-w-full shrink-0 whitespace-normal"
             disabled={pending !== null}
             onClick={() => download(true)}
           >

@@ -58,11 +58,11 @@ export function ScheduleHeader({
       aria-labelledby={SCHEDULE_HEADING_ID}
       className="mb-4 overflow-hidden rounded-xl border border-primary/15 bg-card shadow-sm shadow-primary/5"
     >
-      <div className="flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-5">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3 lg:flex-1">
+      <div className="flex flex-col gap-3 p-3 sm:p-4 lg:px-5 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3 xl:shrink-0">
           <IconWell
-            size="lg"
-            className="bg-primary text-primary-foreground shadow-sm shadow-primary/30 max-sm:hidden"
+            size="md"
+            className="size-11 rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/30 max-sm:hidden"
           >
             <CalendarRange />
           </IconWell>
@@ -71,7 +71,7 @@ export function ScheduleHeader({
           )}
           <h1
             id={SCHEDULE_HEADING_ID}
-            className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start lg:flex-1"
+            className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
           >
             <span className="truncate text-sm font-medium text-brand-soft-foreground">
               برنامه بخش · {departmentName}
@@ -86,14 +86,8 @@ export function ScheduleHeader({
           )}
         </div>
         {(primaryAction || secondaryAction) && (
-          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:max-w-[60%] lg:justify-end max-sm:[&>button:last-child]:self-center">
+          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start xl:justify-end [&>a]:h-11 [&>a]:shrink-0 [&>button]:h-11 [&>button]:w-full [&>button]:shrink-0 sm:[&>button]:w-auto [&>button>svg]:size-5 [&>button>svg]:shrink-0">
             {primaryAction}
-            {primaryAction && secondaryAction && (
-              <span
-                aria-hidden="true"
-                className="hidden h-7 w-px bg-border sm:block"
-              />
-            )}
             {secondaryAction}
           </div>
         )}
