@@ -738,3 +738,90 @@ describe("staffing rule sets (D108)", () => {
     ).toBe(false);
   });
 });
+
+describe("Excel template and export (D124)", () => {
+  const admin: Actor = {
+    userId: "admin",
+    isActive: true,
+    isHospitalAdmin: true,
+    memberships: [],
+    supervisedDepartmentIds: [],
+  };
+  const secretary: Actor = {
+    userId: "secretary",
+    isActive: true,
+    isHospitalAdmin: false,
+    memberships: [{ departmentId: DEPT, role: "SECRETARY" }],
+    supervisedDepartmentIds: [],
+  };
+
+  it.each(ACTOR_NAMES)(
+    "lets only the department's Head Nurse among %s manage the template",
+    (name) => {
+      expect(
+        decide(actors[name], "excelTemplate.manage", { departmentId: DEPT })
+          .allowed,
+      ).toBe(name === "headNurse");
+    },
+  );
+
+  it("lets any active Hospital Admin manage every department's template", () => {
+    expect(
+      decide(admin, "excelTemplate.manage", { departmentId: "any" }),
+    ).toEqual({ allowed: true });
+    expect(
+      decide({ ...admin, isActive: false }, "excelTemplate.manage", {
+        departmentId: DEPT,
+      }).allowed,
+    ).toBe(false);
+  });
+
+  it("denies a secretary and names the reason", () => {
+    expect(
+      decide(secretary, "excelTemplate.manage", { departmentId: DEPT }),
+    ).toEqual({ allowed: false, reason: "NOT_HEAD_NURSE_OF_DEPARTMENT" });
+  });
+
+  const STATUSES: ScheduleStatus[] = [
+    "DRAFT",
+    "PLANNING",
+    "FINALIZED",
+    "SUBMITTED",
+    "RETURNED",
+    "APPROVED",
+    "REVISING",
+  ];
+  it.each(STATUSES)(
+    "exports like the department grid is viewed in %s",
+    (status) => {
+      expect(
+        decide(actors.headNurse, "schedule.export", {
+          departmentId: DEPT,
+          status,
+        }).allowed,
+      ).toBe(true);
+      for (const actor of [
+        actors.nurse,
+        actors.otherHeadNurse,
+        actors.otherSupervisor,
+        secretary,
+        admin,
+      ])
+        expect(
+          decide(actor, "schedule.export", { departmentId: DEPT, status })
+            .allowed,
+        ).toBe(false);
+      expect(
+        decide(actors.supervisor, "schedule.export", {
+          departmentId: DEPT,
+          status,
+        }).allowed,
+      ).toBe(
+        decide(actors.supervisor, "schedule.viewDepartment", {
+          departmentId: DEPT,
+          status,
+        }).allowed,
+      );
+    },
+  );
+});

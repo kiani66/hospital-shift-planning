@@ -16,6 +16,7 @@ const { db, url } = setupTestDatabase({ seed: false });
 const EXPECTED_TABLES = [
   "audit_events",
   "change_reasons",
+  "department_excel_templates",
   "department_memberships",
   "departments",
   "legacy_shift_change_request_items",
@@ -236,7 +237,10 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0008 system-level Hospital Admin flag, 0009 personnel identity (stage 1),
     // 0010 explicit OFF, 0011 versioned staffing rule sets, 0012 ME label, 0013 reset records,
     // 0014 leave day (H)
-    expect(before).toBe(16);
+    // 0015 secretary role, 0016 department Excel export templates,
+    // 0017 Excel template statistics mapping, 0018 Excel template calendar mapping,
+    // 0019 Excel template department foreign key (idempotent; 0016 stays as first applied)
+    expect(before).toBe(20);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });

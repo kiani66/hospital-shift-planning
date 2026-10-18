@@ -9,3 +9,4 @@ export * from "./notifications";
 export * from "./audit";
 export * from "./auth";
 export * from "./reset-operations";
+export * from "./excel-templates";

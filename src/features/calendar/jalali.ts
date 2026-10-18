@@ -61,6 +61,11 @@ const weekdayFormat = new Intl.DateTimeFormat("fa-IR", {
   weekday: "long",
 });
 
+const weekdayInitialFormat = new Intl.DateTimeFormat("fa-IR", {
+  timeZone: "UTC",
+  weekday: "narrow",
+});
+
 const digits = new Intl.NumberFormat("fa-IR", { useGrouping: false });
 const grouped = new Intl.NumberFormat("fa-IR");
 
@@ -172,6 +177,10 @@ export function formatJalaliDate(
 /** The Persian weekday name, e.g. "شنبه". */
 export const jalaliWeekday = (date: IsoDate): string =>
   weekdayFormat.format(utcMidnight(date));
+
+/** The one-letter weekday printed in narrow calendar columns, e.g. "ج" for Friday. */
+export const jalaliWeekdayInitial = (date: IsoDate): string =>
+  weekdayInitialFormat.format(utcMidnight(date));
 
 /** "۱ تا ۳۰ آبان ۱۴۰۵" within one month, otherwise both dates in full. */
 export function formatJalaliRange(from: IsoDate, to: IsoDate): string {

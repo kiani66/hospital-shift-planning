@@ -85,6 +85,17 @@ export interface ActionResources
     readonly status: ScheduleStatus;
   };
   /**
+   * Download the department grid as the department's Excel template (D124):
+   * whoever may view the grid in that status, in any status for the Head
+   * Nurse. A read: it never changes the schedule.
+   */
+  "schedule.export": DepartmentResource & { readonly status: ScheduleStatus };
+  /**
+   * Upload, replace, download and map the department's Excel export template
+   * (D124): any Hospital Admin, or a Head Nurse of that department.
+   */
+  "excelTemplate.manage": DepartmentResource;
+  /**
    * The actor's own shifts in one schedule. `onRoster` is true when the actor is
    * or was rostered on it, which keeps history readable after leaving (D16).
    */
@@ -179,6 +190,12 @@ export function decide<A extends Action>(
       ? allow
       : deny("NO_DEPARTMENT_ACCESS");
   }
+  if (action === "excelTemplate.manage") {
+    const { departmentId } = resource as DepartmentResource;
+    return actor.isHospitalAdmin || isHeadNurseOf(actor, departmentId)
+      ? allow
+      : deny("NOT_HEAD_NURSE_OF_DEPARTMENT");
+  }
   if (action === "staffingRules.applyToSchedule") {
     // Never the Head Nurse: they read the rules but do not choose them (D108).
     const { departmentId } = resource as DepartmentResource;
@@ -201,12 +218,14 @@ export function decide<A extends Action>(
     | "personnel.view"
     | "staffingRules.view"
     | "staffingRules.applyToSchedule"
+    | "excelTemplate.manage"
     | "notification.access"
     | "account.changeOwnPassword"
   >;
   const r = resource as ActionResources[DepartmentAction];
   switch (action as DepartmentAction) {
-    case "schedule.viewDepartment": {
+    case "schedule.viewDepartment":
+    case "schedule.export": {
       if (headNurse) return allow;
       if (!supervisor) return deny("NO_DEPARTMENT_ACCESS");
       const { status } = r as ActionResources["schedule.viewDepartment"];

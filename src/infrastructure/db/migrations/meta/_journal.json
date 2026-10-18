@@ -113,6 +113,34 @@
       "when": 1791909797253,
       "tag": "0015_secretary",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791995851701,
+      "tag": "0016_excel_export_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792218374450,
+      "tag": "0017_excel_template_statistics",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792223187862,
+      "tag": "0018_excel_template_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792238878670,
+      "tag": "0019_excel_template_department_fk",
+      "breakpoints": true
     }
   ]
 }

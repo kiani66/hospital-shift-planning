@@ -90,6 +90,7 @@ describe("buildNavigation", () => {
       "/departments/icu/requests",
       "/departments/icu/history",
       "/departments/icu/coverage-rules",
+      "/departments/icu/settings",
       "/departments/icu/people",
     ]);
   });
@@ -117,6 +118,9 @@ describe("buildNavigation", () => {
     expect(buildNavigation(ctx).primary[0]?.href).toBe("/admin/personnel");
     expect(allItems(ctx).map((i) => i.href)).toContain("/admin/personnel");
     expect(allItems(ctx).map((i) => i.href)).toContain("/admin/staffing-rules");
+    expect(allItems(ctx).map((i) => i.href)).toContain(
+      "/admin/excel-templates",
+    );
     expect(allItems(ctx).some((i) => i.href.startsWith("/departments/"))).toBe(
       false,
     );

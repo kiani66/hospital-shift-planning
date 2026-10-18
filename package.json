@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:identity-verify": "tsx scripts/db-identity-verify.ts",
     "db:studio": "drizzle-kit studio",
     "db:up": "docker compose up -d --wait db",
     "db:down": "docker compose down",

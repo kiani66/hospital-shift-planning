@@ -2191,6 +2191,178 @@ Amends D57's login card and brand panel; layout, wording and auth are unchanged.
 Enforced in `app/login/page.tsx`, `features/auth/login-form.tsx`,
 `features/auth/login-brand-panel.tsx` and `tests/e2e/login.spec.ts`.
 
+## Phase 16 — Dynamic Excel template management and schedule export
+
+### D124 · Department Excel export template and template-driven export
+
+Approved: the Head Nurse downloads a monthly schedule as `.xlsx` in the hospital's own print
+workbook. The workbook is never generated: the department's uploaded template is copied and only
+its mapped day cells are written. Paths are relative to `src/`.
+
+- **Storage.** PostgreSQL, table `department_excel_templates` (migration 0016): the bytes
+  (`bytea`, at most 2 MiB), file name, size, SHA-256, the mapping, version, uploader and time.
+  Evaluated against Vercel Blob: Neon is already the only persistent store (D2), the file is small
+  and rarely written, and one transaction keeps the bytes, mapping, active flag and audit
+  consistent. Nothing touches the local or deployment file system or the repository; a new upload
+  is used by the next export with no commit, build, deployment or restart.
+- **One active template per department** (partial unique index). An upload or replacement locks
+  the department row, checks the template the user saw (`expectedTemplateId`; a concurrent
+  replacement gets CONFLICT), validates the file and mapping, then deactivates the old row and
+  inserts the new one in the same transaction, with `excelTemplate.uploaded` / `.replaced` audit.
+  A failed validation or write leaves the working template active. Older rows stay as minimal
+  history (no history UI in V1). A mapping change validates against the stored bytes, bumps the
+  row's `revision` (optimistic concurrency) and is audited (`excelTemplate.mappingUpdated`). The
+  template belongs to its department (foreign key, no cascade) and is registered in the Phase 14
+  reset's `departments` master category: a reset that deletes a department deletes and counts its
+  templates, an operational reset keeps them, and a department can never be deleted under a
+  template, so no template is ever orphaned or unreachable. The reset inventory never reads the
+  workbook bytes (`sha256` identifies them). `uploaded_by` / `mapping_updated_by` have no foreign
+  key, so templates never retain personnel through a personnel reset.
+- **Authorization.** `excelTemplate.manage`: any Hospital Admin, or a Head Nurse of that
+  department; Supervisor, Nurse and Secretary cannot. `schedule.export` follows the department
+  grid (`schedule.viewDepartment`): the Head Nurse in every status, a Supervisor from FINALIZED on.
+  Admins reach every department's settings from «قالب‌های خروجی اکسل»; the Head Nurse from
+  «تنظیمات بخش». Unknown and forbidden departments or schedules look the same (404).
+- **Mapping.** Worksheet name, personnel-number column, first and last personnel row (at most 500
+  rows) and the first of 31 consecutive day columns. Nothing about a layout is hard-coded. The
+  personnel-number column may be hidden. One universal 31-day template serves every month.
+  Optional (migration 0017): a day-heading row, per-person statistic columns and daily summary
+  rows (below). A summary row may sit inside the personnel block; it must hold no personnel number.
+  Optional (migration 0018): a weekday row and its form (LONG «چهارشنبه» or NARROW «چ» for narrow
+  day columns), a month-heading cell, and the holiday highlighting (a holiday fill cell and a
+  normal-day column, both or neither); see «Calendar headings and holiday highlighting».
+- **Personnel-number column from the records.** Not needed for the NICU file, which prints its
+  personnel numbers in column B («شماره سیستم»); those printed numbers are matched as they are and
+  nothing is added. A hospital workbook without numbers can be prepared in
+  «ساخت ستون شماره پرسنلی پنهان»: the user assigns each printed row to a
+  current or future member of the department (active account); the server writes those members'
+  recorded numbers, as text, into a column that holds no value in any row and crosses no merge,
+  and hides it. Nothing is inserted or moved; only that sheet part changes (cells, one `<col>`,
+  the dimension). Numbers never come from the workbook, typed input or names; row text is shown
+  only to recognise a row. Nothing is stored or audited: the file is downloaded, reviewed and
+  uploaded as the template. The template preview lists every matched row with the name the system
+  records for its number and warns about numbers no member of the department has.
+- **Identity.** The personnel number is the only matching key (never the name, row or database
+  order), read as text so leading zeros survive; Persian digits are normalized. Numeric cells are
+  accepted only as integers of at most 15 digits (Excel's exact precision). Duplicates in the
+  mapped rows are rejected. A changed number is picked up by the next export once both the
+  application and the template carry it.
+- **Validation before activation** (and again on every export): `.xlsx` ZIP structure, upload
+  size, entry count and actually inflated size; no macros, external links, data connections,
+  ActiveX or embedded objects (external hyperlinks are allowed); the sheet exists; the mapping is
+  inside the grid and the personnel column is outside the day block; no formula, error, boolean,
+  date or rich value in mapped cells; no merged cell, array/shared formula or Excel table over the
+  mapped area; in a protected sheet the day cells must be unlocked; a row without a personnel
+  number must have empty day cells (decorative and spacing rows are ignored and kept); day cells
+  of personnel rows must be empty or hold a code from a previous export (M, E, N, ME, OFF, H or
+  `?`; anything else usually means a wrong first-day column). Every other written cell
+  (statistics of personnel rows, summary and heading rows) may hold any static value but no
+  formula, error, boolean, date, rich value, merge, shared formula, table or lock, and it must
+  already hold what the export writes there or nothing: a figure or `?` (statistics, summaries), a
+  day number 1–31 (day headings), a short word without digits (weekdays), a heading with a
+  four-digit year (month heading). Hospital text, a signature or a wrong mapping is therefore never
+  silently overwritten. The month heading may be the top-left cell of a merge (where Excel keeps
+  the merged value); any other merge over a written cell is rejected. A mapped cell outside the
+  sheet's print area is a warning (the system never edits print settings; the NICU file prints
+  A1:AS31, which includes day 31 in AR). Messages name the Excel cell.
+- **Export.** One repeatable-read, read-only transaction: authorize, load the active template and
+  mapping, the roster and decisions. DRAFT … RETURNED write the working copy; an approved schedule
+  (APPROVED, or REVISING / a revision's SUBMITTED / RETURNED) writes the latest approved version
+  by default, and the open revision's working copy only through the explicit «خروجی پیش‌نویس
+  بازبینی (تأییدنشده)» (file name suffix `-revision-draft`), so unapproved revision changes never
+  appear in the official export (D11, D70). Approved conventions: M, E, N, ME and leave H as
+  themselves; rest (OFF) a **blank** cell, as the hospital's sheets print it (D120); an undecided
+  day **`?`**, so it is never read as rest (D100). Days the month lacks (30–31 of a 29-day month)
+  are blank; the length comes from the schedule's own period. Every active roster member, and
+  every roster member with a decision, needs a row: a missing number or a person without a
+  personnel number fails the export naming them. Template rows of people not in the export are
+  cleared (days and statistics). Secretaries are exported like nurses (staffing rules unchanged,
+  D119). No schedule or template row is written, and no audit row is added.
+- **Statistics.** The hospital's printed totals are static values from the month the file was
+  saved, so every mapped statistic cell is rewritten from the exported decisions, never kept:
+  `SHIFT_COUNT` (working shifts, ME once, `summarizeShifts`, D42), `LEAVE_DAYS` (H days of the
+  period, not a leave balance), daily `COVERAGE_M/E/N` (nursing coverage per period exactly as
+  staffing counts it: `coverageOf`, ME toward M and E, secretaries excluded, D119), the day
+  headings 1…N, and `CLEAR` for a figure the system cannot calculate (required/contractual hours,
+  leave balances, contract), which is emptied. A figure that depends on an undecided day is `?`.
+  Working-hour and coverage semantics are unchanged; no hours are written. Approved by the product
+  owner: **ME is exactly one shift** in `SHIFT_COUNT` and contributes one person to both Morning
+  and Evening coverage; the shift count is never multiplied by covered periods. H, OFF and an
+  undecided day stay distinct (H counts as leave, OFF as neither, undecided makes the figure `?`).
+- **NICU mapping (verified against the approved `Template_Export.xlsx`).** `Sheet2`; personnel
+  numbers in B, rows 7–21 nurses and 22 the secretary; days N–AR; weekdays row 5 (NARROW: the day
+  columns are about three characters wide, full names are clipped); day numbers row 6; month
+  heading U3 («مهرماه 1405»); holiday fill from P7 (a Friday of the saved month), normal days like
+  column O. **Final product decision:** the personnel statistics in H–L (I «سابقه کار-ماه»,
+  J «ساعت موظفی», K «مرخصی», L «تعداد شیفت») and the daily coverage in rows 23–25 are maintained by
+  hand, so the NICU mapping has **no statistic column** (an unmapped column is never touched) and
+  rows 23, 24, 25 are `MANUAL` summary rows. The export generates only the shifts (N7:AR22), the
+  weekday and day-number rows 5–6 and the month heading U3, and applies the Friday style to rows
+  5–25. The calculated kinds below stay available, unchanged, for any department that maps them
+  (the tests cover both mappings on the same workbook). Static figures the system does not model
+  (A2/A3, F26, F27, N27, G29) are left as they are.
+- **Manual summary rows (`MANUAL`, no migration).** A hand-maintained daily row keeps the value of
+  every day the period has exactly as it is (the cell's value, type and any other content are not
+  rewritten; with highlighting mapped only its style index changes, so a Friday column is
+  highlighted without touching what the hospital typed). Days the period lacks are cleared (a
+  31st-day value is never printed in a 30-day month). The mapped cells are validated like every
+  written cell (no formula, error, merge, lock; a plain figure or empty), because a shorter month
+  clears them. A `MANUAL` row for which a caller supplies no values is kept, never emptied.
+  `summary_rows` is a `jsonb` array validated by the domain and Zod, so no migration is needed.
+- **Calendar headings and holiday highlighting.** Jalali conversion stays in the presentation
+  adapter (`features/calendar/jalali.ts`): the export use case receives an `ExcelExportCalendar`
+  (day number, weekday, month heading per ISO date) from the route, so no conversion depends on
+  the application layer or the server's timezone. Every export rewrites the mapped weekday and
+  day-number cells for the period's days and blanks the rest (29- and 30-day months clear 30–31),
+  and writes «<ماه>‌ماه <سال>» (both months for a period across a month boundary). Holidays are
+  classified once (`domain/calendar/holiday-kind.ts`): every Friday (`WEEKLY_REST`) and, once a
+  master calendar is connected through `HolidayCalendar`, official holidays (`OFFICIAL`, none
+  today); the classification is presentation only and does not make Friday a staffing HOLIDAY
+  (D41 unchanged). With highlighting mapped, every written day cell (weekday and day-number rows,
+  personnel rows, summary rows and filled empty rows of the personnel block) gets the holiday fill
+  on a holiday and its row's normal fill (read from the normal-day column of the stored template)
+  otherwise. Only the cell's `fillId` changes: its border, font, alignment, number format and
+  protection stay, the same format is reused when the workbook has it, and a missing combination
+  is appended to `<cellXfs>`. Fills always come from the stored template, so highlights never
+  accumulate across months, and the month the file was saved in reproduces the file's own styles.
+  The holiday fill cell must show the holiday fill in the uploaded file; a holiday fill that equals
+  the normal fill in every personnel row is rejected, and in other rows (the NICU header rows
+  5–6, filled on every day) it is a warning. Without highlighting mapped, fills are untouched and a
+  template whose day columns differ in fill gets a warning that they will stay put.
+- **Deterministic output.** Every ZIP entry carries a fixed timestamp (1980-01-01 00:00, built
+  from local components because ZIP stores local time), so the same template, mapping and schedule
+  give a byte-identical file whatever the clock or the server's timezone (fflate otherwise stamps
+  each entry with the current time). Covered by tests with different system clocks and timezones,
+  for the export and the personnel-column preparation.
+- **Preservation.** The workbook is patched at the ZIP/XML level: every part except the mapped
+  worksheet (and, for a new fill combination, `styles.xml`, where formats are only appended) is
+  copied byte for byte, and in that worksheet only the `<c>` elements of the mapped cells change
+  (inline strings; the cell's own style kept, or the same style with the holiday or normal fill).
+  Fonts, borders, merges, hidden columns, row heights, column widths, print area, margins, orientation,
+  headers/footers, drawings, formulas and totals are untouched. A library round trip (ExcelJS)
+  was rejected because it re-serializes the whole workbook and drops features it does not model.
+  When the workbook contains formulas, their cached results are dropped (the formulas themselves
+  are kept exactly) and `fullCalcOnLoad` is set: Excel recalculates on open, and a viewer that does
+  not recalculate (Protected View, previews, other apps) computes or shows nothing rather than the
+  template's stale totals (verified: a stale cached `0` became the correct `2` in LibreOffice). The stored template bytes never change.
+- **Download.** `GET /api/schedules/[scheduleId]/excel` (`?source=revision-draft`) and
+  `GET /api/departments/[code]/excel-template`, authorized on every request, `private, no-store`,
+  the xlsx content type and an attachment named from the schedule month only, e.g.
+  `NICU-schedule-1405-07.xlsx`; the month inside the workbook is written only when a month-heading
+  cell is mapped.
+  Server Actions accept up to 3 MB (`serverActions.bodySizeLimit`) for the upload.
+- **Out of scope (V1):** non-consecutive day columns, several active templates, version-history
+  UI, editing formulas or unmapped totals, the official-holiday master calendar (a separate change:
+  no holiday table, migration, admin UI or external source here), and any change to Excel import.
+
+Enforced in `domain/excel-export/template-mapping.ts`, `domain/excel-export/statistics.ts`,
+`domain/authz/policies.ts`, `application/excel-export/`,
+`infrastructure/repositories/excel-templates.ts`, migrations `0016_excel_export_templates` and
+`0017_excel_template_statistics`, `0018_excel_template_calendar`, `domain/calendar/holiday-kind.ts`,
+`features/excel-export/` (with `calendar.ts`, the Jalali adapter of the export) and
+`app/(app)/departments/[code]/settings/page.tsx`; the sanitized NICU equivalent is
+`tests/support/nicu-template.ts`.
+
 ## Optional preference decisions
 
 ### D125 · Preferences are optional; finalize from DRAFT; open preferences until finalization

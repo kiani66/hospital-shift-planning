@@ -16,6 +16,7 @@ import {
   jalaliMonthParam,
   jalaliMonthPeriod,
   jalaliWeekday,
+  jalaliWeekdayInitial,
   parseJalaliMonthParam,
   toJalali,
   wholeJalaliMonthOf,
@@ -86,6 +87,12 @@ describe("Persian labels", () => {
     );
     expect(jalaliWeekday(d("2026-10-24"))).toBe("شنبه");
     expect(jalaliWeekday(d("2026-10-30"))).toBe("جمعه");
+    // One letter per day, Saturday first: ش ی د س چ پ ج.
+    expect(
+      Array.from({ length: 7 }, (_, i) =>
+        jalaliWeekdayInitial(d(`2026-10-${24 + i}`)),
+      ).join(" "),
+    ).toBe("ش ی د س چ پ ج");
     expect(formatJalaliRange(d("2026-10-23"), d("2026-11-21"))).toBe(
       "۱ تا ۳۰ آبان ۱۴۰۵",
     );
