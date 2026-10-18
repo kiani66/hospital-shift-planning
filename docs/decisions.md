@@ -2400,3 +2400,35 @@ Enforced in `domain/schedule/state-machine.ts`, `application/schedules/preferenc
 `application/schedules/queries.ts`, `features/schedule-workflow/workflow-ui.tsx` and
 `features/schedule/schedule-overview.tsx`; tested in `tests/integration/optional-preferences.test.ts`
 and `tests/e2e/schedule-approval.spec.ts`.
+
+## Phase 17 — Workforce report calculations
+
+### D126 · Stage 1: actual-period, pure-domain recorded workload
+
+Each report covers exactly one schedule's actual inclusive ISO period (D29's existing
+maximum of 62 days), never an automatic merge of schedules overlapping a Jalali month.
+Every schedule roster member, including Head Nurse and Secretary, has the full period
+denominator regardless of membership effective dates or current account activity. Stored
+decisions are never discarded because of membership dates. Missing assignments count as
+UNDECIDED, distinct from explicit OFF (rest) and H (leave).
+
+`summarizeWorkforce` reuses `summarizeShifts` and the domain shift catalog (D42, D98):
+M/E/N/ME count as working shifts, ME exactly once; minutes are catalog durations
+(420/300/720/720 today). A night belongs wholly to its assignment date, including the last
+period day. OFF, H and UNDECIDED contribute no working shifts or minutes. All seven counts
+partition the reporting days. Recorded numeric totals remain visible when incomplete;
+`isComplete` means no undecided roster-day, never approval or scheduling-rule validity.
+
+The pure API takes a period, roster identities/snapshot roles and the selected schedule's
+assignments. It returns per-person counts, working shifts, integer scheduled minutes and
+chronological daily decisions; rows sort by user ID, leaving presentation sorting to Stage 3.
+An empty roster yields an empty, complete report. Invalid periods, duplicate roster identities,
+duplicate nurse-days (even identical), non-roster assignments and out-of-period assignments
+return the existing domain `ValidationError` through `Result`, rather than silently dropping
+or double-counting records. Existing scheduling validation is unchanged.
+
+Stage 1 adds no persistence, queries, authorization, source selection, Jalali presentation,
+UI or Excel behavior. Working/approved source selection belongs to later application stages.
+No contractual/required hours, overtime, payroll, attendance or actual worked hours are inferred.
+
+Enforced in `domain/workforce-report/summary.ts` and its adjacent unit tests.
