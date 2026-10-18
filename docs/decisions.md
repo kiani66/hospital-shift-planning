@@ -2432,3 +2432,41 @@ UI or Excel behavior. Working/approved source selection belongs to later applica
 No contractual/required hours, overtime, payroll, attendance or actual worked hours are inferred.
 
 Enforced in `domain/workforce-report/summary.ts` and its adjacent unit tests.
+
+### D127 · Stage 2: authorized workforce report snapshot and source provenance
+
+`getWorkforceReport` takes a department ID, schedule ID and explicit source
+(`DEFAULT` or `REVISION_DRAFT`). It reports that one schedule's actual ISO period
+using `summarizeWorkforce` (D126), never selecting or combining schedules by month.
+It includes the complete historical roster, including Head Nurse, Secretary,
+inactive accounts and people with no decisions. Current identity fields accompany
+snapshot roles; current department personnel and membership eligibility never rebuild
+or filter the roster or its decisions.
+
+Every request authorizes `department.manage` against the trusted actor. Malformed,
+unknown, cross-department and denied schedule/department identities all raise the
+same `NotFoundError("Schedule")`. No Supervisor-only or Hospital Admin-only access is
+added. An invalid source raises `ValidationError` only after schedule authorization.
+
+`DEFAULT` reads only the version referenced by `currentVersionId` when present,
+regardless of schedule status (SUBMITTED and RETURNED also occur after approval).
+Without that pointer it reads only working assignments and marks them provisional.
+The referenced version must exist, belong to this schedule and have valid approval
+metadata; inconsistency raises `ConflictError` with reason
+`WORKFORCE_APPROVED_VERSION_INCONSISTENT`, never a working-copy fallback.
+`REVISION_DRAFT` requires that valid approved version plus a same-schedule OPEN
+revision whose scope is inside the period (an empty initial scope is allowed, D109).
+Otherwise it raises `ConflictError` / `WORKFORCE_REVISION_DRAFT_UNAVAILABLE`.
+An eligible draft reads only working assignments and is explicitly unapproved.
+Approved gaps stay UNDECIDED, never filled from the working copy.
+
+The result carries schedule identity, status/revision, actual period, requested and
+resolved sources, provisional flag, approved version ID/number/time when applicable,
+and the revision ID for a draft. Each query uses one read-only repeatable-read
+transaction for all repository reads: concurrent edits or approvals cannot mix
+snapshots. Reads take no row locks and write no business data, audit or notifications.
+The bounded query count is independent of roster size. No new policy, persistence,
+workflow, UI or Excel behavior is introduced.
+
+Enforced in `application/workforce-report/queries.ts`; tested in
+`tests/integration/workforce-report.test.ts`.
