@@ -188,12 +188,9 @@ test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics an
   await form.getByLabel("ردیف پایان پرسنل").fill("22");
   await form.getByLabel("ستون روز اول").fill("N");
   await form.getByLabel("ردیف عنوان روزها").fill("6");
-  await form.getByLabel("ستون تعداد شیفت").fill("L");
-  await form.getByLabel("ستون روزهای مرخصی (H)").fill("K");
-  await form.getByLabel("ستون‌های پاک‌شونده").fill("J");
-  await form.getByLabel("ردیف تعداد صبح").fill("23");
-  await form.getByLabel("ردیف تعداد عصر").fill("24");
-  await form.getByLabel("ردیف تعداد شب").fill("25");
+  // The statistics in H–L and the coverage in rows 23–25 are kept by hand:
+  // no statistic column is mapped, and the coverage rows are manual.
+  await form.getByLabel("ردیف‌های خلاصه دستی").fill("23, 24, 25");
   await form.getByLabel("ردیف روزهای هفته").fill("5");
   await form.getByLabel("شکل روز هفته").selectOption("NARROW");
   await form.getByLabel("خانه عنوان ماه").fill("U3");
@@ -203,6 +200,8 @@ test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics an
   const summary = page.getByRole("region", { name: "خلاصه نگاشت" });
   await expect(summary).toContainText("قالب قابل فعال‌سازی است");
   await expect(summary).toContainText("B7:B22");
+  await expect(summary).toContainText("مقدار دستی حفظ می‌شود");
+  await expect(summary).not.toContainText("آمار پرسنل");
   await expect(summary).not.toContainText("(ستون پنهان)");
   await expect(summary).toContainText(fixture.nurse.displayName);
   await expect(summary).toContainText("A1:AS31");
@@ -228,10 +227,22 @@ test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics an
   expect([day(22, 1), day(22, 2), day(22, 3)]).toEqual(["M", "?", "H"]);
   expect(day(7, 1)).toBe("?");
   expect(day(8, 31)).toBeNull(); // Mehr has 30 days.
-  expect(["J8", "K8", "L8"].map((a) => sheet.getCell(a).value ?? null)).toEqual(
-    [null, "?", "?"],
-  );
-  expect(day(23, 1)).toBe("?");
+  // The hospital's own statistics and coverage stay exactly as uploaded.
+  const saved = (await readWorkbook(new Uint8Array(fixture.nicu))).getWorksheet(
+    "Sheet2",
+  )!;
+  for (const address of ["H8", "I8", "J8", "K8", "L8", "J22", "L22"])
+    expect(sheet.getCell(address).value, address).toEqual(
+      saved.getCell(address).value,
+    );
+  expect(saved.getCell("L8").value).not.toBeNull();
+  for (const row of [23, 24, 25]) {
+    expect(day(row, 1)).toBe(saved.getCell(row, 14).value);
+    expect(day(row, 29)).toBe(saved.getCell(row, 42).value);
+    // Mehr has 30 days: the saved 31st day's coverage is cleared.
+    expect(saved.getCell(row, 44).value ?? null).not.toBeNull();
+    expect(day(row, 31)).toBeNull();
+  }
   // Calendar: 1 Mehr 1405 is a Wednesday; Fridays are 3, 10, 17 and 24.
   expect(sheet.getCell("U3").value).toBe("مهر\u200cماه 1405");
   expect([day(5, 1), day(5, 2), day(5, 3)]).toEqual(["چ", "پ", "ج"]);

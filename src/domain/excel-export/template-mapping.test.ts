@@ -145,6 +145,46 @@ describe("resolveTemplateMapping", () => {
     expect(requireTemplateMapping(resolved)).toEqual(resolved);
   });
 
+  it("accepts MANUAL summary rows and unmapped statistics (the NICU mapping)", () => {
+    const manual: ExcelTemplateMapping = {
+      ...nicu,
+      statisticColumns: [],
+      summaryRows: [
+        { row: 23, statistic: "MANUAL" },
+        { row: 24, statistic: "MANUAL" },
+        { row: 25, statistic: "MANUAL" },
+      ],
+    };
+    const resolved = requireTemplateMapping(manual);
+    expect(resolved.statisticColumns).toEqual([]);
+    expect(resolved.summaryRows).toEqual(manual.summaryRows);
+    expect(storedTemplateMapping(resolved).summaryRows).toEqual(
+      manual.summaryRows,
+    );
+    // Generic statistics and manual rows can be mixed per department.
+    expect(
+      resolveTemplateMapping({
+        ...manual,
+        statisticColumns: [{ column: "L", statistic: "SHIFT_COUNT" }],
+        summaryRows: [
+          { row: 23, statistic: "COVERAGE_M" },
+          { row: 24, statistic: "MANUAL" },
+        ],
+      }).ok,
+    ).toBe(true);
+    // A manual row is still a plain row: no duplicates, not the heading rows.
+    for (const row of [24, 6, 5]) {
+      const result = resolveTemplateMapping({
+        ...manual,
+        summaryRows: [
+          { row: 24, statistic: "MANUAL" },
+          { row, statistic: "MANUAL" },
+        ],
+      });
+      expect(result.ok, `row ${row}`).toBe(false);
+    }
+  });
+
   it("defaults the weekday format and leaves the calendar features off", () => {
     const resolved = requireTemplateMapping(mapping);
     expect(storedTemplateMapping(resolved)).toMatchObject({

@@ -74,13 +74,18 @@ export type PersonStatistic = (typeof PERSON_STATISTICS)[number];
 /**
  * What a daily summary row holds: nursing coverage of one period (M, E or
  * N, counted as the app counts staffing: ME toward M and E, secretaries
- * excluded, D42, D119), or CLEAR.
+ * excluded, D42, D119), CLEAR, or MANUAL.
+ *
+ * MANUAL is a row the hospital maintains by hand (D124): the export keeps
+ * the values of the period's days exactly as they are, clears the days the
+ * period does not have, and only restyles the cells (Friday highlighting).
  */
 export const DAILY_STATISTICS = [
   "COVERAGE_M",
   "COVERAGE_E",
   "COVERAGE_N",
   "CLEAR",
+  "MANUAL",
 ] as const;
 export type DailyStatistic = (typeof DAILY_STATISTICS)[number];
 
@@ -426,6 +431,15 @@ export const EXCEL_UNDECIDED_VALUE = "?";
 
 /** A cell value to write: text, a number, or null for a blank cell. */
 export type ExportCellValue = string | number | null;
+
+/**
+ * "Leave this cell's value as it is" (a MANUAL summary row's valid days).
+ * Only its style may change.
+ */
+export const KEEP_CELL: unique symbol = Symbol("KEEP_CELL");
+
+/** A summary-row cell: a value to write, or `KEEP_CELL`. */
+export type SummaryCellValue = ExportCellValue | typeof KEEP_CELL;
 
 function requireDayCount(dayCount: number): void {
   if (

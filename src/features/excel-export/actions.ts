@@ -97,6 +97,7 @@ const statisticsOf = (form: FormData) => ({
       statistic: "COVERAGE_N",
     })),
     ...list(form, "clearRows").map((row) => ({ row, statistic: "CLEAR" })),
+    ...list(form, "manualRows").map((row) => ({ row, statistic: "MANUAL" })),
   ],
 });
 

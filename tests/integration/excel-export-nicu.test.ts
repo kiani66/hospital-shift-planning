@@ -34,7 +34,9 @@ import {
 import { createUser } from "../../src/infrastructure/repositories/users";
 import { completeScheduleFixture } from "../support/complete-schedule";
 import { readWorkbook } from "../support/excel-templates";
+import type { ExcelTemplateMapping } from "../../src/domain/excel-export/template-mapping";
 import {
+  NICU_CALCULATED_MAPPING,
   NICU_DAY_ROW,
   NICU_FIRST_DAY,
   NICU_MAPPING,
@@ -115,15 +117,30 @@ const departmentTemplate = (printArea?: string) =>
     ...(printArea ? { printArea } : {}),
   });
 
-const upload = async (content: Uint8Array) =>
+const upload = async (
+  content: Uint8Array,
+  mapping: ExcelTemplateMapping = NICU_MAPPING,
+) =>
   ok(
     await uploadExcelTemplate(head, {
       departmentId: DEMO_ICU.id,
       expectedTemplateId: null,
       fileName: "nicu.xlsx",
       content,
-      mapping: NICU_MAPPING,
+      mapping,
     }),
+  );
+
+/** The template as uploaded, for what the export must leave alone. */
+const savedSheet = async () =>
+  (await readWorkbook(await departmentTemplate())).getWorksheet(NICU_SHEET)!;
+const savedDays = (
+  sheet: Awaited<ReturnType<typeof savedSheet>>,
+  row: number,
+) =>
+  Array.from(
+    { length: 31 },
+    (_, d) => sheet.getCell(row, NICU_FIRST_DAY + d).value ?? null,
   );
 
 async function exported(scheduleId: string) {
@@ -336,20 +353,18 @@ describe("exporting the NICU layout (D124)", () => {
     ).toBe(true);
     // Rows 13–21 hold nobody: cleared.
     expect(days(15).every((v) => v === null)).toBe(true);
-    // Statistics: J (contractual hours) cleared, K/L unknown while days are open.
+    // Hand-maintained statistics (H–L) and coverage (rows 23–25) are the
+    // template's own: never recalculated, never "?", day 31 cleared.
+    const saved = await savedSheet();
     for (const row of PEOPLE_ROWS)
-      expect([cell(`J${row}`), cell(`K${row}`), cell(`L${row}`)]).toEqual([
-        null,
-        "?",
-        "?",
-      ]);
-    // Coverage: ? on days with someone undecided.
+      for (const column of ["H", "I", "J", "K", "L"])
+        expect(cell(`${column}${row}`), `${column}${row}`).toBe(
+          saved.getCell(`${column}${row}`).value ?? null,
+        );
     for (const row of [23, 24, 25]) {
-      expect(
-        days(row)
-          .slice(0, 30)
-          .every((v) => v === "?"),
-      ).toBe(true);
+      expect(days(row).slice(0, 30)).toEqual(
+        savedDays(saved, row).slice(0, 30),
+      );
       expect(days(row)[30]).toBeNull();
     }
     // The calendar follows the schedule's own dates.
@@ -368,7 +383,7 @@ describe("exporting the NICU layout (D124)", () => {
       expect(highlighted(row), `row ${row}`).toEqual(fridays(dates));
   });
 
-  it("a complete schedule: every figure recalculated from the decisions", async () => {
+  it("a complete schedule: shifts exact, manual statistics and coverage untouched", async () => {
     await upload(await departmentTemplate());
     await completeScheduleFixture(db, DEMO_SCHEDULE.id, [
       U.icuHead.id,
@@ -378,6 +393,7 @@ describe("exporting the NICU layout (D124)", () => {
     await assign(U.icuNurse3.id, "2026-10-31", "ME"); // One shift; M and E coverage.
     await assign(secretaryId, "2026-11-01", "N"); // Never nursing coverage.
     const { days, cell } = await exported(DEMO_SCHEDULE.id);
+    const saved = await savedSheet();
 
     const assignments = await listAssignments(db, DEMO_SCHEDULE.id);
     const people = rowsOf();
@@ -391,6 +407,34 @@ describe("exporting the NICU layout (D124)", () => {
           return code === "OFF" ? null : code;
         }),
       );
+      // H–L are the hospital's own figures, whatever the schedule says.
+      for (const column of ["H", "I", "J", "K", "L"])
+        expect(cell(`${column}${row}`), `${column}${row}`).toBe(
+          saved.getCell(`${column}${row}`).value ?? null,
+        );
+    }
+    for (const row of [23, 24, 25])
+      expect(days(row).slice(0, 30)).toEqual(
+        savedDays(saved, row).slice(0, 30),
+      );
+    expect(days(10)[dayOf("2026-10-31") - 1]).toBe("ME");
+  });
+
+  it("a department that maps its statistics still gets them calculated", async () => {
+    await upload(await departmentTemplate(), NICU_CALCULATED_MAPPING);
+    await completeScheduleFixture(db, DEMO_SCHEDULE.id, [
+      U.icuHead.id,
+      U.icuNurse1.id,
+    ]);
+    await assign(U.icuNurse2.id, "2026-10-30", "H");
+    await assign(U.icuNurse3.id, "2026-10-31", "ME"); // One shift; M and E coverage.
+    await assign(secretaryId, "2026-11-01", "N"); // Never nursing coverage.
+    const { days, cell } = await exported(DEMO_SCHEDULE.id);
+
+    const assignments = await listAssignments(db, DEMO_SCHEDULE.id);
+    const people = rowsOf();
+    for (const { row, userId } of people) {
+      const mine = assignments.filter((a) => a.nurseId === userId);
       // L: working shifts, ME once; K: H days; J: cleared.
       expect(cell(`L${row}`)).toBe(
         mine.filter((a) => ["M", "E", "N", "ME"].includes(a.shift)).length,
@@ -399,7 +443,6 @@ describe("exporting the NICU layout (D124)", () => {
       expect(cell(`J${row}`)).toBeNull();
     }
     expect(cell("K9")).toBeGreaterThanOrEqual(1);
-    expect(days(10)[dayOf("2026-10-31") - 1]).toBe("ME");
     // Daily coverage of the nurses (not the secretary): ME toward M and E.
     const nurses = new Set(
       people.filter((p) => p.userId !== secretaryId).map((p) => p.userId),
@@ -468,11 +511,12 @@ describe("exporting the NICU layout (D124)", () => {
       }
       for (const row of [...PEOPLE_ROWS, 23, 24, 25])
         expect(highlighted(row)).toEqual(fridays(dates));
-      expect(
-        days(23)
-          .slice(0, length)
-          .every((v) => typeof v === "number"),
-      ).toBe(true);
+      // Manual coverage: the month's days as saved, nothing past its end.
+      const saved = await savedSheet();
+      for (const row of [23, 24, 25])
+        expect(days(row).slice(0, length), `row ${row}`).toEqual(
+          savedDays(saved, row).slice(0, length),
+        );
     },
   );
 

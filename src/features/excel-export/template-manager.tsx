@@ -77,6 +77,7 @@ const DAILY_STATISTIC_LABELS: Record<DailyStatistic, string> = {
   COVERAGE_E: "پوشش عصر",
   COVERAGE_N: "پوشش شب",
   CLEAR: "پاک می‌شود",
+  MANUAL: "مقدار دستی حفظ می‌شود",
 };
 
 const kib = (bytes: number) =>
@@ -359,6 +360,7 @@ export function ExcelTemplateManager({
     coverageE: useId(),
     coverageN: useId(),
     clearRows: useId(),
+    manualRows: useId(),
     weekdays: useId(),
     weekdayFormat: useId(),
     monthHeading: useId(),
@@ -566,11 +568,13 @@ export function ExcelTemplateManager({
             آمار ماهانه و خلاصه روزانه (اختیاری)
           </legend>
           <p className="text-sm text-muted-foreground">
-            آمار چاپی فایل مقدار ثابت ماه قبل است. هر ستون یا ردیفی که اینجا
-            تعیین شود در هر خروجی از روی برنامه دوباره محاسبه یا خالی می‌شود؛ تا
-            روزی نامشخص است به جای عدد «?» نوشته می‌شود. ساعت موظفی، مانده مرخصی
-            و قرارداد را سامانه نمی‌داند: ستون آن‌ها را در «ستون‌های پاک‌شونده»
-            بگذارید.
+            هر ستون یا ردیفی که اینجا تعیین شود در هر خروجی از روی برنامه دوباره
+            محاسبه یا خالی می‌شود؛ تا روزی نامشخص است به جای عدد «?» نوشته
+            می‌شود. ساعت موظفی، مانده مرخصی و قرارداد را سامانه نمی‌داند: ستون
+            آن‌ها را در «ستون‌های پاک‌شونده» بگذارید. ستونی که اینجا تعیین نشود
+            (مثلاً آمار دستی پرسنل) هرگز تغییر نمی‌کند. «ردیف‌های خلاصه دستی»
+            مقدار روزهای همان ماه را نگه می‌دارند، روزهای پس از پایان ماه را
+            خالی می‌کنند و فقط رنگ جمعه را اعمال می‌کنند.
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatField
@@ -637,6 +641,18 @@ export function ExcelTemplateManager({
               placeholder="26"
               defaultValue={(m?.summaryRows ?? [])
                 .filter((r) => r.statistic === "CLEAR")
+                .map((r) => r.row)
+                .join(", ")}
+              list
+              numeric
+            />
+            <StatField
+              id={ids.manualRows}
+              name="manualRows"
+              label="ردیف‌های خلاصه دستی (حفظ می‌شود)"
+              placeholder="23, 24, 25"
+              defaultValue={(m?.summaryRows ?? [])
+                .filter((r) => r.statistic === "MANUAL")
                 .map((r) => r.row)
                 .join(", ")}
               list

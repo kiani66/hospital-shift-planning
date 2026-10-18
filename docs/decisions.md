@@ -2292,12 +2292,23 @@ its mapped day cells are written. Paths are relative to `src/`.
 - **NICU mapping (verified against the approved `Template_Export.xlsx`).** `Sheet2`; personnel
   numbers in B, rows 7–21 nurses and 22 the secretary; days N–AR; weekdays row 5 (NARROW: the day
   columns are about three characters wide, full names are clipped); day numbers row 6; month
-  heading U3 («مهرماه 1405»); J «ساعت موظفی» CLEAR (contractual, until authoritative data exists),
-  K «مرخصی» LEAVE_DAYS, L «تعداد شیفت» SHIFT_COUNT (I is «سابقه کار-ماه» and is not written); rows
-  23, 24, 25 COVERAGE_M, _E, _N (the rows carry no label in the file; the order is the product
-  owner's and must be confirmed on the real file); holiday fill from P7 (a Friday of the saved
-  month), normal days like column O. Static figures the system does not model (A2/A3, F26, F27,
-  N27, G29) are left as they are.
+  heading U3 («مهرماه 1405»); holiday fill from P7 (a Friday of the saved month), normal days like
+  column O. **Final product decision:** the personnel statistics in H–L (I «سابقه کار-ماه»,
+  J «ساعت موظفی», K «مرخصی», L «تعداد شیفت») and the daily coverage in rows 23–25 are maintained by
+  hand, so the NICU mapping has **no statistic column** (an unmapped column is never touched) and
+  rows 23, 24, 25 are `MANUAL` summary rows. The export generates only the shifts (N7:AR22), the
+  weekday and day-number rows 5–6 and the month heading U3, and applies the Friday style to rows
+  5–25. The calculated kinds below stay available, unchanged, for any department that maps them
+  (the tests cover both mappings on the same workbook). Static figures the system does not model
+  (A2/A3, F26, F27, N27, G29) are left as they are.
+- **Manual summary rows (`MANUAL`, no migration).** A hand-maintained daily row keeps the value of
+  every day the period has exactly as it is (the cell's value, type and any other content are not
+  rewritten; with highlighting mapped only its style index changes, so a Friday column is
+  highlighted without touching what the hospital typed). Days the period lacks are cleared (a
+  31st-day value is never printed in a 30-day month). The mapped cells are validated like every
+  written cell (no formula, error, merge, lock; a plain figure or empty), because a shorter month
+  clears them. A `MANUAL` row for which a caller supplies no values is kept, never emptied.
+  `summary_rows` is a `jsonb` array validated by the domain and Zod, so no migration is needed.
 - **Calendar headings and holiday highlighting.** Jalali conversion stays in the presentation
   adapter (`features/calendar/jalali.ts`): the export use case receives an `ExcelExportCalendar`
   (day number, weekday, month heading per ISO date) from the route, so no conversion depends on
@@ -2318,6 +2329,11 @@ its mapped day cells are written. Paths are relative to `src/`.
   the normal fill in every personnel row is rejected, and in other rows (the NICU header rows
   5–6, filled on every day) it is a warning. Without highlighting mapped, fills are untouched and a
   template whose day columns differ in fill gets a warning that they will stay put.
+- **Deterministic output.** Every ZIP entry carries a fixed timestamp (1980-01-01 00:00, built
+  from local components because ZIP stores local time), so the same template, mapping and schedule
+  give a byte-identical file whatever the clock or the server's timezone (fflate otherwise stamps
+  each entry with the current time). Covered by tests with different system clocks and timezones,
+  for the export and the personnel-column preparation.
 - **Preservation.** The workbook is patched at the ZIP/XML level: every part except the mapped
   worksheet (and, for a new fill combination, `styles.xml`, where formats are only appended) is
   copied byte for byte, and in that worksheet only the `<c>` elements of the mapped cells change

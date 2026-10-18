@@ -5,6 +5,7 @@ import {
   EXCEL_TEMPLATE_DAY_COLUMNS,
   EXCEL_TEMPLATE_MAX_PERSONNEL_ROWS,
   EXCEL_UNDECIDED_VALUE,
+  KEEP_CELL,
   cellAddress,
   columnIndex,
   columnLetters,
@@ -12,6 +13,7 @@ import {
   type ExcelTemplateMapping,
   type ExportCellValue,
   type ResolvedTemplateMapping,
+  type SummaryCellValue,
 } from "../../domain/excel-export/template-mapping";
 import { parsePersonnelNumber } from "../../domain/identity/personnel-number";
 import { ValidationError } from "../../domain/shared/errors";
@@ -1357,7 +1359,7 @@ export interface TemplateExtras {
     ReadonlyMap<string, ExportCellValue>
   >;
   /** Daily summary row → 31 values. */
-  readonly summaries?: ReadonlyMap<number, readonly ExportCellValue[]>;
+  readonly summaries?: ReadonlyMap<number, readonly SummaryCellValue[]>;
   /** The 31 day-heading values, written when the mapping has a heading row. */
   readonly dayHeader?: readonly ExportCellValue[];
   /** The 31 weekday values, written when the mapping has a weekday row. */
@@ -1373,16 +1375,17 @@ export interface TemplateExtras {
 
 /** One cell's new value (null empties it) and, when restyled, its new format. */
 interface CellEdit {
-  readonly value: ExportCellValue;
+  /** `KEEP_CELL`: the cell's value stays as it is (only its style may change). */
+  readonly value: SummaryCellValue;
   readonly style?: number;
 }
 
 /** Cell edits by row, then column. */
 type SheetEdits = Map<number, Map<number, CellEdit>>;
 
-const dayValues = (values: readonly ExportCellValue[] | undefined) => {
+const dayValues = (values: readonly SummaryCellValue[] | undefined) => {
   const all =
-    values ?? Array<ExportCellValue>(EXCEL_TEMPLATE_DAY_COLUMNS).fill(null);
+    values ?? Array<SummaryCellValue>(EXCEL_TEMPLATE_DAY_COLUMNS).fill(null);
   if (all.length !== EXCEL_TEMPLATE_DAY_COLUMNS)
     throw new RangeError("Each row needs 31 day values");
   return all;
@@ -1419,7 +1422,7 @@ export function populateExcelTemplate(
     edits.set(row, edit);
     return edit;
   };
-  const dayRow = (row: number, cells: readonly ExportCellValue[]) => {
+  const dayRow = (row: number, cells: readonly SummaryCellValue[]) => {
     const edit = rowEdits(row);
     dayValues(cells).forEach((value, i) =>
       edit.set(m.firstDayColumnIndex + i, { value }),
@@ -1435,8 +1438,19 @@ export function populateExcelTemplate(
     for (const { column, columnIndex: index } of m.statisticColumns)
       edit.set(index, { value: statistics?.get(column) ?? null });
   }
-  for (const { row } of m.summaryRows)
-    dayRow(row, dayValues(extras.summaries?.get(row)));
+  for (const { row, statistic } of m.summaryRows)
+    dayRow(
+      row,
+      dayValues(
+        extras.summaries?.get(row) ??
+          // A hand-maintained row is never emptied by a caller that gave no values.
+          (statistic === "MANUAL"
+            ? Array<SummaryCellValue>(EXCEL_TEMPLATE_DAY_COLUMNS).fill(
+                KEEP_CELL,
+              )
+            : undefined),
+      ),
+    );
   if (m.dayHeaderRow !== null && extras.dayHeader)
     dayRow(m.dayHeaderRow, extras.dayHeader);
   // Calendar headings are rewritten every time: a shorter month never keeps
@@ -1509,10 +1523,23 @@ export function populateExcelTemplate(
   return zipParts(output);
 }
 
+/**
+ * Entry timestamp of every written part (1980-01-01 00:00, the ZIP/DOS
+ * epoch and what OOXML packages conventionally carry). fflate would
+ * otherwise stamp each entry with the current time, so the same template
+ * exported twice, two seconds apart, would differ byte for byte. The date is
+ * built from local components because ZIP stores local time: the same bytes
+ * come out whatever the server's timezone is.
+ */
+const ZIP_ENTRY_TIME = () => new Date(1980, 0, 1, 0, 0, 0);
+
 const zipParts = (parts: Parts) =>
   zipSync(
     Object.fromEntries(
-      [...parts].map(([name, data]) => [name, [data, { level: 6 }]]),
+      [...parts].map(([name, data]) => [
+        name,
+        [data, { level: 6 as const, mtime: ZIP_ENTRY_TIME() }],
+      ]),
     ),
   );
 
@@ -1568,7 +1595,7 @@ function withDimension(xml: string, edits: SheetEdits): string {
   if (!dimension || !range) return xml;
   const written = [...edits].flatMap(([row, cells]) =>
     [...cells]
-      .filter(([, edit]) => edit.value !== null)
+      .filter(([, edit]) => edit.value !== null && edit.value !== KEEP_CELL)
       .map(([column]) => ({ row, column })),
   );
   const wider: Range = {
@@ -1601,6 +1628,18 @@ function cellXml(
   return typeof value === "number"
     ? `<${prefix}c r="${ref}"${s}><${prefix}v>${value}</${prefix}v></${prefix}c>`
     : `<${prefix}c r="${ref}"${s} t="inlineStr"><${prefix}is><${prefix}t>${escapeXml(value)}</${prefix}t></${prefix}is></${prefix}c>`;
+}
+
+/** `<c …>` with its style (`s`) set to `style`; nothing else in the cell changes. */
+function withStyle(raw: string, style: string | undefined): string {
+  return raw.replace(
+    /^<((?:[\w.-]+:)?c)(?=[\s/>])([^>]*?)(\/?)>/,
+    (_whole, tag: string, attrs: string, selfClosing: string) => {
+      const rest = attrs.replace(/\ss\s*=\s*("[^"]*"|'[^']*')/, "");
+      const s = style && style !== "0" ? ` s="${style}"` : "";
+      return `<${tag}${rest}${s}${selfClosing}>`;
+    },
+  );
 }
 
 function rewriteRow(
@@ -1647,7 +1686,17 @@ function rewriteRow(
       : String(effectiveStyle(model, row, undefined, column));
     const style = restyled === undefined ? inherited : String(restyled);
     let xml: string | null;
-    if (value === null)
+    if (value === KEEP_CELL)
+      // Value untouched; only the style may change (a kept cell keeps every
+      // other byte: its type, value, formula and any extension data).
+      xml = cell
+        ? style === inherited
+          ? cell.raw
+          : withStyle(cell.raw, style)
+        : (style ?? "0") !== (inherited ?? "0")
+          ? `<${p}c r="${ref}"${style && style !== "0" ? ` s="${style}"` : ""}/>`
+          : null;
+    else if (value === null)
       // A cleared cell keeps its style; an absent one stays absent unless restyled.
       xml =
         cell || (style ?? "0") !== (inherited ?? "0")

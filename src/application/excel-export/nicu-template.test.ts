@@ -1,5 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   dailyStatistic,
@@ -27,6 +27,7 @@ import {
   sheetPart,
 } from "../../../tests/support/excel-templates";
 import {
+  NICU_CALCULATED_MAPPING,
   NICU_DAY_ROW,
   NICU_FIRST_DAY,
   NICU_MAPPING,
@@ -222,10 +223,22 @@ describe("the NICU template as approved", () => {
     [string, (xml: string) => string, Partial<ExcelTemplateMapping>, string]
   >([
     [
-      "a formula in a statistic cell",
+      "a formula in a statistic cell the mapping writes",
       cellValue("L9", "><f>SUM(N9:AR9)</f><v>3</v></c>"),
-      {},
+      { statisticColumns: NICU_CALCULATED_MAPPING.statisticColumns },
       "L9",
+    ],
+    [
+      "hospital text in a manual coverage row",
+      cellValue("S24", ' t="inlineStr"><is><t>abc</t></is></c>'),
+      {},
+      "S24",
+    ],
+    [
+      "a formula in a manual coverage row",
+      cellValue("S25", "><f>SUM(N23:N24)</f><v>3</v></c>"),
+      {},
+      "S25",
     ],
     ["a merge over a summary row", withMerge("N24:O24"), {}, "N24:O24"],
     ["a merge over the weekday row", withMerge("Q5:R5"), {}, "Q5:R5"],
@@ -334,6 +347,29 @@ describe("exporting into the NICU template", () => {
       "E",
       "N",
     ]);
+    // The hand-maintained statistics (H–L) are exactly the template's.
+    const before = await read(template);
+    for (const row of NICU_PERSONNEL_ROWS)
+      for (const column of ["H", "I", "J", "K", "L", "M"])
+        expect(
+          sheet.getCell(`${column}${row}`).value,
+          `${column}${row}`,
+        ).toEqual(before.getCell(`${column}${row}`).value);
+    // So are the manual coverage rows, on the month's days.
+    for (const row of NICU_SUMMARY_ROWS)
+      expect(days(sheet, row).slice(0, 29)).toEqual(
+        days(before, row).slice(0, 29),
+      );
+  });
+
+  it("calculates the statistics and coverage when a department maps them (generic capability)", async () => {
+    const people = new Map(NICU_PERSONNEL_ROWS.map((row) => [row, full]));
+    people.set(8, plan(["ME", null, "OFF", "H", "ME"]));
+    const sheet = await read(
+      exportMonth(MONTHS.mehr1405, people, {
+        mapping: NICU_CALCULATED_MAPPING,
+      }),
+    );
     // J (contractual hours) cleared; K leave days; L shifts with ME counted once.
     const fullMonth = Array.from({ length: 30 }, (_, i) => CYCLE[i % 6]!);
     expect(
@@ -352,6 +388,65 @@ describe("exporting into the NICU template", () => {
     expect(days(sheet, 23)[0]).toBe(15); // Fourteen nurses on M plus one ME.
     expect(days(sheet, 24)[0]).toBe(1); // The ME.
     expect(days(sheet, 25)[30]).toBeNull();
+    // Statistics the mapping does not name (H, I, M) are still untouched.
+    const before = await read(template);
+    for (const column of ["H", "I", "M"])
+      expect(sheet.getCell(`${column}7`).value).toEqual(
+        before.getCell(`${column}7`).value,
+      );
+  });
+
+  it.each([
+    ["Esfand 1404 (29 days)", MONTHS.esfand1404],
+    ["Mehr 1405 (30 days)", MONTHS.mehr1405],
+    ["Farvardin 1405 (31 days)", MONTHS.farvardin1405],
+  ] as const)(
+    "%s: manual coverage keeps the month's days and clears the rest",
+    async (_, month) => {
+      const before = await read(template);
+      const sheet = await read(exportMonth(month));
+      for (const row of NICU_SUMMARY_ROWS) {
+        const was = days(before, row);
+        const now = days(sheet, row);
+        expect(now.slice(0, month.days), `row ${row}`).toEqual(
+          was.slice(0, month.days),
+        );
+        expect(now.slice(month.days), `row ${row}`).toEqual(
+          Array(31 - month.days).fill(null),
+        );
+      }
+      // The saved day 31 («3») is gone from a shorter month, kept in a 31-day one.
+      expect(sheet.getCell("AR23").value ?? null).toBe(
+        month.days === 31 ? (before.getCell("AR23").value ?? null) : null,
+      );
+    },
+  );
+
+  it("changes only the style of a manual cell: its value and type bytes stay", () => {
+    const cellOf = (xml: string, ref: string) =>
+      new RegExp(`<c r="${ref}"[^>]*?(?:/>|>.*?</c>)`).exec(xml)![0];
+    const body = (cell: string) => cell.replace(/\ss="\d+"/, "");
+    const exported = sheetXml(exportMonth(MONTHS.aban1405));
+    const saved = sheetXml(template);
+    const style = (cell: string) => /\ss="(\d+)"/.exec(cell)?.[1];
+    let restyled = 0;
+    for (const row of NICU_SUMMARY_ROWS)
+      for (let day = 1; day <= 29; day++) {
+        const ref = `${columnLetters(NICU_FIRST_DAY + day - 1)}${row}`;
+        const [before, after] = [cellOf(saved, ref), cellOf(exported, ref)];
+        expect(body(after), ref).toBe(body(before));
+        if (style(after) !== style(before)) restyled++;
+      }
+    // Aban's Fridays (1, 8, 15, 22, 29) differ from Mehr's (3, 10, 17, 24).
+    expect(restyled).toBe(NICU_SUMMARY_ROWS.length * 9);
+  });
+
+  it("never empties a manual row for which no values were supplied", async () => {
+    const bytes = populateExcelTemplate(template, NICU_MAPPING, new Map());
+    const before = await read(template);
+    const sheet = await read(bytes);
+    for (const row of NICU_SUMMARY_ROWS)
+      expect(days(sheet, row)).toEqual(days(before, row));
   });
 
   it.each([
@@ -373,7 +468,11 @@ describe("exporting into the NICU template", () => {
         expect(days(sheet, row).slice(month.days), `row ${row}`).toEqual(
           Array(31 - month.days).fill(null),
         );
-        expect(days(sheet, row)[month.days - 1], `row ${row}`).not.toBeNull();
+        // Generated rows fill the month's last day; the hand-maintained
+        // coverage rows keep whatever the hospital typed (day 30 is empty in
+        // the hospital's file).
+        if (!(NICU_SUMMARY_ROWS as readonly number[]).includes(row))
+          expect(days(sheet, row)[month.days - 1], `row ${row}`).not.toBeNull();
       }
       // The template's day 31 heading and its stale day-31 counts are gone.
       if (month.days < 31) expect(sheet.getCell("AR6").value).toBeNull();
@@ -514,6 +613,10 @@ describe("exporting into the NICU template", () => {
       "E22",
       "H7",
       "I7",
+      "J7",
+      "K7",
+      "L7",
+      "L22",
       "M7",
     ])
       expect(after.getCell(address).value, address).toEqual(
@@ -531,9 +634,13 @@ describe("exporting into the NICU template", () => {
     );
     const sheet = await read(exportMonth(MONTHS.mehr1405, people));
     expect(days(sheet, 21).every((v) => v === null)).toBe(true);
+    // The hand-maintained statistics of that row stay as the template has them.
+    const before = await read(template);
     expect(
-      ["J21", "K21", "L21"].map((a) => sheet.getCell(a).value ?? null),
-    ).toEqual([null, null, null]);
+      ["H21", "I21", "J21", "K21", "L21"].map((a) => sheet.getCell(a).value),
+    ).toEqual(
+      ["H21", "I21", "J21", "K21", "L21"].map((a) => before.getCell(a).value),
+    );
     // Its cells still follow the month's Fridays.
     expect(highlighted(sheet, 21)).toEqual(fridaysOf(MONTHS.mehr1405));
   });
@@ -609,6 +716,74 @@ describe("exporting into the NICU template", () => {
     const sheet = await read(bytes);
     expect(sheet.getCell("N30").value).toBe(2);
     expect(sheet.getCell("AR30").value).toBe(2);
+  });
+});
+
+/** DOS date/time of every central-directory entry of a ZIP. */
+function entryTimes(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const times: { time: number; date: number }[] = [];
+  for (let at = 0; at + 46 <= bytes.length; at++)
+    if (view.getUint32(at, true) === 0x02014b50)
+      times.push({
+        time: view.getUint16(at + 12, true),
+        date: view.getUint16(at + 14, true),
+      });
+  return times;
+}
+
+describe("deterministic output", () => {
+  const zone = process.env.TZ;
+  afterEach(() => {
+    vi.useRealTimers();
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+
+  it("identical inputs give byte-identical files, whatever the clock", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-05-05T10:00:01Z"));
+    const first = exportMonth(MONTHS.aban1405);
+    vi.setSystemTime(new Date("2031-11-30T23:59:58Z"));
+    const second = exportMonth(MONTHS.aban1405);
+    expect(second).toEqual(first);
+  });
+
+  it("every entry carries the fixed ZIP epoch, in any server timezone", () => {
+    const bytes = new Map<string, Uint8Array>();
+    for (const tz of [
+      "UTC",
+      "Asia/Tehran",
+      "Pacific/Kiritimati",
+      "America/Adak",
+    ]) {
+      process.env.TZ = tz;
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2030-06-15T12:34:56Z"));
+      bytes.set(tz, exportMonth(MONTHS.mehr1405));
+      vi.useRealTimers();
+    }
+    const [reference, ...others] = [...bytes.values()];
+    for (const other of others) expect(other).toEqual(reference);
+    const times = entryTimes(reference!);
+    expect(times.length).toBe(Object.keys(unzipSync(reference!)).length);
+    // 1980-01-01 00:00:00: date (0 << 9) | (1 << 5) | 1.
+    for (const t of times) expect(t).toEqual({ time: 0, date: 0x21 });
+  });
+
+  it("also holds for the personnel-column preparation tool", async () => {
+    const bare = await nicuTemplate({ numbers: false });
+    const prepare = () =>
+      writePersonnelColumn(bare, {
+        sheetName: NICU_SHEET,
+        column: "BL",
+        numbers: new Map([[7, "1"]]),
+      });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+    const first = prepare();
+    vi.setSystemTime(new Date("2032-02-02T08:09:10Z"));
+    expect(prepare()).toEqual(first);
   });
 });
 

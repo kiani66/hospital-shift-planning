@@ -240,6 +240,10 @@ Migration `0018_excel_template_calendar` adds the calendar mapping to the same t
 constraint). Existing templates keep their behaviour: no weekday row, heading or highlighting. No
 other table changes; no holiday data is stored (official holidays remain a separate change).
 
+No migration was added for the manual summary rows (`MANUAL`) or for leaving statistic columns
+unmapped: `statistic_columns` and `summary_rows` are `jsonb` arrays whose entries are validated by
+the domain mapping, so a new kind only extends that validation.
+
 Migration `0019_excel_template_department_fk` adds the `department_id` foreign key to `departments`
 (`department_excel_templates_department_id_departments_id_fk`, no action on delete or update). 0016
 was first published without the constraint, applied by Preview databases, and then rewritten;

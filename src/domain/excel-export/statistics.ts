@@ -4,9 +4,11 @@ import { summarizeShifts } from "../shifts/working-time";
 import {
   EXCEL_TEMPLATE_DAY_COLUMNS,
   EXCEL_UNDECIDED_VALUE,
+  KEEP_CELL,
   type DailyStatistic,
   type ExportCellValue,
   type PersonStatistic,
+  type SummaryCellValue,
 } from "./template-mapping";
 
 /**
@@ -40,26 +42,29 @@ export function personStatistic(
   return statistic === "SHIFT_COUNT" ? totals.shiftCount : totals.leaveCount;
 }
 
-const PERIOD_OF: Readonly<Record<Exclude<DailyStatistic, "CLEAR">, BaseShift>> =
-  {
-    COVERAGE_M: "M",
-    COVERAGE_E: "E",
-    COVERAGE_N: "N",
-  };
+const PERIOD_OF: Readonly<
+  Record<Exclude<DailyStatistic, "CLEAR" | "MANUAL">, BaseShift>
+> = {
+  COVERAGE_M: "M",
+  COVERAGE_E: "E",
+  COVERAGE_N: "N",
+};
 
 /**
  * The 31 values of a daily summary row: per day, the nursing coverage of one
  * period over `staffing` (the roster without secretaries, D119), counted as
  * the app counts staffing (`coverageOf`: ME toward M and E). A day on which
  * a counted person is undecided is `?`; days past the period are blank.
+ * A MANUAL row keeps the period's days (`KEEP_CELL`) and blanks the rest.
  */
 export function dailyStatistic(
   statistic: DailyStatistic,
   dayCount: number,
   staffing: readonly DayDecisions[],
-): ExportCellValue[] {
+): SummaryCellValue[] {
   return Array.from({ length: EXCEL_TEMPLATE_DAY_COLUMNS }, (_, i) => {
     if (statistic === "CLEAR" || i >= dayCount) return null;
+    if (statistic === "MANUAL") return KEEP_CELL;
     const codes = staffing.map((decisions) => decisions.get(i + 1) ?? null);
     if (codes.includes(null)) return EXCEL_UNDECIDED_VALUE;
     return coverageOf(countByShift(codes))[PERIOD_OF[statistic]];

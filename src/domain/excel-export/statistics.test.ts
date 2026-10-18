@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AssignmentCode } from "../shifts/shift-type";
 import { dailyStatistic, personStatistic } from "./statistics";
+import { KEEP_CELL } from "./template-mapping";
 
 const month = (codes: readonly (AssignmentCode | null)[]) =>
   new Map(
@@ -98,6 +99,21 @@ describe("dailyStatistic", () => {
     expect(values).toHaveLength(31);
     expect(values[4]).toBe("?");
     expect(values.slice(5).every((v) => v === null)).toBe(true);
+  });
+
+  it("keeps a MANUAL row's days and blanks the days past the period", () => {
+    for (const dayCount of [29, 30, 31]) {
+      const values = dailyStatistic("MANUAL", dayCount, [a, b]);
+      expect(values).toHaveLength(31);
+      expect(values.slice(0, dayCount).every((v) => v === KEEP_CELL)).toBe(
+        true,
+      );
+      expect(values.slice(dayCount).every((v) => v === null)).toBe(true);
+    }
+    // Whoever is undecided makes no difference: nothing is calculated.
+    expect(dailyStatistic("MANUAL", 5, [a, b]).slice(0, 5)).toEqual(
+      Array(5).fill(KEEP_CELL),
+    );
   });
 
   it("clears every day for CLEAR and counts zero with nobody counted", () => {

@@ -16,7 +16,8 @@ import { patchXlsx, sheetPart } from "./excel-templates";
  *   heading «مهرماه 1405»), AM3 (department);
  * - row 5: the weekday row, empty, its 31 day cells bordered and filled;
  * - row 6: the header (A «ردیف», B «شماره سیستم» = personnel number, C/D
- *   names, …, J «ساعت موظفی», K «مرخصی», L «تعداد شیفت», M «قرارداد»)
+ *   names, …, J «ساعت موظفی», K «مرخصی», L «تعداد شیفت», M «قرارداد»; the
+ *   statistics are maintained by hand and the export leaves them alone)
  *   and the day numbers 1–31 as text in N–AR;
  * - nurses on rows 7–21, the secretary («منشی») on row 22, every number in
  *   B as text; static totals in J–L;
@@ -52,7 +53,13 @@ export const NICU_SAVED_FRIDAYS = [3, 10, 17, 24] as const;
 export const nicuNumber = (row: number) =>
   row === NICU_SECRETARY_ROW ? "07022" : String(7000 + row);
 
-/** The NICU mapping, as verified against the hospital's workbook. */
+/**
+ * The NICU mapping as finally approved (D124), verified against the
+ * hospital's workbook. The statistics in H–L and the daily coverage in rows
+ * 23–25 are maintained by hand: they are not mapped as figures, so they are
+ * never rewritten, and the rows are `MANUAL` (valid days kept, days past the
+ * month cleared, Friday style applied).
+ */
 export const NICU_MAPPING = {
   sheetName: NICU_SHEET,
   personnelColumn: "B",
@@ -60,8 +67,27 @@ export const NICU_MAPPING = {
   lastRow: 22,
   firstDayColumn: "N",
   dayHeaderRow: NICU_DAY_ROW,
+  statisticColumns: [],
+  summaryRows: [
+    { row: 23, statistic: "MANUAL" },
+    { row: 24, statistic: "MANUAL" },
+    { row: 25, statistic: "MANUAL" },
+  ],
+  weekdayRow: NICU_WEEKDAY_ROW,
+  // The day columns are about three characters wide.
+  weekdayFormat: "NARROW",
+  monthHeadingCell: "U3",
+  holidayFillCell: "P7",
+  normalFillColumn: "O",
+} as const satisfies ExcelTemplateMapping;
+
+/**
+ * The calculated alternative the generic engine still offers: a department
+ * whose totals the system should write (this layout's J/K/L, rows 23–25).
+ */
+export const NICU_CALCULATED_MAPPING = {
+  ...NICU_MAPPING,
   statisticColumns: [
-    // «ساعت موظفی» is contractual: the system cannot calculate it.
     { column: "J", statistic: "CLEAR" },
     { column: "K", statistic: "LEAVE_DAYS" },
     { column: "L", statistic: "SHIFT_COUNT" },
@@ -71,12 +97,6 @@ export const NICU_MAPPING = {
     { row: 24, statistic: "COVERAGE_E" },
     { row: 25, statistic: "COVERAGE_N" },
   ],
-  weekdayRow: NICU_WEEKDAY_ROW,
-  // The day columns are about three characters wide.
-  weekdayFormat: "NARROW",
-  monthHeadingCell: "U3",
-  holidayFillCell: "P7",
-  normalFillColumn: "O",
 } as const satisfies ExcelTemplateMapping;
 
 export interface NicuTemplateOptions {
