@@ -12,6 +12,7 @@ import {
   getScheduleReview,
   type DayReview,
 } from "@/application/schedules/review";
+import { buttonClasses } from "@/components/ui/button";
 import { addDays, eachDay, type IsoDate } from "@/domain/shared/dates";
 import { isInPeriod, type DatePeriod } from "@/domain/shared/period";
 import { requireRequestContext } from "@/features/auth/guards";
@@ -165,7 +166,7 @@ export default async function DepartmentSchedulePage({
   const periods = data.schedules.map((s) => s.period);
   const importLink = data.canCreate ? (
     <Link
-      className="text-sm underline"
+      className={buttonClasses("outline")}
       href={`/departments/${department.code}/schedule/import`}
     >
       ورود برنامه از Excel
