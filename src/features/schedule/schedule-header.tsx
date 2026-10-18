@@ -31,6 +31,7 @@ export function ScheduleHeader({
   previous,
   next,
   schedule,
+  headingAction,
   primaryAction,
   secondaryAction,
 }: {
@@ -50,6 +51,8 @@ export function ScheduleHeader({
     /** The Head Nurse may change assignments of this schedule now. */
     readonly editable: boolean;
   } | null;
+  /** Submission control kept close to the department/month identity. */
+  headingAction?: ReactNode;
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
 }) {
@@ -59,30 +62,37 @@ export function ScheduleHeader({
       className="mb-4 overflow-hidden rounded-xl border border-primary/15 bg-card shadow-sm shadow-primary/5"
     >
       <div className="flex flex-col gap-3 p-3 sm:p-4 lg:px-5 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3 xl:shrink-0">
-          <IconWell
-            size="md"
-            className="size-11 rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/30 max-sm:hidden"
-          >
-            <CalendarRange />
-          </IconWell>
-          {previous !== undefined && (
-            <MonthNavLink direction="previous" target={previous} />
-          )}
-          <h1
-            id={SCHEDULE_HEADING_ID}
-            className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
-          >
-            <span className="truncate text-sm font-medium text-brand-soft-foreground">
-              برنامه بخش · {departmentName}
-            </span>
-            <span className="sr-only">، </span>
-            <span className="text-xl leading-snug font-bold text-foreground sm:text-2xl">
-              {monthLabel}
-            </span>
-          </h1>
-          {next !== undefined && (
-            <MonthNavLink direction="next" target={next} />
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:shrink-0">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <IconWell
+              size="md"
+              className="size-11 rounded-md border border-input bg-background text-foreground shadow-xs max-sm:hidden"
+            >
+              <CalendarRange />
+            </IconWell>
+            {previous !== undefined && (
+              <MonthNavLink direction="previous" target={previous} />
+            )}
+            <h1
+              id={SCHEDULE_HEADING_ID}
+              className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
+            >
+              <span className="truncate text-sm font-medium text-brand-soft-foreground">
+                برنامه بخش · {departmentName}
+              </span>
+              <span className="sr-only">، </span>
+              <span className="text-xl leading-snug font-bold text-foreground sm:text-2xl">
+                {monthLabel}
+              </span>
+            </h1>
+            {next !== undefined && (
+              <MonthNavLink direction="next" target={next} />
+            )}
+          </div>
+          {headingAction && (
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap [&>button]:h-11 [&>button]:shrink-0 [&>button>svg]:size-5 [&>button>svg]:shrink-0">
+              {headingAction}
+            </div>
           )}
         </div>
         {(primaryAction || secondaryAction) && (
