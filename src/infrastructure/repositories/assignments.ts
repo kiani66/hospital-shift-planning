@@ -51,6 +51,21 @@ export async function setAssignment(
     });
 }
 
+/** Creation-only write: uniqueness rejects an occupied cell; it can never replace it. */
+export async function insertAssignment(
+  db: DbExecutor,
+  input: Parameters<typeof setAssignment>[1],
+): Promise<void> {
+  await db.insert(shiftAssignments).values({
+    scheduleId: input.scheduleId,
+    userId: input.userId,
+    date: input.date,
+    shiftCode: input.shift,
+    source: input.source ?? "MANUAL",
+    updatedBy: input.updatedBy,
+  });
+}
+
 export async function clearAssignment(
   db: DbExecutor,
   input: { scheduleId: string; userId: string; date: IsoDate },

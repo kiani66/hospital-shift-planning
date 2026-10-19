@@ -13,6 +13,7 @@ import { unwrap } from "../../domain/shared/result";
 import { ASSIGNMENT_CODES } from "../../domain/shifts/shift-type";
 import {
   clearAssignment,
+  insertAssignment,
   listAssignmentsFor,
   setAssignment,
 } from "../../infrastructure/repositories/assignments";
@@ -148,14 +149,22 @@ export const setAssignments = defineCommand({
  * in place (one decision per nurse and day, D15: an OFF decision is replaced,
  * never kept beside a shift) and audited on its own (D48). Shared by the
  * planning editor and the candidate command (D111), so both persist and
- * audit an assignment the same way. The caller authorizes, checks and saves.
+ * audit an assignment the same way. Copy requests insert-only persistence, so
+ * the primary key also rejects an unexpected late collision. Ordinary edits
+ * retain their existing replacement behavior. The caller authorizes, checks and saves.
  */
 export async function writeAssignmentChanges(
   uow: UnitOfWork,
   schedule: ScheduleRecord,
   changes: readonly AssignmentChange[],
+  options: { readonly insertOnly?: boolean } = {},
 ): Promise<void> {
   for (const change of changes) {
+    if (options.insertOnly && (change.before !== null || change.after === null))
+      throw new ValidationError(
+        "Creation-only changes cannot replace or clear a cell",
+        "changes",
+      );
     const cell = {
       scheduleId: schedule.id,
       userId: change.nurseId,
@@ -163,7 +172,7 @@ export async function writeAssignmentChanges(
     };
     if (change.after === null) await clearAssignment(uow.tx, cell);
     else
-      await setAssignment(uow.tx, {
+      await (options.insertOnly ? insertAssignment : setAssignment)(uow.tx, {
         ...cell,
         shift: change.after,
         updatedBy: uow.actor.userId,

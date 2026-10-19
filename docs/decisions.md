@@ -2606,3 +2606,27 @@ Enforced in `application/reporting/schedule-snapshot.ts`,
 `application/staffing-report/queries.ts` and `application/workforce-report/queries.ts`;
 tested in `tests/integration/staffing-report.test.ts` and the existing workforce
 report regression tests.
+
+### D131 · Smart Schedule Copy
+
+Head Nurses may preview and apply assignment copies within one department: whole
+monthly period by ordinal day, a single day, or an inclusive positional range,
+including same-schedule overlaps. Optional source personnel/composite-cell filters
+restrict the scope. Target roster, active accounts, dated membership, existing
+assignment editability/revision dates and target-pinned rule assessment remain
+authoritative. No destination decision is overwritten. Source H leave is skipped
+as personal to its original date (explicitly confirmed for this phase); OFF can be
+copied. Preferences remain independent advice and workflow state never changes.
+
+Read-only preview includes explicit exclusions, hard findings, warnings/advisory
+preference differences and target coverage. Introduced/worsened hard violations
+block the entire proposed batch using `assessEdits`; structural exclusions may be
+omitted while applying the reviewed remainder. An actor/request-bound 15-minute
+signed proof fingerprints the plan and its dependencies. Apply reauthorizes and
+rebuilds under the existing globally ordered schedule/boundary locking protocol,
+including the source, plus existing shared membership locks. Stale proofs fail
+without writes. Copy persists with insert-only writes, so uniqueness rejects
+unexpected late occupancy instead of overwriting it. Assignment history and one aggregate `schedule.copied` audit commit
+with the revision bump in one transaction. No migration, preview table, new
+permission, workflow transition, source mutation or global undo framework is added.
+See `docs/schedule-copy.md` for API semantics, validation and limitations.
