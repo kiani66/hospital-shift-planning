@@ -2606,3 +2606,49 @@ Enforced in `application/reporting/schedule-snapshot.ts`,
 `application/staffing-report/queries.ts` and `application/workforce-report/queries.ts`;
 tested in `tests/integration/staffing-report.test.ts` and the existing workforce
 report regression tests.
+
+### D131 · Stage 3: Persian RTL staffing report presentation
+
+`/departments/[code]/staffing` exposes one actual-period staffing report to the
+selected department's Head Nurse (`department.manage`). Server guards, the reused
+workforce schedule selector and `getStaffingReport` preserve indistinguishable
+not-found behavior for denied, foreign or missing identities. Navigation is shown
+only for managed departments; it adds no authorization policy.
+
+Jalali month navigation discovers overlapping schedules, requiring an explicit
+choice when several overlap. It never combines schedules or clips their actual
+inclusive period. Schedule, source and detail filters persist in URLs and GET
+forms; month navigation retains the selected schedule while it still overlaps,
+otherwise clears that selection. A denied department stays not-found; no schedule,
+a required selection, an unavailable source and no matching filtered rows have
+separate empty states.
+
+Source loading remains D130: official approved decisions and their pin, provisional
+working decisions before approval, or an explicitly selected eligible revision
+draft and its current pin. The Persian source banner distinguishes approval from
+an unapproved draft and shows version/approval metadata; the selected rule version
+and hospital/department scope are displayed together. Invalid source data renders
+unavailable, never an automatic fallback. Shared source banners and small UI
+primitives preserve the workforce report's existing behavior; there is no generic
+report engine.
+
+Four unfiltered summary cards distinguish problem buckets, distinct shortage dates
+and summed shortage person-period gaps (D129). Secondary totals include excess
+gaps/dates, within-bounds buckets and nursing UNDECIDED days. Status and M/E/N
+filters select only existing domain rows, leaving totals intact and showing their
+own row count. Desktop/tablet uses a keyboard-scrollable semantic table; phones
+use daily cards grouped by date, keeping all three buckets by default. Unlimited
+maximum and resolved exception/holiday/normal origin are explicit; weekday labels
+never infer official holidays.
+
+Coverage is recorded nursing staffing, not attendance, unique people or hiring
+requirements. ME and Secretary handling is explained, incomplete decisions warn
+without becoming OFF, and shortage/excess never offset. Overall readiness is not
+shown because staffing compliance does not assess every scheduling rule or
+lifecycle requirement. No schema, migration, staffing/scheduling policy, export,
+printing or Production change is introduced.
+
+Enforced in `app/(app)/departments/[code]/staffing/page.tsx`,
+`features/staffing-report/`, `features/reporting/shared.tsx` and shell navigation;
+covered by presentation/navigation unit tests, the existing query integration
+regressions and `tests/e2e/staffing-report.spec.ts`.

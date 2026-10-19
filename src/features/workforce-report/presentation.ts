@@ -1,10 +1,7 @@
 import type { Route } from "next";
 import { z } from "zod";
 
-import type {
-  WorkforceReportProvenance,
-  WorkforceReportRow,
-} from "@/application/workforce-report/queries";
+import type { WorkforceReportRow } from "@/application/workforce-report/queries";
 import {
   normalizeDisplayName,
   normalizeIdentifierText,
@@ -31,14 +28,7 @@ export const workforceParams = z.object({
 });
 export type WorkforceParams = z.infer<typeof workforceParams>;
 
-export const SOURCE_LABELS: Record<
-  WorkforceReportProvenance["source"],
-  string
-> = {
-  APPROVED_VERSION: "نسخه رسمی تأییدشده",
-  WORKING_COPY: "گزارش موقت برنامه",
-  REVISION_DRAFT: "پیش‌نویس اصلاحات — تأییدنشده",
-};
+export { SOURCE_LABELS } from "@/features/reporting/shared";
 
 /** URL state is shared by search, sorting, source switching and detail. */
 export function workforceHref(
