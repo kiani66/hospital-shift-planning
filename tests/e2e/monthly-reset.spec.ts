@@ -1,3 +1,4 @@
+import { openScheduleActions } from "./support/schedule-toolbar";
 import { signInForReset } from "./support/reset-auth";
 import { assertResetE2eDatabase } from "../../scripts/support/reset-e2e-safety";
 import { eq } from "drizzle-orm";
@@ -61,6 +62,7 @@ test("Monthly Reset previews real impact and refreshes to unassigned planning", 
   }
   await signInForReset(page, fixture.headEmail);
   await page.goto(`/departments/${fixture.code}/schedule?schedule=${id}`);
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "بازنشانی چیدمان" }).click();
   const dialog = page.getByRole("dialog", { name: "بازنشانی چیدمان ماه؟" });
   await expect(dialog).toContainText(

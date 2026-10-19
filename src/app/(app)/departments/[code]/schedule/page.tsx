@@ -227,6 +227,7 @@ export default async function DepartmentSchedulePage({
     return (
       <>
         <ScheduleHeader
+          monthlyToolbar
           departmentName={department.name}
           monthLabel={monthLabel}
           previous={previous}
@@ -313,6 +314,7 @@ export default async function DepartmentSchedulePage({
   return (
     <>
       <ScheduleHeader
+        monthlyToolbar
         departmentName={department.name}
         monthLabel={monthLabel}
         previous={previous}
@@ -323,13 +325,10 @@ export default async function DepartmentSchedulePage({
           preferences: selected.preferences.state,
           editable: review.month.editable,
         }}
-        headingAction={
-          review.workflow.actions.submit ? lifecycleAction : undefined
-        }
         primaryAction={
           <>
+            {lifecycleAction}
             <PreferenceAction schedule={selected} />
-            {!review.workflow.actions.submit && lifecycleAction}
           </>
         }
         secondaryAction={

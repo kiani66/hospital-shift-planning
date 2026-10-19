@@ -9,7 +9,9 @@ import {
   MonthNavLink,
   type MonthLink,
 } from "@/features/schedule-review/month-calendar";
+import { cn } from "@/lib/utils";
 
+import { MonthlyToolbar } from "./monthly-toolbar";
 import { PreferenceStateBadge, ScheduleStatusBadge } from "./status-badges";
 
 export const SCHEDULE_HEADING_ID = "schedule-month-heading";
@@ -34,7 +36,9 @@ export function ScheduleHeader({
   headingAction,
   primaryAction,
   secondaryAction,
+  monthlyToolbar = false,
 }: {
+  monthlyToolbar?: boolean;
   departmentName: string;
   monthLabel: string;
   /**
@@ -56,54 +60,72 @@ export function ScheduleHeader({
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
 }) {
+  const navigation = (
+    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <IconWell
+        size="md"
+        className="size-11 rounded-md border border-input bg-background text-foreground shadow-xs max-sm:hidden"
+      >
+        <CalendarRange />
+      </IconWell>
+      {previous !== undefined && (
+        <MonthNavLink direction="previous" target={previous} />
+      )}
+      <h1
+        id={SCHEDULE_HEADING_ID}
+        className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
+      >
+        <span className="truncate text-sm font-medium text-brand-soft-foreground">
+          برنامه بخش · {departmentName}
+        </span>
+        <span className="sr-only">، </span>
+        <span className="text-xl leading-snug font-bold text-foreground sm:text-2xl">
+          {monthLabel}
+        </span>
+      </h1>
+      {next !== undefined && <MonthNavLink direction="next" target={next} />}
+    </div>
+  );
+
   return (
     <section
       aria-labelledby={SCHEDULE_HEADING_ID}
-      className="mb-4 overflow-hidden rounded-xl border border-primary/15 bg-card shadow-sm shadow-primary/5"
+      className={cn(
+        "mb-4 rounded-xl border border-primary/15 bg-card shadow-sm shadow-primary/5",
+        !monthlyToolbar && "overflow-hidden",
+      )}
     >
-      <div className="flex flex-col gap-3 p-3 sm:p-4 lg:px-5 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:shrink-0">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <IconWell
-              size="md"
-              className="size-11 rounded-md border border-input bg-background text-foreground shadow-xs max-sm:hidden"
-            >
-              <CalendarRange />
-            </IconWell>
-            {previous !== undefined && (
-              <MonthNavLink direction="previous" target={previous} />
-            )}
-            <h1
-              id={SCHEDULE_HEADING_ID}
-              className="flex min-w-0 flex-1 flex-col gap-0.5 text-center sm:flex-none sm:text-start"
-            >
-              <span className="truncate text-sm font-medium text-brand-soft-foreground">
-                برنامه بخش · {departmentName}
-              </span>
-              <span className="sr-only">، </span>
-              <span className="text-xl leading-snug font-bold text-foreground sm:text-2xl">
-                {monthLabel}
-              </span>
-            </h1>
-            {next !== undefined && (
-              <MonthNavLink direction="next" target={next} />
+      {monthlyToolbar ? (
+        <MonthlyToolbar
+          navigation={navigation}
+          primary={primaryAction}
+          secondary={secondaryAction}
+        />
+      ) : (
+        <div className="flex flex-col gap-3 p-3 sm:p-4 lg:px-5 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:shrink-0">
+            {navigation}
+            {headingAction && (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap [&>button]:h-11 [&>button]:shrink-0 [&>button>svg]:size-5 [&>button>svg]:shrink-0">
+                {headingAction}
+              </div>
             )}
           </div>
-          {headingAction && (
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap [&>button]:h-11 [&>button]:shrink-0 [&>button>svg]:size-5 [&>button>svg]:shrink-0">
-              {headingAction}
+          {(primaryAction || secondaryAction) && (
+            <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start xl:justify-end [&>a]:h-11 [&>a]:shrink-0 [&>button]:h-11 [&>button]:w-full [&>button]:shrink-0 sm:[&>button]:w-auto [&>button>svg]:size-5 [&>button>svg]:shrink-0">
+              {primaryAction}
+              {secondaryAction}
             </div>
           )}
         </div>
-        {(primaryAction || secondaryAction) && (
-          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start xl:justify-end [&>a]:h-11 [&>a]:shrink-0 [&>button]:h-11 [&>button]:w-full [&>button]:shrink-0 sm:[&>button]:w-auto [&>button>svg]:size-5 [&>button>svg]:shrink-0">
-            {primaryAction}
-            {secondaryAction}
-          </div>
-        )}
-      </div>
+      )}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-primary/10 bg-brand-soft/50 px-3 py-2.5 text-sm max-sm:justify-center sm:px-4 lg:px-5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-primary/10 bg-brand-soft/50 px-3 py-2.5 text-sm max-sm:justify-center sm:px-4 lg:px-5",
+          monthlyToolbar && "rounded-b-xl",
+        )}
+      >
         {schedule ? (
           <>
             <span className="text-muted-foreground tabular-nums">

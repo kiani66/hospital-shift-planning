@@ -1,3 +1,4 @@
+import { openScheduleActions } from "./support/schedule-toolbar";
 import { expect, test, type Page } from "@playwright/test";
 
 import { DEMO_USERS, signInAndWait } from "./support/auth";
@@ -132,6 +133,7 @@ test.describe("Head Nurse schedule management", () => {
     await expectNoHorizontalOverflow(page, "closed");
 
     // The month now has a schedule and cannot be chosen again.
+    await openScheduleActions(page);
     await main(page)
       .getByRole("button", { name: "برنامه ماهانه جدید" })
       .click();
