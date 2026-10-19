@@ -2512,3 +2512,44 @@ Desktop/tablet tables scroll inside a keyboard-focusable region; phones use card
 
 Stage 3 adds no Excel report export, writes, persisted report data, migrations,
 scheduling rules or Production operations.
+
+## Phase 18 — Staffing coverage report calculations
+
+### D129 · Stage 1: pure-domain, actual-period nursing coverage
+
+`summarizeStaffing` reports one selected schedule's actual inclusive ISO period
+(the existing maximum of 62 days), never a merged month. Inputs are its complete
+historical roster with snapshot roles, the selected assignments, pinned rule-set
+content and official holiday dates. Source selection and authorization belong to
+later application stages; no current account activity or membership date filters
+discard recorded history. NURSE and HEAD_NURSE contribute nursing coverage;
+SECRETARY does not (D119). ME contributes one person to M and E while remaining
+one assignment. OFF, H and missing decisions add no coverage; missing nursing
+roster-days are counted separately as `undecidedNurseDays`, never inferred OFF.
+
+The pure result includes the actual period and day count, exactly three rows per
+date in chronological M/E/N order, resolved minimum/nullable unlimited maximum,
+coverage, SHORTAGE / EXCESS / WITHIN_BOUNDS, gap and requirement source. It reuses
+the existing coverage catalog, `resolveDay` (date exception > official holiday >
+normal, D106), `toStaffingBounds` and `bucketCoverage`; Friday is not an official
+holiday automatically. Valid holidays and reusable rule exceptions outside the
+report period add no rows. Inputs are not mutated.
+
+Totals keep shortage/excess **problem buckets** (date × M/E/N), **distinct affected
+dates**, and **summed person-period gaps** separate. For example, two deficient
+buckets on one day, each short by two, mean two problem buckets, one affected date
+and four shortage person-periods. Excess never offsets shortage; affected date
+sets may overlap. Within-bounds buckets complete the partition of all period
+buckets. Gaps are neither unique missing people nor working-shift counts (ME can
+contribute to two periods).
+
+Invalid periods, duplicate/invalid roster entries, duplicate nurse-days (including
+Secretary records), non-roster or invalid/out-of-period assignments, malformed
+holiday dates and invalid rule-set content return domain `ValidationError` through
+`Result`. Existing scheduling validators and staffing rules are unchanged. This is
+staffing compliance only: no overall schedule readiness, completeness, night-rest,
+approval, attendance or actual worked staffing is inferred. Stage 1 adds no
+application query, source loading, authorization policy, UI, export, printing,
+persistence, migration or Production operation.
+
+Enforced in `domain/staffing-report/summary.ts` and its adjacent unit tests.
