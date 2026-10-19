@@ -44,11 +44,17 @@ Locked states and dates outside an open revision are excluded through the existi
 
 The proposed batch is assessed together by `assessEdits`, using target staffing,
 holiday/date exceptions, nursing-versus-secretary coverage and adjacent schedules'
-boundary assignments. An introduced or worsened hard violation blocks **the whole
-proposed batch**. The user can narrow the scope and preview again. Existing unrelated
-or non-worsened findings retain the established assessment semantics. Structural
-exclusions do not block otherwise valid proposed rows. Engine warnings remain
-non-blocking. Current validators emit hard errors; there is no new soft rule.
+boundary assignments. Under D132, correctable `NIGHT_REST` and `STAFFING`
+(minimum and maximum) findings remain hard errors but **do not block Copy**.
+The preview reports deduplicated findings on the resulting schedule, including
+persistent shortages; they never reduce the eligible assignment count. Structural
+`DUPLICATE_ASSIGNMENT` / `OUTSIDE_PERIOD` findings still block the batch, and
+malformed source codes/structure are rejected. New rules require explicit classification.
+There is no separate consecutive-shift validator today. `UNDECIDED` is correctable
+planning incompleteness; the existing review/Finalize validator reports it using the
+full roster, rather than duplicating every undecided cell in Copy. Ordinary
+`assessEdits` behavior for other features is unchanged. Engine warnings remain
+non-blocking; no hard rule is downgraded.
 
 There is no independent leave/unavailability store in this repository. Recorded
 H occupies the target cell and is never overwritten. OFF wishes remain advisory
@@ -80,6 +86,27 @@ protocol cannot cause an upsert to overwrite an occupied cell. All assignments,
 ordinary `assignment.created` history, the aggregate `schedule.copied` event and the
 single schedule revision bump commit or roll back together.
 
+Copy's response reports inserted/excluded counts and `correctableViolations`
+separately. A successful response certifies insertion only, never schedule validity.
+The preview names both source and target roster personnel so existing findings can
+be explained even for a target-only member. The dialog explains preceding/following
+month rest links and shows rule codes alongside the existing Persian explanations.
+After Apply, refreshing the calendar and existing validation panels keeps findings
+visible; the ordinary day editor and problematic-day links are reused for repair.
+
+## Acceptance gates
+
+FINALIZE and SUBMIT retain complete-period validation (including UNDECIDED, nursing
+coverage under the target pin, holidays/exceptions and both month boundaries).
+APPROVE now repeats `validateWorkingCopy` before publishing an immutable version;
+this closes the case where an adjacent schedule changes after submission. Failure
+leaves status, submission, version, audit and notifications unchanged. Copy does
+not change status, and submitted/approved schedules stay immutable. Existing
+FINALIZED corrections remain editable, with SUBMIT enforcing validation again;
+returned/revision drafts cannot be resubmitted with hard errors. Withdrawal releases
+a submission for repair and discard restores the existing approved snapshot/pin;
+neither publishes the invalid copied draft. No approved history is rewritten.
+
 The aggregate audit records actor/time through the existing audit infrastructure,
 source/target IDs, mode and dates, selection, target dates, inserted/excluded counts
 and the reviewed fingerprint. Existing per-cell history is retained. Replay or
@@ -101,7 +128,7 @@ Automated coverage is in:
   apply, injected failure rollback, authorization/revocation, historical sources,
   eligibility, pinned holidays, stale dependencies and concurrent duplicate apply.
 - `tests/e2e/schedule-copy.spec.ts`: the Head Nurse preview/apply flow with preserved
-  target leave and advisory preferences, blocking rules/cancel, and overlapping
+  target leave and advisory preferences, correctable rules/cancel and cross-month Copy → correction → Finalize, and overlapping
   same-schedule range copy with selected personnel. Screenshots use Playwright's
   per-test artifact directory.
 
@@ -120,20 +147,22 @@ copy uses the calendar configured by the application.
 | Database       | No migrations, schema changes, preview tables or new enum values                                                                                                  |
 | Frontend       | `src/features/schedule-copy/actions.ts`, `copy-dialog.tsx`, `preview-panel.tsx`, `presentation.ts`; `src/app/(app)/departments/[code]/schedule/page.tsx`          |
 | Tests          | `src/features/calendar/schedule-copy.test.ts`, `tests/integration/schedule-copy.test.ts`, `tests/e2e/schedule-copy.spec.ts`, `tests/e2e/support/schedule-copy.ts` |
-| Documentation  | `docs/decisions.md` (D131), `docs/schedule-copy.md`                                                                                                               |
+| Documentation  | `docs/decisions.md` (D131/D132), `docs/schedule-copy.md`                                                                                                          |
 
 ## Final review and verification
 
 The final review checked all changed files against the approved scope, the actual
 assignment-writer lock protocol, dated authorization/membership rules, pinned
 staffing resolution, source immutability and target roster snapshots. No schema,
-workflow, permission, unrelated UI or deployment configuration changes are included.
+permission, unrelated UI or Production configuration changes are included. D132
+adds approval revalidation; state transitions and manual assignment editing retain
+their existing behavior.
 
 The review added insert-only persistence for Copy without changing the ordinary
 editor's replacement behavior. A regression test first reproduced a late external
 leave decision being overwritten by the old upsert path; the fixed command returns
-CONFLICT and preserves that leave, without audit or revision side effects. Blocked
-preview rows are now labelled as blocked proposals, rather than transferable cells.
+CONFLICT and preserves that leave, without audit or revision side effects. Only structural findings block Copy;
+D132 allows rest/staffing findings while preserving their acceptance-gate severity.
 
 Tests also explicitly cover authority revocation with an active account, changed
 staffing pins and holiday requirements, target date exceptions, and applying leap
@@ -150,7 +179,7 @@ pnpm build
 pnpm exec playwright test tests/e2e/schedule-copy.spec.ts --workers=2
 ```
 
-Playwright captures preview, blocking-conflict and resulting-calendar screenshots
+Playwright captures preview, correctable-conflict and resulting-calendar screenshots
 in its per-test artifact directory. All automated tests use isolated local/CI
 databases. Preview deployment and CI status belong to the PR; no Production
 operations are required by this feature.

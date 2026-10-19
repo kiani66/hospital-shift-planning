@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { signInAndWait } from "./support/auth";
-import { provisionCopyDepartment, copyState } from "./support/schedule-copy";
+import {
+  provisionBoundaryCopyDepartment,
+  provisionCopyDepartment,
+  copyState,
+} from "./support/schedule-copy";
 
 const copyDialog = (page: import("@playwright/test").Page) =>
   page.getByRole("dialog", { name: "کپی برنامه", exact: true });
@@ -40,7 +44,7 @@ test("Head Nurse previews conflicts and target preferences, then applies only al
     path: testInfo.outputPath("copy-preview.png"),
     contentType: "image/png",
   });
-  await dialog.getByRole("button", { name: "تأیید و اعمال کپی" }).click();
+  await dialog.getByRole("button", { name: "تأیید و کپی برنامه" }).click();
   await expect(dialog).toBeHidden();
   await expect(
     page.getByRole("status").filter({ hasText: "۳ انتساب کپی شد" }),
@@ -72,7 +76,7 @@ test("Head Nurse previews conflicts and target preferences, then applies only al
   ).toBeLessThanOrEqual(0);
 });
 
-test("full-month target hard-rule preview blocks Apply and Cancel leaves all data untouched", async ({
+test("full-month correctable rule preview allows Apply and Cancel leaves all data untouched", async ({
   page,
 }, testInfo) => {
   const d = await provisionCopyDepartment();
@@ -82,14 +86,14 @@ test("full-month target hard-rule preview blocks Apply and Cancel leaves all dat
   await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
   const dialog = copyDialog(page);
   await dialog.getByRole("button", { name: "پیش‌نمایش کپی" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("نقض قانون");
-  await expect(dialog.getByRole("status")).toContainText(
-    "پیشنهاد انتقال (مسدود)",
+  await expect(dialog.getByRole("alert")).toContainText(
+    "تا زمان رفع خطاهای الزامی",
   );
+  await expect(dialog.getByRole("status")).toContainText("قابل انتقال");
   await expect(dialog.getByRole("alert")).toContainText("روز بعد");
   await expect(
-    dialog.getByRole("button", { name: "تأیید و اعمال کپی" }),
-  ).toBeDisabled();
+    dialog.getByRole("button", { name: "تأیید و کپی برنامه" }),
+  ).toBeEnabled();
   await page.screenshot({
     path: testInfo.outputPath("copy-hard-conflict.png"),
     fullPage: true,
@@ -125,7 +129,7 @@ test("same-schedule overlapping range and selected personnel preserve occupied c
   await expect(dialog).toContainText("۳ انتساب بررسی شد");
   await expect(dialog).toContainText("۱ قابل انتقال");
   await expect(dialog).toContainText("۲ تداخل");
-  await dialog.getByRole("button", { name: "تأیید و اعمال کپی" }).click();
+  await dialog.getByRole("button", { name: "تأیید و کپی برنامه" }).click();
   await expect(dialog).toBeHidden();
   const after = await copyState(d);
   expect(after.target).toEqual(before.target);
@@ -134,4 +138,63 @@ test("same-schedule overlapping range and selected personnel preserve occupied c
     before.source,
   );
   expect(after.source.find((a) => a.date === "2026-10-27")!.shift).toBe("M");
+});
+
+test("Mehr-to-Aban copy keeps cross-month rest visible until corrected before Finalize", async ({
+  page,
+}, testInfo) => {
+  const d = await provisionBoundaryCopyDepartment();
+  await signInAndWait(page, d.headEmail);
+  await page.goto(`/departments/${d.code}/schedule?month=1405-08`);
+  await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
+  const dialog = copyDialog(page);
+  await dialog.getByLabel("برنامه مبدأ").selectOption(d.mehrId);
+  await dialog.getByRole("button", { name: "پیش‌نمایش کپی" }).click();
+  const alert = dialog.getByRole("alert");
+  await expect(alert).toContainText("NIGHT_REST");
+  await expect(alert).toContainText("ماه قبل");
+  await expect(alert).toContainText(d.nurseNames[0]!);
+  await expect(
+    dialog.getByRole("button", { name: "تأیید و کپی برنامه" }),
+  ).toBeEnabled();
+  await page.screenshot({
+    path: testInfo.outputPath("cross-month-preview.png"),
+    fullPage: true,
+  });
+  await dialog.getByRole("button", { name: "تأیید و کپی برنامه" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "برخی مغایرت‌ها نیاز به اصلاح دارند" }),
+  ).toBeVisible();
+  const header = page.locator(
+    'section[aria-labelledby="schedule-month-heading"]',
+  );
+  await expect(
+    header.getByRole("button", { name: "نهایی‌سازی برنامه" }),
+  ).toBeDisabled();
+  await expect(page.locator("#workflow-blockers")).toContainText("۱ نقض قانون");
+  await page.goto(
+    `/departments/${d.code}/schedule?month=1405-08&day=2026-10-23`,
+  );
+  const day = page.getByRole("dialog");
+  await expect(day).toContainText("مانع نهایی‌سازی");
+  await expect(day).toContainText("۳۰ مهر");
+  await day
+    .getByRole("group", { name: `شیفت ${d.nurseNames[0]}` })
+    .getByRole("button", { name: "استراحت (OFF)" })
+    .click();
+  await expect(day.getByRole("status").first()).toContainText("ثبت شد");
+  await day.getByRole("button", { name: "بستن جزئیات روز" }).click();
+  await expect(page.locator("#workflow-blockers")).toHaveCount(0);
+  await expect(
+    header.getByRole("button", { name: "نهایی‌سازی برنامه" }),
+  ).toBeEnabled();
+  await header.getByRole("button", { name: "نهایی‌سازی برنامه" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "بله، نهایی شود" })
+    .click();
+  await expect(header.getByText("نهایی‌شده", { exact: true })).toBeVisible();
 });

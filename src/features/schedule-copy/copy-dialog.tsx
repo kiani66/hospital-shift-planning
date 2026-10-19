@@ -114,7 +114,9 @@ export function ScheduleCopyDialog({
         const result = await applyCopyAction(preview.payload);
         setPreview(null);
         if (result.ok) {
-          setSuccess(`${faNumber(result.data.assignmentCount)} انتساب کپی شد.`);
+          setSuccess(
+            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد.${result.data.correctableViolations.length ? ` برنامه کپی شد. برخی مغایرت‌ها نیاز به اصلاح دارند. (${faNumber(result.data.correctableViolations.length)} مغایرت)` : " کپی برنامه به معنی آمادگی برای نهایی‌سازی نیست."}`,
+          );
           setOpen(false);
         } else setMessage(copyErrorMessage(result.error));
       } catch {

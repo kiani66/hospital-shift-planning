@@ -2630,3 +2630,48 @@ unexpected late occupancy instead of overwriting it. Assignment history and one 
 with the revision bump in one transaction. No migration, preview table, new
 permission, workflow transition, source mutation or global undo framework is added.
 See `docs/schedule-copy.md` for API semantics, validation and limitations.
+
+### D132 · Copy first; correct scheduling violations before acceptance
+
+Amends D131's batch rule gate only. Smart Schedule Copy may insert structurally
+eligible assignments into an editable working schedule even if the result introduces,
+worsens or retains NIGHT_REST (including cross-month N→work) or STAFFING minimum /
+maximum violations. Their severity stays error. Copy success records assignments;
+it never certifies readiness, changes status, or substitutes personnel.
+
+The Copy classification is explicit and fail-closed: NIGHT_REST and STAFFING are
+correctable; UNDECIDED is correctable planning incompleteness, reported through the
+existing full review and lifecycle validation, rather than thousands of duplicate
+Copy messages. DUPLICATE_ASSIGNMENT and OUTSIDE_PERIOD remain structural blockers.
+Unknown/new rules require a classification decision. There is no separate consecutive-
+shift or other sequence rule in the current validator; none is invented here.
+Malformed source codes/structure are rejected. Roster, dated membership, authority,
+period/revision scope, source-H exclusion, target occupancy/H preservation and database
+uniqueness remain structural safeguards. Structural row exclusions stay explicit;
+applicable rows commit as one insert-only, audited, revision-bumped transaction.
+
+Preview uses the existing validators and reports eligible counts independently of
+correctable findings, deduplicated by violation identity. It shows the resulting
+schedule's rest/staffing findings, including persistent shortages, and before/after
+coverage. Generic assessEdits blocking semantics remain unchanged for other callers.
+Apply reauthorizes, locks and rebuilds the signed plan with the same stale rejection;
+its response separates assignment/exclusion counts from correctable findings.
+
+FINALIZE and SUBMIT (including returned/revising submissions) continue to validate
+the complete working period, roster completeness, pinned staffing and both adjacent
+boundaries. APPROVE now repeats that same validation under its existing schedule
+lock before creating any immutable version: a neighbouring Copy/edit or changed
+holiday data since submission cannot bypass acceptance. Assignment writers use the
+shared boundary locks, so they cannot change that context during publication.
+Existing FINALIZED corrections remain editable and require revalidation at SUBMIT;
+Copy does not silently reopen/change lifecycle states. Withdrawal releases a pending
+submission for correction; discard restores the existing approved decisions and pin,
+without publishing the copied draft as a new accepted version. Approved snapshots
+are never edited or retrospectively rewritten.
+
+Persian RTL Copy messages distinguish successful insertion from readiness, explain
+cross-month rest with the adjacent date/shift, and keep ordinary calendar/review
+findings visible after refresh. Head Nurses correct assignments with existing editor
+controls and reuse existing problematic-day views. No global rule relaxation,
+manual-editor change, schema/migration, persisted validation cache, automatic repair,
+Phase 9 integration or Production operation is introduced.

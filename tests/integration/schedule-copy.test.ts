@@ -6,6 +6,14 @@ import {
   previewScheduleCopy,
   type ScheduleCopyInput,
 } from "../../src/application/schedules/copy";
+import { validateWorkingCopy } from "../../src/application/schedules/working-copy-validation";
+import {
+  finalizeSchedule,
+  submitSchedule,
+  approveSchedule,
+} from "../../src/application/schedules/lifecycle";
+import { completeScheduleFixture } from "../support/complete-schedule";
+import { periodDays } from "../../src/domain/shared/period";
 import * as assignmentEditing from "../../src/application/schedules/edit-assignments";
 import { setAssignments } from "../../src/application/schedules/edit-assignments";
 import type { AppContext } from "../../src/application/use-case";
@@ -22,6 +30,7 @@ import {
 import {
   listAssignments,
   setAssignment,
+  clearAssignment,
 } from "../../src/infrastructure/repositories/assignments";
 import { listAuditEventsForSchedule } from "../../src/infrastructure/repositories/audit";
 import {
@@ -42,6 +51,8 @@ import {
   findScheduleById,
 } from "../../src/infrastructure/repositories/schedules";
 import { setUserActive } from "../../src/infrastructure/repositories/users";
+import { listVersions } from "../../src/infrastructure/repositories/versions";
+import { listSubmissions } from "../../src/infrastructure/repositories/submissions";
 import { setupTestDatabase } from "./support/database";
 import {
   pinTestRuleSet,
@@ -281,18 +292,27 @@ describe("Smart Schedule Copy", () => {
     });
     expect((await findScheduleById(db, T))!.status).toBe("REVISING");
   });
-  it("blocks target night-rest violations and preserves the complete transaction", async () => {
+  it("copies correctable target night-rest violations and retains validation findings", async () => {
     await put(T, U.icuNurse1.id, "2026-10-24", "N");
     const p = await preview();
     expect(p.assessment.blocking).toContainEqual(
       expect.objectContaining({ rule: "NIGHT_REST" }),
     );
-    const before = await state();
+    expect(p.canApply).toBe(true);
     expect(await applyScheduleCopy(ctx, p.payload)).toMatchObject({
-      ok: false,
-      error: { code: "RULE_VIOLATION" },
+      ok: true,
+      data: {
+        assignmentCount: 1,
+        correctableViolations: expect.arrayContaining([
+          expect.objectContaining({ rule: "NIGHT_REST" }),
+        ]),
+      },
     });
-    expect(await state()).toEqual(before);
+    expect(
+      (await validateWorkingCopy(db, (await findScheduleById(db, T))!))
+        .violations,
+    ).toContainEqual(expect.objectContaining({ rule: "NIGHT_REST" }));
+    expect((await findScheduleById(db, T))!.status).toBe("DRAFT");
   });
   it("reads cross-boundary nights for roster members with no target assignments", async () => {
     await put(S, U.icuNurse1.id, "2026-10-22", "N");
@@ -305,8 +325,10 @@ describe("Smart Schedule Copy", () => {
         },
       }),
     );
-    expect(p.canApply).toBe(false);
-    expect(p.assessment.blocking[0]!.rule).toBe("NIGHT_REST");
+    expect(p.canApply).toBe(true);
+    expect(p.correctableViolations).toContainEqual(
+      expect.objectContaining({ rule: "NIGHT_REST" }),
+    );
   });
   it("validates target-pinned holiday/date staffing bounds, not source staffing", async () => {
     const version = await publishTestRuleSet(db, {
@@ -332,7 +354,7 @@ describe("Smart Schedule Copy", () => {
       rule: "STAFFING",
       status: "ABOVE_MAXIMUM",
     });
-    expect((await applyScheduleCopy(holidayCtx, p.payload)).ok).toBe(false);
+    expect((await applyScheduleCopy(holidayCtx, p.payload)).ok).toBe(true);
   });
   it.each(["icuNurse1", "erHead", "supervisor"] as const)(
     "refuses unauthorized %s on both preview and apply",
@@ -648,12 +670,15 @@ it("uses a target date-specific staffing exception during preview and apply", as
       date: "2026-10-25",
     }),
   );
-  const before = await state();
+  expect(p.canApply).toBe(true);
   expect(await applyScheduleCopy(ctx, p.payload)).toMatchObject({
-    ok: false,
-    error: { code: "RULE_VIOLATION" },
+    ok: true,
+    data: {
+      correctableViolations: expect.arrayContaining([
+        expect.objectContaining({ rule: "STAFFING" }),
+      ]),
+    },
   });
-  expect(await state()).toEqual(before);
 });
 
 it("applies a leap Esfand copy to non-leap Esfand without inserting day 30 into Farvardin", async () => {
@@ -704,3 +729,169 @@ it("applies a leap Esfand copy to non-leap Esfand without inserting day 30 into 
   expect(await listAssignments(db, target.id)).toEqual(p.proposed);
   expect(await listAssignments(db, source.id)).toHaveLength(2);
 });
+
+it("copies Mehr Night-to-Aban Morning, blocks Finalize, then permits correction and Finalize", async () => {
+  const version = await publishTestRuleSet(db, {
+    departmentId: DEMO_ICU.id,
+    createdBy: U.icuHead.id,
+    content: ruleContent({ min: 0, max: null }),
+  });
+  await pinTestRuleSet(db, T, version);
+  // Complete explicit OFF decisions isolate the rest gate from completeness/staffing.
+  const roster = await db
+    .select()
+    .from(scheduleRoster)
+    .where(eq(scheduleRoster.scheduleId, T));
+  for (const date of periodDays((await findScheduleById(db, T))!.period))
+    for (const r of roster) await put(T, r.userId, date, "OFF");
+  await clearAssignment(db, {
+    scheduleId: T,
+    userId: U.icuNurse1.id,
+    date: isoDate("2026-10-23"),
+  });
+  await put(S, U.icuNurse1.id, "2026-10-22", "N");
+  const p = await preview(
+    raw({
+      scope: {
+        mode: "DAY",
+        sourceDate: isoDate("2026-09-25"),
+        targetDate: isoDate("2026-10-23"),
+      },
+    }),
+  );
+  expect(p.canApply).toBe(true);
+  expect(p.proposed).toHaveLength(1);
+  expect(p.correctableViolations).toEqual([
+    expect.objectContaining({
+      rule: "NIGHT_REST",
+      nightDate: "2026-10-22",
+      date: "2026-10-23",
+    }),
+  ]);
+  const before = await state();
+  expect(await applyScheduleCopy(ctx, p.payload)).toMatchObject({
+    ok: true,
+    data: { assignmentCount: 1 },
+  });
+  const copied = (await findScheduleById(db, T))!;
+  expect(copied.status).toBe(before.schedule!.status);
+  expect(copied.revision).toBe(before.schedule!.revision + 1);
+  expect((await validateWorkingCopy(db, copied)).violations).toEqual(
+    p.correctableViolations,
+  );
+  const copiedState = await state();
+  expect(
+    await finalizeSchedule(ctx, {
+      scheduleId: T,
+      expectedRevision: copied.revision,
+    }),
+  ).toMatchObject({ ok: false, error: { code: "RULE_VIOLATION" } });
+  expect(await state()).toEqual(copiedState);
+  const corrected = await setAssignments(ctx, {
+    scheduleId: T,
+    expectedRevision: copied.revision,
+    changes: [{ nurseId: U.icuNurse1.id, date: "2026-10-23", shift: "OFF" }],
+  });
+  expect(corrected.ok).toBe(true);
+  expect(
+    (await validateWorkingCopy(db, (await findScheduleById(db, T))!))
+      .violations,
+  ).toEqual([]);
+  expect(
+    await finalizeSchedule(ctx, {
+      scheduleId: T,
+      expectedRevision: (await findScheduleById(db, T))!.revision,
+    }),
+  ).toMatchObject({ ok: true, data: { status: "FINALIZED" } });
+});
+
+it("revalidates approval when an adjacent Copy invalidates an already submitted schedule", async () => {
+  await completeScheduleFixture(db, T, [
+    U.icuHead.id,
+    U.icuNurse4.id,
+    U.transferNurse.id,
+  ]);
+  const version = await publishTestRuleSet(db, {
+    departmentId: DEMO_ICU.id,
+    createdBy: U.icuHead.id,
+    content: ruleContent({ min: 0, max: null }),
+  });
+  await pinTestRuleSet(db, T, version);
+  await put(T, U.icuNurse1.id, "2026-10-23", "M");
+  expect(
+    (
+      await finalizeSchedule(ctx, {
+        scheduleId: T,
+        expectedRevision: (await findScheduleById(db, T))!.revision,
+      })
+    ).ok,
+  ).toBe(true);
+  expect(
+    (
+      await submitSchedule(ctx, {
+        scheduleId: T,
+        expectedRevision: (await findScheduleById(db, T))!.revision,
+      })
+    ).ok,
+  ).toBe(true);
+  // The source's final day is editable; its new Night now touches submitted Aban.
+  await put(S, U.icuNurse1.id, "2026-09-26", "N");
+  const p = await preview(
+    raw({
+      sourceScheduleId: S,
+      targetScheduleId: S,
+      scope: {
+        mode: "DAY",
+        sourceDate: isoDate("2026-09-26"),
+        targetDate: isoDate("2026-10-22"),
+      },
+    }),
+  );
+  expect(p.canApply).toBe(true);
+  expect((await applyScheduleCopy(ctx, p.payload)).ok).toBe(true);
+  const before = await state();
+  expect(
+    await approveSchedule(await actorContext(U.supervisor.id), {
+      scheduleId: T,
+      expectedRevision: before.schedule!.revision,
+    }),
+  ).toMatchObject({ ok: false, error: { code: "RULE_VIOLATION" } });
+  expect(await state()).toEqual(before);
+  expect(await listVersions(db, T)).toEqual([]);
+  expect((await listSubmissions(db, T)).at(-1)!.decision).toBeNull();
+});
+
+it.each(["FINALIZED", "RETURNED", "REVISING"] as const)(
+  "keeps %s copies editable without letting hard errors through SUBMIT",
+  async (targetStatus) => {
+    await status(targetStatus);
+    if (targetStatus === "REVISING")
+      await startRevision(db, {
+        scheduleId: T,
+        reason: "repair",
+        startedBy: U.icuHead.id,
+        dates: [isoDate("2026-10-25")],
+      });
+    await put(T, U.icuNurse1.id, "2026-10-24", "N");
+    const p = await preview();
+    expect(p.canApply).toBe(true);
+    expect((await applyScheduleCopy(ctx, p.payload)).ok).toBe(true);
+    const before = await state();
+    expect(before.schedule!.status).toBe(targetStatus);
+    expect(
+      await submitSchedule(ctx, {
+        scheduleId: T,
+        expectedRevision: before.schedule!.revision,
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: "RULE_VIOLATION",
+        violations: expect.arrayContaining([
+          expect.objectContaining({ rule: "NIGHT_REST" }),
+        ]),
+      },
+    });
+    expect(await state()).toEqual(before);
+  },
+);
