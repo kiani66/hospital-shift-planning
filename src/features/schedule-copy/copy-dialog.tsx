@@ -111,11 +111,17 @@ export function ScheduleCopyDialog({
     inFlight.current = true;
     startTransition(async () => {
       try {
-        const result = await applyCopyAction(preview.payload);
+        const reviewed = preview;
+        const result = await applyCopyAction(reviewed.payload);
         setPreview(null);
         if (result.ok) {
+          const leaveCount = reviewed.rows.filter(
+            (row) => row.reason === "SOURCE_LEAVE_NOT_COPIED",
+          ).length;
+          const conflictCount = reviewed.conflictCount;
+          const otherSkippedCount = reviewed.skippedCount - leaveCount;
           setSuccess(
-            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد.${result.data.correctableViolations.length ? ` برنامه کپی شد. برخی مغایرت‌ها نیاز به اصلاح دارند. (${faNumber(result.data.correctableViolations.length)} مغایرت)` : " کپی برنامه به معنی آمادگی برای نهایی‌سازی نیست."}`,
+            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد. ${faNumber(leaveCount)} مرخصی مبدأ کپی نشد؛ ${faNumber(conflictCount)} تداخل و ${faNumber(otherSkippedCount)} مورد دیگر منتقل نشد.${result.data.correctableViolations.length ? ` برخی مغایرت‌ها نیاز به اصلاح دارند. (${faNumber(result.data.correctableViolations.length)} مغایرت)` : ""} کپی به معنی آمادگی برنامه برای نهایی‌سازی نیست.`,
           );
           setOpen(false);
         } else setMessage(copyErrorMessage(result.error));
@@ -271,28 +277,64 @@ export function ScheduleCopyDialog({
               فقط پرسنل انتخاب‌شده
             </label>
             {selectedOnly && (
-              <fieldset className="grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2">
+              <fieldset className="rounded-md border p-2">
                 <legend className="px-1 text-sm">پرسنل مبدأ</legend>
-                {roster.map((n) => (
-                  <label
-                    key={n.userId}
-                    className="flex min-h-11 items-center gap-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={nurseIds.includes(n.userId)}
-                      onChange={(e) => {
-                        setNurseIds((ids) =>
-                          e.target.checked
-                            ? [...ids, n.userId]
-                            : ids.filter((id) => id !== n.userId),
-                        );
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm">
+                  <span>
+                    {faNumber(nurseIds.length)} نفر از {faNumber(roster.length)}{" "}
+                    نفر انتخاب شده‌اند
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        pending ||
+                        roster.length === 0 ||
+                        nurseIds.length === roster.length
+                      }
+                      onClick={() => {
+                        setNurseIds(roster.map((n) => n.userId));
                         resetPreview();
                       }}
-                    />
-                    {n.displayName}
-                  </label>
-                ))}
+                    >
+                      انتخاب همه
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={pending || nurseIds.length === 0}
+                      onClick={() => {
+                        setNurseIds([]);
+                        resetPreview();
+                      }}
+                    >
+                      لغو انتخاب همه
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
+                  {roster.map((n) => (
+                    <label
+                      key={n.userId}
+                      className="flex min-h-11 items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={nurseIds.includes(n.userId)}
+                        onChange={(e) => {
+                          setNurseIds((ids) =>
+                            e.target.checked
+                              ? [...ids, n.userId]
+                              : ids.filter((id) => id !== n.userId),
+                          );
+                          resetPreview();
+                        }}
+                      />
+                      {n.displayName}
+                    </label>
+                  ))}
+                </div>
               </fieldset>
             )}
             <Button
