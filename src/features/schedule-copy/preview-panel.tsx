@@ -10,7 +10,10 @@ import {
   formatJalaliDate,
   formatJalaliRange,
 } from "@/features/calendar/jalali";
-import { findingMessage } from "@/features/schedule-review/presentation";
+import {
+  findingMessage,
+  ruleTitle,
+} from "@/features/schedule-review/presentation";
 import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { COPY_REASONS } from "./presentation";
@@ -86,14 +89,16 @@ export function CopyPreviewPanel({
           </p>
           <ul className="list-inside list-disc">
             {preview.assessment.blocking.map((v, i) => (
-              <li key={i}>{finding(v)}</li>
+              <li key={i}>
+                {ruleTitle(v)}: {finding(v)}
+              </li>
             ))}
           </ul>
         </div>
       )}
       {preview.assessment.warnings.map((v, i) => (
         <p key={i} className="text-sm">
-          هشدار: {finding(v)}
+          هشدار: {ruleTitle(v)}: {finding(v)}
         </p>
       ))}
       {!!preview.preferenceNotes.length && (
