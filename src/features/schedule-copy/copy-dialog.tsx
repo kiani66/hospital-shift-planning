@@ -121,7 +121,7 @@ export function ScheduleCopyDialog({
           const conflictCount = reviewed.conflictCount;
           const otherSkippedCount = reviewed.skippedCount - leaveCount;
           setSuccess(
-            `کپی برنامه انجام شد. ${faNumber(result.data.assignmentCount)} انتساب ثبت شد؛ ${faNumber(leaveCount)} مرخصی مبدأ کپی نشد؛ ${faNumber(conflictCount)} تداخل و ${faNumber(otherSkippedCount)} مورد دیگر منتقل نشد.${result.data.correctableViolations.length ? ` ${faNumber(result.data.correctableViolations.length)} مغایرت نیازمند اصلاح است.` : ""} کپی به معنی آمادگی برنامه برای نهایی‌سازی نیست.`,
+            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد. ${faNumber(leaveCount)} مرخصی مبدأ کپی نشد؛ ${faNumber(conflictCount)} تداخل و ${faNumber(otherSkippedCount)} مورد دیگر منتقل نشد.${result.data.correctableViolations.length ? ` ${faNumber(result.data.correctableViolations.length)} مغایرت نیازمند اصلاح است.` : ""} کپی به معنی آمادگی برنامه برای نهایی‌سازی نیست.`,
           );
           setOpen(false);
         } else setMessage(copyErrorMessage(result.error));
@@ -280,12 +280,19 @@ export function ScheduleCopyDialog({
               <fieldset className="rounded-md border p-2">
                 <legend className="px-1 text-sm">پرسنل مبدأ</legend>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm">
-                  <span>{faNumber(nurseIds.length)} نفر از {faNumber(roster.length)} نفر انتخاب شده‌اند</span>
+                  <span>
+                    {faNumber(nurseIds.length)} نفر از {faNumber(roster.length)} نفر
+                    انتخاب شده‌اند
+                  </span>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={pending || roster.length === 0 || nurseIds.length === roster.length}
+                      disabled={
+                        pending ||
+                        roster.length === 0 ||
+                        nurseIds.length === roster.length
+                      }
                       onClick={() => {
                         setNurseIds(roster.map((n) => n.userId));
                         resetPreview();
@@ -307,8 +314,8 @@ export function ScheduleCopyDialog({
                   </div>
                 </div>
                 <div className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
-                {roster.map((n) => (
-                  <label
+                  {roster.map((n) => (
+                    <label
                     key={n.userId}
                     className="flex min-h-11 items-center gap-2 text-sm"
                   >
@@ -325,8 +332,8 @@ export function ScheduleCopyDialog({
                       }}
                     />
                     {n.displayName}
-                  </label>
-                ))}
+                    </label>
+                  ))}
                 </div>
               </fieldset>
             )}
