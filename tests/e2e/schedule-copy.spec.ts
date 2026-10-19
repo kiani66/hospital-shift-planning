@@ -1,3 +1,4 @@
+import { openScheduleActions } from "./support/schedule-toolbar";
 import { expect, test } from "@playwright/test";
 import { signInAndWait } from "./support/auth";
 import {
@@ -16,6 +17,7 @@ test("Head Nurse previews conflicts and target preferences, then applies only al
   const before = await copyState(d);
   await signInAndWait(page, d.headEmail);
   await page.goto(`/departments/${d.code}/schedule?month=1405-09`);
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
   const dialog = copyDialog(page);
   await expect(dialog).toBeVisible();
@@ -83,6 +85,7 @@ test("full-month correctable rule preview allows Apply and Cancel leaves all dat
   const before = await copyState(d);
   await signInAndWait(page, d.headEmail);
   await page.goto(`/departments/${d.code}/schedule?month=1405-09`);
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
   const dialog = copyDialog(page);
   await dialog.getByRole("button", { name: "پیش‌نمایش کپی" }).click();
@@ -117,6 +120,7 @@ test("same-schedule overlapping range and selected personnel preserve occupied c
   const before = await copyState(d);
   await signInAndWait(page, d.headEmail);
   await page.goto(`/departments/${d.code}/schedule?month=1405-08`);
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
   const dialog = copyDialog(page);
   await dialog.getByLabel("برنامه مبدأ").selectOption(d.abanId);
@@ -153,6 +157,7 @@ test("Mehr-to-Aban copy keeps cross-month rest visible until corrected before Fi
   const d = await provisionBoundaryCopyDepartment();
   await signInAndWait(page, d.headEmail);
   await page.goto(`/departments/${d.code}/schedule?month=1405-08`);
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "کپی برنامه", exact: true }).click();
   const dialog = copyDialog(page);
   await dialog.getByLabel("برنامه مبدأ").selectOption(d.mehrId);

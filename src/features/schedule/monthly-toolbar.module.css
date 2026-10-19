@@ -1,0 +1,209 @@
+.container {
+  container-type: inline-size;
+}
+
+.toolbar {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.navigation,
+.primary,
+.secondary {
+  min-inline-size: 0;
+}
+
+.primary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.primary > p {
+  grid-column: 1 / -1;
+  inline-size: 0;
+  min-inline-size: 100%;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Only toolbar controls: never change the forms inside their dialogs. */
+.primary > button,
+.panel > button,
+.panel > a,
+.panel > div > div > button {
+  block-size: 2.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.primary > button > svg,
+.panel > button > svg,
+.panel > a > svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.more {
+  inline-size: 100%;
+}
+
+.panel {
+  display: none;
+}
+
+.panel[data-open="true"] {
+  display: flex;
+  margin-block-start: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+
+/* Export includes explanatory text and, during revisions, a second control. */
+.panel > div,
+.panel > div > div {
+  inline-size: 100%;
+  min-inline-size: 0;
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.navigation h1 {
+  flex: 1;
+}
+
+@container (min-width: 38rem) {
+  .toolbar {
+    padding: 1rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .navigation {
+    grid-column: 1 / -1;
+  }
+
+  .navigation > div {
+    inline-size: fit-content;
+    max-inline-size: 100%;
+  }
+
+  .navigation h1 {
+    flex: 0 1 auto;
+  }
+
+  .primary {
+    grid-template-columns: repeat(2, max-content);
+  }
+
+  .primary > button {
+    inline-size: 100%;
+  }
+
+  .primary > button:last-of-type:nth-of-type(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .secondary {
+    position: relative;
+    grid-column: 2;
+  }
+
+  .panel[data-open="true"] {
+    position: absolute;
+    inset-inline-end: 0;
+    z-index: 30;
+    inline-size: 20rem;
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@container (min-width: 56rem) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+  }
+
+  .navigation,
+  .secondary {
+    grid-column: auto;
+  }
+}
+
+/* Spacious screens expose secondary actions in one intentional, separate row. */
+@container (min-width: 90rem) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .secondary {
+    grid-column: 1 / -1;
+  }
+
+  .more {
+    display: none;
+  }
+
+  .panel,
+  .panel[data-open="true"] {
+    position: static;
+    display: flex;
+    inline-size: auto;
+    flex-direction: row;
+    align-items: start;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .panel > div {
+    inline-size: 18rem;
+  }
+
+  .panel > button,
+  .panel > a {
+    inline-size: auto;
+  }
+}
+
+.navigation h1 > span:last-child {
+  white-space: nowrap;
+}
+
+/* Give long export labels the full toolbar width on the narrowest phones. */
+@container (max-width: 37.999rem) {
+  .panel[data-open="true"] {
+    padding: 0.5rem 0;
+    border-inline: 0;
+  }
+
+  .panel > div > div > button {
+    padding-inline: 0.5rem;
+  }
+}
+
+.panel > div > p a {
+  display: inline-flex;
+  min-block-size: 2.75rem;
+  align-items: center;
+}
+
+@container (min-width: 120rem) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .secondary {
+    grid-column: auto;
+  }
+}

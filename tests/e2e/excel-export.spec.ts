@@ -1,3 +1,4 @@
+import { openScheduleActions } from "./support/schedule-toolbar";
 import { readFile } from "node:fs/promises";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -31,6 +32,7 @@ test("Head Nurse uploads a template, exports a partial DRAFT and replaces the te
 
   // Without a template the button explains what to do first.
   await page.goto(`/departments/${code}/schedule?month=1405-07`);
+  await openScheduleActions(page);
   await expect(page.getByRole("button", { name: "خروجی اکسل" })).toBeDisabled();
   await expect(
     page.getByText("برای خروجی اکسل ابتدا باید قالب Excel بخش بارگذاری شود"),
@@ -75,6 +77,7 @@ test("Head Nurse uploads a template, exports a partial DRAFT and replaces the te
   // Export the partially planned DRAFT.
   await page.goto(`/departments/${code}/schedule?month=1405-07`);
   const exported = page.waitForEvent("download");
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "خروجی اکسل" }).click();
   const download = await exported;
   expect(download.suggestedFilename()).toBe(
@@ -120,6 +123,7 @@ test("Head Nurse uploads a template, exports a partial DRAFT and replaces the te
 
   await page.goto(`/departments/${code}/schedule?month=1405-07`);
   const again = page.waitForEvent("download");
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "خروجی اکسل" }).click();
   const second = (
     await readWorkbook(
@@ -215,6 +219,7 @@ test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics an
   // 2. Export the partially planned Mehr 1405 DRAFT.
   await page.goto(`/departments/${code}/schedule?month=1405-07`);
   const exported = page.waitForEvent("download");
+  await openScheduleActions(page);
   await page.getByRole("button", { name: "خروجی اکسل" }).click();
   const sheet = (
     await readWorkbook(
