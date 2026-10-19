@@ -87,6 +87,7 @@ describe("buildNavigation", () => {
       "/requests",
       "/notifications",
       "/departments/icu/schedule",
+      "/departments/icu/workforce",
       "/departments/icu/requests",
       "/departments/icu/history",
       "/departments/icu/coverage-rules",
