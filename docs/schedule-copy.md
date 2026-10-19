@@ -120,7 +120,7 @@ copy uses the calendar configured by the application.
 | Database       | No migrations, schema changes, preview tables or new enum values                                                                                                  |
 | Frontend       | `src/features/schedule-copy/actions.ts`, `copy-dialog.tsx`, `preview-panel.tsx`, `presentation.ts`; `src/app/(app)/departments/[code]/schedule/page.tsx`          |
 | Tests          | `src/features/calendar/schedule-copy.test.ts`, `tests/integration/schedule-copy.test.ts`, `tests/e2e/schedule-copy.spec.ts`, `tests/e2e/support/schedule-copy.ts` |
-| Documentation  | `docs/decisions.md` (D130), `docs/schedule-copy.md`                                                                                                               |
+| Documentation  | `docs/decisions.md` (D131), `docs/schedule-copy.md`                                                                                                               |
 
 ## Final review and verification
 
