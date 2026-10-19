@@ -6,7 +6,11 @@ import {
 } from "../../domain/schedule/publication";
 import type { ScheduleStatus } from "../../domain/schedule/status";
 import { nurseScheduleView } from "../../domain/schedule/visibility";
-import { compareIsoDates, type IsoDate } from "../../domain/shared/dates";
+import {
+  addDays,
+  compareIsoDates,
+  type IsoDate,
+} from "../../domain/shared/dates";
 import {
   createPeriod,
   isInPeriod,
@@ -31,6 +35,9 @@ import {
 } from "../../infrastructure/repositories/schedules";
 import { listVersionAssignments } from "../../infrastructure/repositories/versions";
 import type { AppContext } from "../use-case";
+import type { DbExecutor } from "../../infrastructure/db/database";
+
+type ReadContext = Pick<AppContext, "actor"> & { readonly db: DbExecutor };
 
 /**
  * The nurse's own shifts for one calendar period (a Jalali month on the
@@ -75,6 +82,8 @@ export interface MyShiftDay {
 }
 
 export interface MyShiftSchedule {
+  readonly departmentId: string;
+  readonly timezone: string;
   readonly id: string;
   readonly label: string;
   readonly departmentName: string;
@@ -110,7 +119,7 @@ const overlaps = (a: DatePeriod, b: DatePeriod) =>
 
 /** What the actor sees of one schedule (D11), limited to `period`. */
 async function visibleSchedule(
-  ctx: AppContext,
+  ctx: ReadContext,
   schedule: RosteredScheduleRecord,
   period: DatePeriod,
   today: IsoDate,
@@ -169,6 +178,8 @@ async function visibleSchedule(
   return {
     summary: {
       id: schedule.id,
+      departmentId: schedule.departmentId,
+      timezone: schedule.timezone,
       label: schedule.label,
       departmentName: schedule.departmentName,
       period: schedule.period,
@@ -184,11 +195,18 @@ async function visibleSchedule(
   };
 }
 
-export async function getMyShiftsMonth(
-  ctx: AppContext,
-  input: { period: DatePeriod; today: IsoDate },
-): Promise<MyShiftsMonth> {
-  const period = unwrap(createPeriod(input.period.start, input.period.end));
+/** Shared own-assignment loader: each relevant schedule is read once for all ranges. */
+export async function getMyShiftsPeriods(
+  ctx: ReadContext,
+  input: {
+    periods: readonly DatePeriod[];
+    today: IsoDate;
+    includeUpcoming?: boolean;
+  },
+): Promise<{ periods: MyShiftsMonth[]; upcoming: DatedMyShift[] }> {
+  const periods = input.periods.map((p) =>
+    unwrap(createPeriod(p.start, p.end)),
+  );
   const { db, actor } = ctx;
   const rostered = (await listSchedulesOnRoster(db, actor.userId)).filter(
     (s) =>
@@ -199,30 +217,84 @@ export async function getMyShiftsMonth(
   );
   const shown = await Promise.all(
     rostered
-      .filter((s) => overlaps(s.period, period))
-      .map((s) => visibleSchedule(ctx, s, period, input.today)),
+      .filter(
+        (s) =>
+          periods.some((p) => overlaps(s.period, p)) ||
+          (input.includeUpcoming && s.period.end >= addDays(input.today, -1)),
+      )
+      .map((s) => visibleSchedule(ctx, s, s.period, input.today)),
   );
 
-  const days = periodDays(period).map((date): MyShiftDay => {
-    const entries = shown.flatMap((s) => s.entries.get(date) ?? []);
-    return {
-      date,
-      entries,
-      changePending:
-        entries.length === 0 &&
-        shown.some((s) => s.summary.pendingChangeDates.includes(date)),
-    };
-  });
-  const visible = days.flatMap((d) => d.entries);
-
   return {
-    period,
-    onAnyRoster: rostered.length > 0,
-    schedules: shown.map((s) => s.summary),
-    days,
-    totals: {
-      ...summarizeShifts(visible.map((e) => e.shift)),
-      includesUnapproved: visible.some((e) => e.publication !== "OFFICIAL"),
-    },
+    periods: periods.map((period): MyShiftsMonth => {
+      const relevant = shown.filter((s) => overlaps(s.summary.period, period));
+      const days = periodDays(period).map((date): MyShiftDay => {
+        const entries = relevant.flatMap((s) => s.entries.get(date) ?? []);
+        return {
+          date,
+          entries,
+          changePending:
+            entries.length === 0 &&
+            relevant.some((s) => s.summary.pendingChangeDates.includes(date)),
+        };
+      });
+      const visible = days.flatMap((d) => d.entries);
+      return {
+        period,
+        onAnyRoster: rostered.length > 0,
+        schedules: relevant.map(({ summary, entries }) => {
+          const inRange = [...entries]
+            .filter(([date]) => isInPeriod(period, date))
+            .map(([, e]) => e);
+          return {
+            ...summary,
+            shiftCount: inRange.filter((e) => isWorkingShift(e.shift)).length,
+            offCount: inRange.filter((e) => e.shift === "OFF").length,
+            leaveCount: inRange.filter((e) => isLeave(e.shift)).length,
+            pendingChangeDates: summary.pendingChangeDates.filter((d) =>
+              isInPeriod(period, d),
+            ),
+          };
+        }),
+        days,
+        totals: {
+          ...summarizeShifts(visible.map((e) => e.shift)),
+          includesUnapproved: visible.some((e) => e.publication !== "OFFICIAL"),
+        },
+      };
+    }),
+    upcoming: input.includeUpcoming
+      ? shown.flatMap(({ summary, entries }) =>
+          [...entries]
+            .filter(
+              ([date, entry]) =>
+                date >= addDays(input.today, -1) && isWorkingShift(entry.shift),
+            )
+            .map(([date, entry]) => ({
+              date,
+              entry,
+              departmentName: summary.departmentName,
+              timezone: summary.timezone,
+            })),
+        )
+      : [],
   };
+}
+
+export interface DatedMyShift {
+  readonly date: IsoDate;
+  readonly entry: MyShiftEntry;
+  readonly departmentName: string;
+  readonly timezone: string;
+}
+
+export async function getMyShiftsMonth(
+  ctx: ReadContext,
+  input: { period: DatePeriod; today: IsoDate },
+): Promise<MyShiftsMonth> {
+  const data = await getMyShiftsPeriods(ctx, {
+    periods: [input.period],
+    today: input.today,
+  });
+  return data.periods[0]!;
 }

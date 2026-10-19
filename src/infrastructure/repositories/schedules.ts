@@ -185,6 +185,7 @@ export async function findScheduleDepartmentCode(
 
 export interface RosteredScheduleRecord extends ScheduleRecord {
   readonly departmentName: string;
+  readonly timezone: string;
 }
 
 /** Every schedule the user is on the roster of, with its department name, oldest period first. */
@@ -193,7 +194,11 @@ export async function listSchedulesOnRoster(
   userId: string,
 ): Promise<RosteredScheduleRecord[]> {
   const rows = await db
-    .select({ ...columns, departmentName: departments.name })
+    .select({
+      ...columns,
+      departmentName: departments.name,
+      timezone: departments.timezone,
+    })
     .from(schedules)
     .innerJoin(
       scheduleRoster,
@@ -204,9 +209,10 @@ export async function listSchedulesOnRoster(
     )
     .innerJoin(departments, eq(departments.id, schedules.departmentId))
     .orderBy(asc(schedules.periodStart), asc(schedules.id));
-  return rows.map(({ departmentName, ...row }) => ({
+  return rows.map(({ departmentName, timezone, ...row }) => ({
     ...toRecord(row),
     departmentName,
+    timezone,
   }));
 }
 

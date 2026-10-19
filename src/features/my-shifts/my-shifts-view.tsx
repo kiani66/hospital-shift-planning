@@ -160,7 +160,7 @@ function MonthHeader({
  * first and loudest: what the state means for the nurse in a sentence,
  * with its icon (never color alone). A revision in progress adds its days.
  */
-function PublicationNotices({
+export function PublicationNotices({
   schedules,
 }: {
   schedules: readonly MyShiftSchedule[];
@@ -244,7 +244,7 @@ function PublicationNotices({
 }
 
 /** The month's figures: shifts, scheduled hours, nights, and each shift type's count. */
-function MonthTotals({
+export function MonthTotals({
   totals,
   shiftLabels,
 }: {
@@ -375,7 +375,7 @@ function noShiftText(date: IsoDate, schedules: readonly MyShiftSchedule[]) {
  * duration, how settled it is, a pending revision change, and the way to ask
  * for a change (the requests page) while one may be made.
  */
-function DayDetail({
+export function DayDetail({
   day,
   today,
   schedules,
@@ -536,6 +536,8 @@ export function MyShiftsView({
   selected,
   dayHref,
   shiftLabels,
+  coworkers,
+  summary,
 }: {
   month: MyShiftsMonth;
   label: string;
@@ -547,6 +549,8 @@ export function MyShiftsView({
   dayHref: (date: IsoDate) => Route;
   /** Descriptive shift names (`shift_types.label`), loaded once by the page. */
   shiftLabels: ShiftLabels;
+  coworkers?: ReactNode;
+  summary?: ReactNode;
 }) {
   const selectedDay = selected
     ? (month.days.find((d) => d.date === selected) ?? null)
@@ -573,7 +577,6 @@ export function MyShiftsView({
     body = (
       <>
         <PublicationNotices schedules={month.schedules} />
-        <MonthTotals totals={month.totals} shiftLabels={shiftLabels} />
         {month.totals.shiftCount +
           month.totals.offCount +
           month.totals.leaveCount ===
@@ -599,6 +602,10 @@ export function MyShiftsView({
             shiftLabels={shiftLabels}
           />
         </div>
+        {coworkers}
+        {summary ?? (
+          <MonthTotals totals={month.totals} shiftLabels={shiftLabels} />
+        )}
         <ShiftAgenda days={month.days} shiftLabels={shiftLabels} />
       </>
     );
@@ -613,6 +620,12 @@ export function MyShiftsView({
         schedules={month.schedules}
       />
       {body}
+      {month.schedules.length === 0 && (
+        <>
+          {coworkers}
+          {summary}
+        </>
+      )}
       {/* Shift hours are useful in every state, even a month without a schedule. */}
       <section aria-labelledby="legend-title" className="flex flex-col gap-2">
         <h2 id="legend-title" className="text-sm font-semibold">
