@@ -2553,3 +2553,56 @@ application query, source loading, authorization policy, UI, export, printing,
 persistence, migration or Production operation.
 
 Enforced in `domain/staffing-report/summary.ts` and its adjacent unit tests.
+
+### D130 · Stage 2: authorized staffing snapshot and shared report source loading
+
+`getStaffingReport` requires `department.manage` for one department and selected
+schedule. Malformed, unknown, foreign and denied identities all raise the same
+`NotFoundError("Schedule")`; invalid sources are validated only after authorization.
+No Supervisor-only, Hospital Admin-only or `staffingRules.view` access is added.
+
+The small `withScheduleReportSnapshot` helper is shared with `getWorkforceReport`:
+it owns authorization, approved-pointer validation, DEFAULT / REVISION_DRAFT
+resolution, complete historical roster/selected-assignment loading and shared
+schedule/provenance metadata within one read-only REPEATABLE READ transaction.
+Report-specific reads use that same transaction. Workforce results and existing
+error reasons stay D127's contract; it gains no staffing calculation or pin reads.
+
+For staffing, DEFAULT with `currentVersionId` uses only that immutable version's
+assignments **and its staffing rule pin**, regardless of current status or working
+pin. DEFAULT without it uses working assignments and the current schedule pin,
+explicitly provisional. REVISION_DRAFT requires a valid approved baseline and a
+same-schedule OPEN revision with valid in-period scope (empty is allowed), in
+REVISING, SUBMITTED or RETURNED; it reports the entire working period and current
+pin, explicitly unapproved. Approved gaps stay UNDECIDED. Mixing approved decisions
+with current rules would misstate the approved schedule whenever a revision changes
+its pin, so assignments and rules always resolve together; neither missing data
+nor an inconsistent pin causes a fallback.
+
+Staffing-specific code validates the selected pin's immutable PUBLISHED/RETIRED
+version, applicable hospital/department scope, publication metadata and complete
+content, and validates a draft's approved baseline pin when different. Pins are
+never reselected from live effective dates. Inconsistent approval, draft or pin
+data raises `ConflictError` with respectively `STAFFING_APPROVED_VERSION_INCONSISTENT`,
+`STAFFING_REVISION_DRAFT_UNAVAILABLE` or `STAFFING_REPORT_RULE_SET_INCONSISTENT`.
+Invalid recorded decisions retain domain `ValidationError` behavior.
+
+The query delegates rows, gaps, totals and nursing UNDECIDED counts to
+`summarizeStaffing` unchanged (D129). It retains all historical roster decisions,
+including inactive personnel, uses snapshot roles, and excludes Secretaries only
+from nursing coverage. Official holidays are loaded once through `AppContext.holidays`
+(otherwise `NO_HOLIDAY_DATA`) inside the report operation; Friday is not inferred.
+The existing calendar port is not historically versioned: database reads share one
+snapshot, while calendar data follows that port's supplied result.
+
+Rule-pin validation, holidays and calculations remain report-specific; a generic
+Reporting Engine/registry/DSL is deferred because these two reports only need a
+small common source boundary. Query count is independent of roster size; no
+neighbouring schedules, locks, writes, audit or notifications are loaded/emitted.
+No UI, route, navigation, schema, migration, scheduling/authorization rule, export,
+printing, Production or Neon change is introduced.
+
+Enforced in `application/reporting/schedule-snapshot.ts`,
+`application/staffing-report/queries.ts` and `application/workforce-report/queries.ts`;
+tested in `tests/integration/staffing-report.test.ts` and the existing workforce
+report regression tests.
