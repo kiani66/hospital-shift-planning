@@ -253,14 +253,18 @@ describe("intelligent copy plan", () => {
     input.adjacentAssignments = [a("2026-10-22", "N")];
     const p = planScheduleCopy(input);
     expect(p.assessment.blocking[0]!.rule).toBe("NIGHT_REST");
-    expect(p.canApply).toBe(false);
+    expect(p.canApply).toBe(true);
+    expect(p.correctableViolations).toHaveLength(1);
+    expect(p.blockingViolations).toEqual([]);
   });
-  it("assesses the batch together so copied shifts cannot introduce inter-row rest violations", () => {
+  it("assesses the batch together and reports correctable inter-row rest violations", () => {
     const input = base();
     input.source.assignments = [a("2026-09-23", "N"), a("2026-09-24", "M")];
-    expect(planScheduleCopy(input).assessment.blocking[0]!.rule).toBe(
-      "NIGHT_REST",
-    );
+    const p = planScheduleCopy(input);
+    expect(p.assessment.blocking[0]!.rule).toBe("NIGHT_REST");
+    expect(p.canApply).toBe(true);
+    expect(p.proposed).toHaveLength(2);
+    expect(p.correctableViolations).toHaveLength(1);
   });
   it("uses target staffing maxima, keeps shortages as context, and reports target coverage", () => {
     const input = base();
@@ -271,6 +275,8 @@ describe("intelligent copy plan", () => {
       rule: "STAFFING",
       status: "ABOVE_MAXIMUM",
     });
+    expect(p.canApply).toBe(true);
+    expect(p.correctableViolations[0]!.rule).toBe("STAFFING");
     expect(p.coverage[0]!.periods[0]!).toMatchObject({
       before: 0,
       after: 1,
@@ -341,4 +347,49 @@ it("preserves non-blocking soft-rule warnings supplied by the shared engine", ()
   expect(plan.assessment.warnings).toEqual([warning]);
   expect(plan.assessment.blocking).toEqual([]);
   expect(plan.canApply).toBe(true);
+});
+
+it("keeps structural duplicate/out-of-period findings blocking and rejects malformed shifts", () => {
+  const input = base();
+  input.source.assignments = [a("2026-09-23"), a("2026-09-23", "E")];
+  expect(() => planScheduleCopy(input)).toThrow(
+    "Invalid source assignment structure",
+  );
+  input.source.assignments = [a("2026-09-23")];
+  input.target.assignments = [
+    a("2026-10-23", "OFF", "n2"),
+    a("2026-10-23", "M", "n2"),
+  ];
+  const duplicate = planScheduleCopy(input);
+  expect(duplicate.canApply).toBe(false);
+  expect(duplicate.blockingViolations[0]!.rule).toBe("DUPLICATE_ASSIGNMENT");
+  input.source.assignments = [a("2026-09-23")];
+  input.target.assignments = [a("2026-10-22", "OFF")];
+  expect(planScheduleCopy(input).blockingViolations[0]!.rule).toBe(
+    "OUTSIDE_PERIOD",
+  );
+  expect(planScheduleCopy(input).canApply).toBe(false);
+  input.source.assignments = [a("2026-09-23", "BAD" as Assignment["shift"])];
+  expect(() => planScheduleCopy(input)).toThrow(
+    "Invalid source assignment code",
+  );
+});
+
+it("reports remaining staffing shortages without miscounting eligible assignments", () => {
+  const input = base();
+  input.staffingRequirements = new Map([
+    [targetPeriod.start, { M: { min: 3 } }],
+  ]);
+  const p = planScheduleCopy(input);
+  expect(p.correctableViolations).toContainEqual(
+    expect.objectContaining({
+      rule: "STAFFING",
+      status: "BELOW_MINIMUM",
+      covered: 1,
+    }),
+  );
+  expect(p.proposed).toHaveLength(1);
+  expect(p.canApply).toBe(true);
+  expect(p.skippedCount + p.conflictCount).toBe(0);
+  expect(input.target.status).toBe("PLANNING");
 });

@@ -251,7 +251,14 @@ export async function previewScheduleCopy(ctx: AppContext, raw: unknown) {
       };
       return {
         ...result.plan,
-        nurses: await listRoster(tx, input.sourceScheduleId),
+        nurses: [
+          ...new Map(
+            [
+              ...(await listRoster(tx, input.sourceScheduleId)),
+              ...result.roster,
+            ].map((nurse) => [nurse.userId, nurse]),
+          ).values(),
+        ],
         sourceLabel: result.source.label,
         targetLabel: result.target.label,
         payload: {
@@ -300,8 +307,8 @@ export const applyScheduleCopy = defineCommand({
       throw stale();
     const result = await buildPlan(uow.tx, uow, input, uow.now, uow.holidays);
     if (proof.fingerprint !== result.fingerprint) throw stale();
-    if (result.plan.assessment.blocked)
-      throw new RuleViolationError(result.plan.assessment.blocking);
+    if (result.plan.blockingViolations.length)
+      throw new RuleViolationError(result.plan.blockingViolations);
     if (!result.plan.canApply)
       throw new ValidationError(
         "No applicable assignments",
@@ -347,6 +354,8 @@ export const applyScheduleCopy = defineCommand({
       scheduleId: saved.id,
       revision: saved.revision,
       assignmentCount: changes.length,
+      excludedCount: result.plan.skippedCount + result.plan.conflictCount,
+      correctableViolations: result.plan.correctableViolations,
     };
   },
 });

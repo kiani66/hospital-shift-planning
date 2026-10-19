@@ -3,7 +3,7 @@
 import type { ScheduleCopyPreview } from "@/application/schedules/copy";
 import { Button } from "@/components/ui/button";
 import { toDiagnostic } from "@/domain/rules/diagnostic";
-import type { Violation } from "@/domain/rules/violation";
+import { violationKey, type Violation } from "@/domain/rules/violation";
 import type { DatePeriod } from "@/domain/shared/period";
 import {
   faNumber,
@@ -70,7 +70,9 @@ export function CopyPreviewPanel({
       <p role="status" className="text-sm font-semibold">
         {faNumber(preview.sourceAssignmentCount)} انتساب بررسی شد ·{" "}
         {faNumber(preview.proposed.length)}{" "}
-        {preview.assessment.blocked ? "پیشنهاد انتقال (مسدود)" : "قابل انتقال"}{" "}
+        {preview.blockingViolations.length > 0
+          ? "پیشنهاد انتقال (مسدود)"
+          : "قابل انتقال"}{" "}
         · {faNumber(preview.unchangedCount)} بدون تغییر ·{" "}
         {faNumber(preview.skippedCount)} صرف‌نظر ·{" "}
         {faNumber(preview.conflictCount)} تداخل
@@ -79,7 +81,36 @@ export function CopyPreviewPanel({
         {faNumber(preview.affectedNurseIds.length)} نفر ·{" "}
         {faNumber(preview.targetDates.length)} روز مقصد
       </p>
-      {!!preview.assessment.blocking.length && (
+      {!!preview.correctableViolations.length && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive p-3 text-sm"
+        >
+          <p className="font-semibold">
+            این برنامه دارای مغایرت با قوانین شیفت‌بندی است. می‌توانید برنامه را
+            کپی کنید و سپس مغایرت‌ها را برطرف کنید. تا زمان رفع خطاهای الزامی،
+            نهایی‌سازی برنامه مجاز نیست.
+          </p>
+          <p>
+            {faNumber(preview.correctableViolations.length)} مغایرت نیازمند
+            اصلاح
+          </p>
+          <ul className="max-h-64 list-inside list-disc overflow-y-auto">
+            {preview.correctableViolations.map((v) => (
+              <li key={violationKey(v)}>
+                {ruleTitle(v)}: {finding(v)}
+                {v.rule === "NIGHT_REST" &&
+                  v.nightDate < period.start &&
+                  " این شیفت شب در برنامه ماه قبل ثبت شده است."}
+                {v.rule === "NIGHT_REST" &&
+                  v.date > period.end &&
+                  " شیفت روز بعد در برنامه ماه بعد ثبت شده است."}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!preview.blockingViolations.length && (
         <div
           role="alert"
           className="rounded-md border border-destructive p-3 text-sm"
@@ -88,16 +119,16 @@ export function CopyPreviewPanel({
             نقض قانون؛ اعمال این مجموعه مجاز نیست.
           </p>
           <ul className="list-inside list-disc">
-            {preview.assessment.blocking.map((v, i) => (
-              <li key={i}>
+            {preview.blockingViolations.map((v) => (
+              <li key={violationKey(v)}>
                 {ruleTitle(v)}: {finding(v)}
               </li>
             ))}
           </ul>
         </div>
       )}
-      {preview.assessment.warnings.map((v, i) => (
-        <p key={i} className="text-sm">
+      {preview.assessment.warnings.map((v) => (
+        <p key={violationKey(v)} className="text-sm">
           هشدار: {ruleTitle(v)}: {finding(v)}
         </p>
       ))}
@@ -136,7 +167,7 @@ export function CopyPreviewPanel({
                   : "روز مقصد وجود ندارد"}
               </span>
               <span>
-                {r.outcome === "CREATE" && preview.assessment.blocked
+                {r.outcome === "CREATE" && preview.blockingViolations.length > 0
                   ? "پیشنهاد انتقال؛ مجموعه مسدود است"
                   : outcomes[r.outcome]}
               </span>
@@ -167,7 +198,7 @@ export function CopyPreviewPanel({
           ))}
         </ul>
       </details>
-      {!preview.canApply && !preview.assessment.blocked && (
+      {!preview.canApply && preview.blockingViolations.length === 0 && (
         <p className="text-sm">انتساب قابل انتقالی وجود ندارد.</p>
       )}
       <p className="text-xs text-muted-foreground">
@@ -175,7 +206,7 @@ export function CopyPreviewPanel({
         موارد منتقل‌نشده را می‌توانید با ویرایش عادی بررسی کنید.
       </p>
       <Button disabled={!preview.canApply || pending} onClick={onApply}>
-        {pending ? "در حال ثبت…" : "تأیید و اعمال کپی"}
+        {pending ? "در حال ثبت…" : "تأیید و کپی برنامه"}
       </Button>
     </section>
   );

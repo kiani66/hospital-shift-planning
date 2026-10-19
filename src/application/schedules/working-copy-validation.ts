@@ -102,7 +102,7 @@ export function validateUnder(
  * plus the neighbouring schedules' boundary days (night rest across schedule
  * boundaries, D7, D20), against the staffing bounds of the schedule's PINNED
  * rule-set version (D106), never "the latest rules". The monthly review
- * shows the result; FINALIZE and SUBMIT are gated by it (inside their
+ * shows the result; FINALIZE, SUBMIT and APPROVE are gated by it (inside their
  * transaction, after the row lock).
  */
 export async function validateWorkingCopy(
@@ -110,7 +110,7 @@ export async function validateWorkingCopy(
   schedule: ValidatedSchedule,
   holidays: HolidayCalendar = NO_HOLIDAY_DATA,
 ): Promise<WorkingCopyValidation> {
-  // Sequential: FINALIZE and SUBMIT call this on their transaction client.
+  // Sequential: lifecycle acceptance commands call this on their transaction client.
   const loaded = await loadWorkingCopy(db, schedule, holidays);
   const ruleSet = await loadRuleSet(db, schedule.staffingRuleSetVersionId);
   return { ...loaded, ruleSet, ...validateUnder(schedule, loaded, ruleSet) };

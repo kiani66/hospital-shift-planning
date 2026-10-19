@@ -1,4 +1,7 @@
 import { conflictsWithPreference } from "../preferences/preference-alignment";
+import { validateSchedule } from "../rules/validate-schedule";
+import { isBlocking, violationKey, type Violation } from "../rules/violation";
+import { ASSIGNMENT_CODES } from "../shifts/shift-type";
 import type { StaffingRequirement } from "../rules/staffing";
 import { staffingImpact } from "../rules/assess-change";
 import {
@@ -17,6 +20,17 @@ import {
   canEditAssignment,
   type AssignmentEditContext,
 } from "./assignment-editing";
+
+/** D132: explicit, fail-closed classification; a new rule needs a decision. */
+const COPY_RULE_DISPOSITION: Readonly<
+  Record<Violation["rule"], "CORRECTABLE" | "STRUCTURAL">
+> = {
+  NIGHT_REST: "CORRECTABLE",
+  STAFFING: "CORRECTABLE",
+  UNDECIDED: "CORRECTABLE",
+  DUPLICATE_ASSIGNMENT: "STRUCTURAL",
+  OUTSIDE_PERIOD: "STRUCTURAL",
+};
 
 /** Whole monthly periods map their ordinal day (Jalali day number at the UI boundary). */
 export type CopyScope =
@@ -121,6 +135,21 @@ export function planScheduleCopy(input: {
       "sourceScheduleId",
       "CROSS_DEPARTMENT_COPY",
     );
+  if (source.assignments.some((a) => !ASSIGNMENT_CODES.includes(a.shift)))
+    throw new ValidationError(
+      "Invalid source assignment code",
+      "sourceScheduleId",
+    );
+  if (
+    validateSchedule({
+      period: source.period,
+      assignments: source.assignments,
+    }).some((v) => COPY_RULE_DISPOSITION[v.rule] !== "CORRECTABLE")
+  )
+    throw new ValidationError(
+      "Invalid source assignment structure",
+      "sourceScheduleId",
+    );
   const mapping = mapCopyDates(input.scope, source.period, target.period);
   const selectedCells = selection.sourceCells
     ? new Set(
@@ -194,6 +223,32 @@ export function planScheduleCopy(input: {
     staffingRequirements: input.staffingRequirements,
     staffingNurseIds: input.staffingNurseIds,
   });
+  // Keep the ordinary change assessment intact. Copy alone allows the explicit
+  // planning rules above, while exposing the resulting schedule's hard findings.
+  // No roster here: completeness remains in the existing review/Finalize gate.
+  const violations = [
+    ...new Map(
+      [
+        ...validateSchedule({
+          period: target.period,
+          assignments: target.assignments,
+        }).filter((v) => COPY_RULE_DISPOSITION[v.rule] !== "CORRECTABLE"),
+        ...validateSchedule({
+          period: target.period,
+          assignments: after,
+          adjacentAssignments: input.adjacentAssignments,
+          staffingRequirements: input.staffingRequirements,
+          staffingNurseIds: input.staffingNurseIds,
+        }),
+      ].map((v) => [violationKey(v), v]),
+    ).values(),
+  ].filter(isBlocking);
+  const correctableViolations = violations.filter(
+    (v) => COPY_RULE_DISPOSITION[v.rule] === "CORRECTABLE",
+  );
+  const blockingViolations = violations.filter(
+    (v) => COPY_RULE_DISPOSITION[v.rule] !== "CORRECTABLE",
+  );
   const preferenceNotes = proposed
     .filter((a) =>
       conflictsWithPreference({
@@ -217,7 +272,9 @@ export function planScheduleCopy(input: {
     affectedNurseIds: [...new Set(proposed.map((a) => a.nurseId))].sort(),
     assessment,
     preferenceNotes,
-    canApply: proposed.length > 0 && !assessment.blocked,
+    correctableViolations,
+    blockingViolations,
+    canApply: proposed.length > 0 && blockingViolations.length === 0,
     coverage: staffingImpact({
       before: target.assignments,
       after,

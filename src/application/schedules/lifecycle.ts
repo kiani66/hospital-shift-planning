@@ -8,7 +8,11 @@ import {
   type ScheduleCommand,
 } from "../../domain/schedule/state-machine";
 import type { ScheduleStatus } from "../../domain/schedule/status";
-import { InvalidStateError } from "../../domain/shared/errors";
+import { hasBlockingViolations } from "../../domain/rules/violation";
+import {
+  InvalidStateError,
+  RuleViolationError,
+} from "../../domain/shared/errors";
 import { unwrap } from "../../domain/shared/result";
 import type { Assignment } from "../../domain/shifts/assignment";
 import { APP_TIMEZONE, todayIn } from "../../infrastructure/auth/actor";
@@ -324,6 +328,17 @@ export const approveSchedule = defineCommand({
     );
     const status = next(schedule, { type: "APPROVE" });
     const submission = await pendingSubmission(uow, schedule, "APPROVE");
+    // D132: adjacent planning copies/edits or holiday data can change after
+    // submission. Validate again before publishing an immutable version.
+    const { violations } = await validateWorkingCopy(
+      uow.tx,
+      schedule,
+      uow.holidays,
+    );
+    if (hasBlockingViolations(violations))
+      throw new RuleViolationError(
+        violations.filter((v) => v.severity === "error"),
+      );
     await decide(uow, submission, "APPROVED");
     const version = await createVersionFromWorkingCopy(uow.tx, {
       scheduleId: schedule.id,
