@@ -2470,3 +2470,45 @@ workflow, UI or Excel behavior is introduced.
 
 Enforced in `application/workforce-report/queries.ts`; tested in
 `tests/integration/workforce-report.test.ts`.
+
+### D128 · Stage 3: Head Nurse workforce report presentation
+
+`/departments/[code]/workforce` is a Persian RTL, read-only Head Nurse page,
+linked as «گزارش پرسنل» in the existing department navigation (including the
+phone drawer and More page). Both navigation metadata and report queries
+require `department.manage`; inaccessible departments/schedules and forged
+person identities use the existing indistinguishable not-found presentation.
+No policy or workflow changes are introduced.
+
+The default month is Tehran's current Jalali month. Previous/next links move
+one calendar month even when it has no schedules. Matching schedules share
+at least one day with the selected month. One match is selected automatically;
+multiple matches require an explicit schedule choice, never aggregation.
+An explicit foreign, unknown or nonmatching schedule is rejected without a
+fallback. The true inclusive schedule period and day count remain visible,
+including periods crossing month boundaries. Empty months, an unselected or
+unavailable report, an empty roster and a roster without recorded decisions
+have separate explanations.
+
+The page calls `getWorkforceReport` unchanged (D127). The selector's read-only
+repeatable-read navigation snapshot only advertises an approved pointer plus
+an OPEN revision with an in-period scope; the report query revalidates source
+eligibility and approved metadata in its own coherent snapshot. A concurrent
+approval/discard can invalidate an advertised draft; the page shows an
+unavailable report, never silently substitutes another source. Source labels
+say official, provisional or unapproved revision in text, with version/approval
+metadata where supplied. Incomplete data remains explicitly marked.
+
+Whole-roster summary cards sum only the selected report rows' integer totals,
+independent of search. Name/personnel-number search reuses identity normalization;
+numbers remain strings. Numeric sorting uses minutes, working shifts, Night or
+UNDECIDED counts, with name/identity ties. URL state preserves month, schedule,
+source, search and ordering through filtering and person detail. The detail is
+a native URL-backed dialog with focus containment, Escape/close and focus return;
+only the selected report's roster is addressable. Every actual-period date is
+shown, distinguishing missing UNDECIDED from explicit OFF and H. Shared Jalali
+formatters, shift tokens/labels and minute-preserving hours formatting are reused.
+Desktop/tablet tables scroll inside a keyboard-focusable region; phones use cards.
+
+Stage 3 adds no Excel report export, writes, persisted report data, migrations,
+scheduling rules or Production operations.

@@ -58,6 +58,7 @@ const departmentPath = (
   code: string,
   page:
     | "schedule"
+    | "workforce"
     | "requests"
     | "history"
     | "people"
@@ -145,6 +146,12 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       label: qualify("برنامه بخش", d.name),
       icon: "departmentSchedule",
     } satisfies NavItem,
+    workforce: {
+      id: `department-workforce-${d.code}`,
+      href: departmentPath(d.code, "workforce"),
+      label: qualify("گزارش پرسنل", d.name),
+      icon: "personnel",
+    } satisfies NavItem,
     requests: {
       id: `department-requests-${d.code}`,
       href: departmentPath(d.code, "requests"),
@@ -194,6 +201,7 @@ export function buildNavigation(ctx: Capabilities): Navigation {
       title: d.name,
       items: [
         departmentItems[i]!.schedule,
+        departmentItems[i]!.workforce,
         departmentItems[i]!.requests,
         departmentItems[i]!.history,
         departmentItems[i]!.coverageRules,
