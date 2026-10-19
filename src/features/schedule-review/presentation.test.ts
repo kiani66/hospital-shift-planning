@@ -14,6 +14,7 @@ import {
   DAY_FILTERS,
   DAY_STATE_PRESENTATION,
   RULE_TITLES,
+  ruleTitle,
   STAFFING_NOT_EVALUATED,
   dayCountsLabel,
   findingCategoryLabel,
@@ -250,6 +251,35 @@ describe("calendar filters (D104)", () => {
   });
 });
 
+describe("Persian rule titles", () => {
+  it.each([
+    ["NIGHT_REST", undefined, "عدم رعایت استراحت پس از شیفت شب"],
+    ["STAFFING", undefined, "مغایرت با حداقل یا حداکثر نیروی موردنیاز"],
+    ["STAFFING", "BELOW_MINIMUM", "کمبود نیروی موردنیاز"],
+    ["STAFFING", "ABOVE_MAXIMUM", "مازاد بر ظرفیت مجاز"],
+    ["STAFFING", "UNKNOWN_STATUS", "مغایرت با حداقل یا حداکثر نیروی موردنیاز"],
+    ["UNDECIDED", undefined, "تصمیم تعیین‌نشده"],
+    ["DUPLICATE_ASSIGNMENT", undefined, "بیش از یک شیفت در یک روز"],
+    ["OUTSIDE_PERIOD", undefined, "شیفت خارج از دوره برنامه"],
+    ["NIGHT_REST", "BELOW_MINIMUM", "عدم رعایت استراحت پس از شیفت شب"],
+  ])(
+    "localizes %s (%s) without changing identifiers",
+    (rule, status, title) => {
+      const input = Object.freeze({ rule, status });
+      expect(ruleTitle(input)).toBe(title);
+      expect(input).toEqual({ rule, status });
+      expect(title).not.toMatch(ISO_OR_CODE);
+    },
+  );
+
+  it.each(["UNKNOWN_RULE", "", "toString", "constructor", "__proto__"])(
+    "uses a Persian fallback for unknown code %j",
+    (rule) => {
+      expect(ruleTitle({ rule })).toBe("مغایرت با قوانین برنامه‌ریزی");
+    },
+  );
+});
+
 describe("finding messages", () => {
   it("explains a night-rest violation in plain Persian", () => {
     const f = finding({
@@ -389,7 +419,11 @@ describe("coverage findings (D102: both bounds are hard rules)", () => {
       ]);
       expect(findingResolution(f, SHIFT_LABELS)).toContain(fix);
       expect(findingResolution(f, SHIFT_LABELS)).not.toMatch(ISO_OR_CODE);
-      expect(RULE_TITLES.STAFFING).toBe("پوشش نفرات");
+      expect(ruleTitle(f.violation)).toBe(
+        status === "BELOW_MINIMUM"
+          ? "کمبود نیروی موردنیاز"
+          : "مازاد بر ظرفیت مجاز",
+      );
     },
   );
 });

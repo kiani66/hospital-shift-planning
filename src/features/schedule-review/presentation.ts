@@ -254,12 +254,26 @@ export function matchesDayFilter(
 
 /** Short title of each rule, shown above its message. */
 export const RULE_TITLES: Readonly<Record<RuleCode, string>> = {
-  NIGHT_REST: "استراحت پس از شیفت شب",
+  NIGHT_REST: "عدم رعایت استراحت پس از شیفت شب",
   UNDECIDED: "تصمیم تعیین‌نشده",
   DUPLICATE_ASSIGNMENT: "بیش از یک شیفت در یک روز",
   OUTSIDE_PERIOD: "شیفت خارج از دوره برنامه",
-  STAFFING: "پوشش نفرات",
+  STAFFING: "مغایرت با حداقل یا حداکثر نیروی موردنیاز",
 };
+
+/** Presentation only: keep stable rule/status identifiers in the supplied data. */
+export function ruleTitle(violation: {
+  readonly rule: string;
+  readonly status?: string;
+}): string {
+  if (violation.rule === "STAFFING") {
+    if (violation.status === "BELOW_MINIMUM") return "کمبود نیروی موردنیاز";
+    if (violation.status === "ABOVE_MAXIMUM") return "مازاد بر ظرفیت مجاز";
+  }
+  return Object.hasOwn(RULE_TITLES, violation.rule)
+    ? RULE_TITLES[violation.rule as RuleCode]
+    : "مغایرت با قوانین برنامه‌ریزی";
+}
 
 const day = (date: IsoDate) => formatJalaliDate(date, { weekday: true });
 

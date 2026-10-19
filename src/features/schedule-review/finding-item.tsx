@@ -11,7 +11,7 @@ import { ShiftChip } from "@/features/shifts/shift-chip";
 import { cn } from "@/lib/utils";
 import {
   findingCategoryLabel,
-  RULE_TITLES,
+  ruleTitle,
   findingFacts,
   findingMessage,
   findingResolution,
@@ -97,7 +97,7 @@ export function FindingItem({
       )}
     >
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
-        {RULE_TITLES[finding.code]}
+        {ruleTitle(finding.violation)}
         <Badge
           tone={CATEGORY_TONE[validationCategory(finding.violation)]}
           size="sm"

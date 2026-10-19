@@ -87,6 +87,12 @@ test("full-month target hard-rule preview blocks Apply and Cancel leaves all dat
     "پیشنهاد انتقال (مسدود)",
   );
   await expect(dialog.getByRole("alert")).toContainText("روز بعد");
+  const alert = dialog.getByRole("alert");
+  await expect(alert).toContainText("عدم رعایت استراحت پس از شیفت شب");
+  await expect(alert).not.toContainText(
+    /NIGHT_REST|STAFFING|BELOW_MINIMUM|ABOVE_MAXIMUM|\d{4}-\d{2}-\d{2}/,
+  );
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(
     dialog.getByRole("button", { name: "تأیید و اعمال کپی" }),
   ).toBeDisabled();

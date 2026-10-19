@@ -32,7 +32,11 @@ Preview runs in a read-only repeatable-read transaction. It returns source count
 per-source-cell outcomes and stable reason codes, proposed assignments, unchanged
 and skipped counts, conflicts, affected personnel, target dates, rule assessments,
 preference notes and coverage before/after under the target's pinned rule version.
-Persian messages and shift labels are applied by the presentation layer.
+Persian messages and shift labels are applied by the presentation layer. Rule
+labels are centralized and shared with other validation panels. Staffing labels
+distinguish shortage from excess when its status is available, with a generic
+staffing label otherwise. Unknown rule titles use a Persian fallback; internal
+rule codes in API results and audit remain unchanged.
 
 Target roster membership is mandatory; nobody is added automatically. Active
 accounts and effective department membership on each target date are also checked.
