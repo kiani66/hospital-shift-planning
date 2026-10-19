@@ -86,8 +86,9 @@ export function CopyPreviewPanel({
       </p>
       {skippedLeaveCount > 0 && (
         <p className="text-sm text-muted-foreground">
-          {faNumber(skippedLeaveCount)} مرخصی مبدأ کپی نمی‌شود. این سلول‌ها
-          در صورت خالی بودن مقصد، تعیین‌نشده باقی می‌مانند؛ استراحت خودکار ثبت نمی‌شود.
+          {faNumber(skippedLeaveCount)} مرخصی مبدأ کپی نمی‌شود. این سلول‌ها در
+          صورت خالی بودن مقصد، تعیین‌نشده باقی می‌مانند؛ استراحت خودکار ثبت
+          نمی‌شود.
         </p>
       )}
       {!!preview.correctableViolations.length && (

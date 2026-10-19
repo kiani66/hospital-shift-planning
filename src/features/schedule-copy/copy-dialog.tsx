@@ -281,8 +281,8 @@ export function ScheduleCopyDialog({
                 <legend className="px-1 text-sm">پرسنل مبدأ</legend>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm">
                   <span>
-                    {faNumber(nurseIds.length)} نفر از {faNumber(roster.length)} نفر
-                    انتخاب شده‌اند
+                    {faNumber(nurseIds.length)} نفر از {faNumber(roster.length)}{" "}
+                    نفر انتخاب شده‌اند
                   </span>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -316,22 +316,22 @@ export function ScheduleCopyDialog({
                 <div className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
                   {roster.map((n) => (
                     <label
-                    key={n.userId}
-                    className="flex min-h-11 items-center gap-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={nurseIds.includes(n.userId)}
-                      onChange={(e) => {
-                        setNurseIds((ids) =>
-                          e.target.checked
-                            ? [...ids, n.userId]
-                            : ids.filter((id) => id !== n.userId),
-                        );
-                        resetPreview();
-                      }}
-                    />
-                    {n.displayName}
+                      key={n.userId}
+                      className="flex min-h-11 items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={nurseIds.includes(n.userId)}
+                        onChange={(e) => {
+                          setNurseIds((ids) =>
+                            e.target.checked
+                              ? [...ids, n.userId]
+                              : ids.filter((id) => id !== n.userId),
+                          );
+                          resetPreview();
+                        }}
+                      />
+                      {n.displayName}
                     </label>
                   ))}
                 </div>
