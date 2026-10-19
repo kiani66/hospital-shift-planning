@@ -47,6 +47,9 @@ test("nurse landing defaults to seven days from today; range navigation and view
       .getByRole("link", { name: "ماهانه" }),
   ).toHaveAttribute("aria-current", "page");
   await page.getByRole("link", { name: "هفتگی", exact: true }).click();
+  // A click does not wait for the Next.js navigation to commit in WebKit.
+  await expect(page).toHaveURL(`/my-shifts?view=week&start=${today}`);
+  await expect(calendar.getByRole("link")).toHaveCount(7);
   await page.goto("/my-shifts");
   await expect(calendar.getByRole("link")).toHaveCount(7);
 });
