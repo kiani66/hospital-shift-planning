@@ -91,6 +91,13 @@ test("full-month correctable rule preview allows Apply and Cancel leaves all dat
   );
   await expect(dialog.getByRole("status")).toContainText("قابل انتقال");
   await expect(dialog.getByRole("alert")).toContainText("روز بعد");
+  const alert = dialog.getByRole("alert");
+  await expect(alert).toContainText("عدم رعایت استراحت پس از شیفت شب");
+  await expect(alert).toContainText("کمبود نیروی موردنیاز");
+  await expect(alert).not.toContainText(
+    /NIGHT_REST|STAFFING|BELOW_MINIMUM|ABOVE_MAXIMUM|\d{4}-\d{2}-\d{2}/,
+  );
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(
     dialog.getByRole("button", { name: "تأیید و کپی برنامه" }),
   ).toBeEnabled();
@@ -151,7 +158,10 @@ test("Mehr-to-Aban copy keeps cross-month rest visible until corrected before Fi
   await dialog.getByLabel("برنامه مبدأ").selectOption(d.mehrId);
   await dialog.getByRole("button", { name: "پیش‌نمایش کپی" }).click();
   const alert = dialog.getByRole("alert");
-  await expect(alert).toContainText("NIGHT_REST");
+  await expect(alert).toContainText("عدم رعایت استراحت پس از شیفت شب");
+  await expect(alert).not.toContainText(
+    /NIGHT_REST|STAFFING|BELOW_MINIMUM|ABOVE_MAXIMUM/,
+  );
   await expect(alert).toContainText("ماه قبل");
   await expect(alert).toContainText(d.nurseNames[0]!);
   await expect(

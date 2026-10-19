@@ -19,7 +19,7 @@ import { toDiagnostic } from "@/domain/rules/diagnostic";
 import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ROLE_LABELS } from "@/features/schedule/labels";
 import {
-  RULE_TITLES,
+  ruleTitle,
   findingMessage,
 } from "@/features/schedule-review/presentation";
 import { commitExcelAction, previewExcelAction } from "./actions";
@@ -163,7 +163,7 @@ function Preview({
           <ul className="space-y-2 text-sm">
             {preview.violations.map((v, i) => (
               <li key={i}>
-                {formatJalaliDate(v.date)} — {RULE_TITLES[v.rule]}:{" "}
+                {formatJalaliDate(v.date)} — {ruleTitle(v)}:{" "}
                 {findingMessage(
                   {
                     ...toDiagnostic(v, {

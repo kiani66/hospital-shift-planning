@@ -8,7 +8,7 @@ import { faNumber, formatJalaliDate } from "@/features/calendar/jalali";
 import { CHANGE_MODE_LABELS } from "@/features/change-requests/presentation";
 import {
   findingMessage,
-  RULE_TITLES,
+  ruleTitle,
   staffingStatusLabel,
 } from "@/features/schedule-review/presentation";
 import type { ShiftLabels } from "@/features/shifts/catalog";
@@ -29,7 +29,7 @@ function FindingList({
       <ul className="flex list-disc flex-col gap-1 ps-5">
         {findings.map((f, i) => (
           <li key={`${f.code}-${i}`}>
-            <span className="font-medium">{RULE_TITLES[f.code]}: </span>
+            <span className="font-medium">{ruleTitle(f.violation)}: </span>
             {findingMessage(f, shiftLabels)}
           </li>
         ))}

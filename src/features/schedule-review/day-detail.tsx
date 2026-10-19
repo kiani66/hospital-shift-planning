@@ -49,7 +49,7 @@ import {
   CATEGORY_LABELS,
   DAY_STATE_PRESENTATION,
   HOLIDAY_LABEL,
-  RULE_TITLES,
+  ruleTitle,
   STAFFING_NOT_EVALUATED,
   findingMessage,
   staffingBoundsLabel,
@@ -239,7 +239,7 @@ function RelatedFindings({
             key={`${f.code}-${f.nurseIds.join()}-${i}`}
             className="flex flex-col gap-1 text-sm"
           >
-            <span className="font-medium">{RULE_TITLES[f.code]}</span>
+            <span className="font-medium">{ruleTitle(f.violation)}</span>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <FindingNurses finding={f} linked={linked} />
               <FindingFacts finding={f} shiftLabels={shiftLabels} />

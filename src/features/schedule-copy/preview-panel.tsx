@@ -10,7 +10,10 @@ import {
   formatJalaliDate,
   formatJalaliRange,
 } from "@/features/calendar/jalali";
-import { findingMessage } from "@/features/schedule-review/presentation";
+import {
+  findingMessage,
+  ruleTitle,
+} from "@/features/schedule-review/presentation";
 import type { ShiftLabels } from "@/features/shifts/catalog";
 import { ShiftChip } from "@/features/shifts/shift-chip";
 import { COPY_REASONS } from "./presentation";
@@ -95,7 +98,7 @@ export function CopyPreviewPanel({
           <ul className="max-h-64 list-inside list-disc overflow-y-auto">
             {preview.correctableViolations.map((v) => (
               <li key={violationKey(v)}>
-                <code dir="ltr">{v.rule}</code>: {finding(v)}
+                {ruleTitle(v)}: {finding(v)}
                 {v.rule === "NIGHT_REST" &&
                   v.nightDate < period.start &&
                   " این شیفت شب در برنامه ماه قبل ثبت شده است."}
@@ -117,14 +120,16 @@ export function CopyPreviewPanel({
           </p>
           <ul className="list-inside list-disc">
             {preview.blockingViolations.map((v) => (
-              <li key={violationKey(v)}>{finding(v)}</li>
+              <li key={violationKey(v)}>
+                {ruleTitle(v)}: {finding(v)}
+              </li>
             ))}
           </ul>
         </div>
       )}
       {preview.assessment.warnings.map((v) => (
         <p key={violationKey(v)} className="text-sm">
-          هشدار: {finding(v)}
+          هشدار: {ruleTitle(v)}: {finding(v)}
         </p>
       ))}
       {!!preview.preferenceNotes.length && (
