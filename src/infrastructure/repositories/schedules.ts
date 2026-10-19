@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 
 import { addDays } from "../../domain/shared/dates";
 import type { DatePeriod } from "../../domain/shared/period";
@@ -107,7 +107,9 @@ export async function lockScheduleForUpdate(
  * Assignment writers acquire the target and both boundary schedules BEFORE
  * reading cells, in one global UUID order. Period/department are immutable;
  * the preliminary read is only for discovering this set, never for validation.
- * At most three rows (non-overlapping department periods) are locked.
+ * Normally at most three rows (non-overlapping department periods) are locked.
+ * Copy also includes its read-only source in this SAME ordered acquisition;
+ * acquiring it afterwards could deadlock with an opposite-direction copy.
  *
  * All working-copy writers use this protocol, including revision restoration.
  * A newly created neighbour starts empty; its first writer also locks this
@@ -117,6 +119,7 @@ export async function lockScheduleForUpdate(
 export async function lockScheduleForAssignmentUpdate(
   tx: Transaction,
   id: string,
+  readScheduleIds: readonly string[] = [],
 ): Promise<ScheduleRecord | null> {
   const target = await findScheduleById(tx, id);
   if (!target) return null;
@@ -127,7 +130,7 @@ export async function lockScheduleForAssignmentUpdate(
     .from(schedules)
     .where(
       or(
-        eq(schedules.id, id),
+        inArray(schedules.id, [id, ...readScheduleIds]),
         and(
           eq(schedules.departmentId, target.departmentId),
           or(

@@ -1,3 +1,4 @@
+import { ScheduleCopyDialog } from "@/features/schedule-copy/copy-dialog";
 import { FileInput } from "lucide-react";
 import { MissingShiftReference } from "@/features/shifts/missing-reference";
 import { MonthlyResetControl } from "@/features/reset/monthly-control";
@@ -333,6 +334,14 @@ export default async function DepartmentSchedulePage({
         }
         secondaryAction={
           <>
+            {review.month.editable && (
+              <ScheduleCopyDialog
+                key={selected.id}
+                target={selected}
+                sources={data.schedules}
+                shiftLabels={shiftLabels}
+              />
+            )}
             {(selected.status === "DRAFT" ||
               selected.status === "PLANNING") && (
               <MonthlyResetControl
