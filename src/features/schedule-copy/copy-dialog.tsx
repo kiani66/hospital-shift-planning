@@ -121,7 +121,7 @@ export function ScheduleCopyDialog({
           const conflictCount = reviewed.conflictCount;
           const otherSkippedCount = reviewed.skippedCount - leaveCount;
           setSuccess(
-            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد. ${faNumber(leaveCount)} مرخصی مبدأ کپی نشد؛ ${faNumber(conflictCount)} تداخل و ${faNumber(otherSkippedCount)} مورد دیگر منتقل نشد.${result.data.correctableViolations.length ? ` ${faNumber(result.data.correctableViolations.length)} مغایرت نیازمند اصلاح است.` : ""} کپی به معنی آمادگی برنامه برای نهایی‌سازی نیست.`,
+            `${faNumber(result.data.assignmentCount)} انتساب کپی شد. ${faNumber(result.data.excludedCount)} مورد منتقل نشد. ${faNumber(leaveCount)} مرخصی مبدأ کپی نشد؛ ${faNumber(conflictCount)} تداخل و ${faNumber(otherSkippedCount)} مورد دیگر منتقل نشد.${result.data.correctableViolations.length ? ` برخی مغایرت‌ها نیاز به اصلاح دارند. (${faNumber(result.data.correctableViolations.length)} مغایرت)` : ""} کپی به معنی آمادگی برنامه برای نهایی‌سازی نیست.`,
           );
           setOpen(false);
         } else setMessage(copyErrorMessage(result.error));
