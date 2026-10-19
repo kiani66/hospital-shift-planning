@@ -39,6 +39,9 @@ export function CopyPreviewPanel({
   onApply: () => void;
 }) {
   const names = new Map(preview.nurses.map((n) => [n.userId, n.displayName]));
+  const skippedLeaveCount = preview.rows.filter(
+    (row) => row.reason === "SOURCE_LEAVE_NOT_COPIED",
+  ).length;
   function finding(v: Violation) {
     const diagnostic = toDiagnostic(v, period);
     return findingMessage(
@@ -81,6 +84,12 @@ export function CopyPreviewPanel({
         {faNumber(preview.affectedNurseIds.length)} نفر ·{" "}
         {faNumber(preview.targetDates.length)} روز مقصد
       </p>
+      {skippedLeaveCount > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {faNumber(skippedLeaveCount)} مرخصی مبدأ کپی نمی‌شود. این سلول‌ها
+          در صورت خالی بودن مقصد، تعیین‌نشده باقی می‌مانند؛ استراحت خودکار ثبت نمی‌شود.
+        </p>
+      )}
       {!!preview.correctableViolations.length && (
         <div
           role="alert"
