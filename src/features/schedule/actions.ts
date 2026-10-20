@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import type { ActionError } from "@/application/result";
+import { applyMonthlyPreferences } from "@/application/schedules/apply-preferences";
+import { preferenceSkipMessage } from "./preference-application";
 import { createSchedule } from "@/application/schedules/create-schedule";
 import { addRosterMembers } from "@/application/schedules/roster";
 import {
@@ -28,6 +30,7 @@ import {
 export interface ScheduleFormState {
   readonly status: "idle" | "success" | "error";
   readonly message?: string;
+  readonly details?: readonly string[];
   /** Changes on every submission so the UI can react to repeated results. */
   readonly at?: number;
 }
@@ -101,6 +104,31 @@ const scheduleForm = z.object({
   scheduleId: z.uuid(),
   expectedRevision: z.coerce.number().int().nonnegative(),
 });
+
+export async function applyMonthlyPreferencesAction(
+  _previous: ScheduleFormState,
+  formData: FormData,
+): Promise<ScheduleFormState> {
+  const form = scheduleForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return failure(COMMON.VALIDATION);
+  const result = await applyMonthlyPreferences(
+    await requireRequestContext(),
+    form.data,
+  );
+  if (result.ok || result.error.code === "CONFLICT") refresh();
+  if (!result.ok) return failure(COMMON[result.error.code]);
+  const { assignmentCount, unchangedCount, preferenceCount, skipped } =
+    result.data;
+  return {
+    status: "success",
+    message:
+      preferenceCount === 0
+        ? "ترجیحی برای این ماه ثبت نشده است؛ ۰ تصمیم اعمال شد."
+        : `${faNumber(assignmentCount)} تصمیم بر اساس ترجیحات اعمال شد؛ ${faNumber(unchangedCount)} تصمیم از قبل یکسان بود و ${faNumber(skipped.length)} مورد اعمال نشد. برنامه هنوز نهایی نشده است؛ پوشش و مغایرت‌ها را بررسی کنید.`,
+    details: skipped.map(preferenceSkipMessage),
+    at: Date.now(),
+  };
+}
 
 async function runScheduleCommand(
   formData: FormData,

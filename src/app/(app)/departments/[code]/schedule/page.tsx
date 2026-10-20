@@ -38,6 +38,7 @@ import { RosterAdditions } from "@/features/schedule/roster-additions";
 import { ScheduleHeader } from "@/features/schedule/schedule-header";
 import {
   EmptySchedules,
+  ApplyMonthlyPreferencesAction,
   PreferenceAction,
   ScheduleDetails,
 } from "@/features/schedule/schedule-overview";
@@ -328,6 +329,10 @@ export default async function DepartmentSchedulePage({
         primaryAction={
           <>
             {lifecycleAction}
+            <ApplyMonthlyPreferencesAction
+              key={selected.id}
+              schedule={{ ...selected, revision: review.month.revision }}
+            />
             <PreferenceAction schedule={selected} />
           </>
         }

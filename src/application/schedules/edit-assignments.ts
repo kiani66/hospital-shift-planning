@@ -157,7 +157,10 @@ export async function writeAssignmentChanges(
   uow: UnitOfWork,
   schedule: ScheduleRecord,
   changes: readonly AssignmentChange[],
-  options: { readonly insertOnly?: boolean } = {},
+  options: {
+    readonly insertOnly?: boolean;
+    readonly source?: "MANUAL" | "PREFILL";
+  } = {},
 ): Promise<void> {
   for (const change of changes) {
     if (options.insertOnly && (change.before !== null || change.after === null))
@@ -175,6 +178,7 @@ export async function writeAssignmentChanges(
       await (options.insertOnly ? insertAssignment : setAssignment)(uow.tx, {
         ...cell,
         shift: change.after,
+        source: options.source,
         updatedBy: uow.actor.userId,
       });
     await uow.audit({

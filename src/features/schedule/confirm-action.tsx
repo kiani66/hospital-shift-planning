@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Send,
   Undo2,
+  ListChecks,
 } from "lucide-react";
 import { useActionState, useId, useState, type ReactNode } from "react";
 
@@ -27,6 +28,7 @@ const ICONS = {
   approve: BadgeCheck,
   return: MessageSquareWarning,
   discard: RotateCcw,
+  preferences: ListChecks,
 } as const;
 
 /** Directional icons (send, undo) point the other way in RTL. */
@@ -120,6 +122,23 @@ export function ConfirmScheduleAction({
         <p role="alert" className="text-sm leading-relaxed text-destructive">
           {state.message}
         </p>
+      )}
+      {state.status === "success" && (
+        <div role="status" className="basis-full text-sm leading-relaxed">
+          <p>{state.message}</p>
+          {!!state.details?.length && (
+            <details className="mt-2 max-w-prose rounded-md border p-3">
+              <summary className="min-h-11 cursor-pointer font-medium">
+                موارد اعمال‌نشده
+              </summary>
+              <ul className="max-h-60 list-inside list-disc overflow-y-auto">
+                {state.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
 
       <Dialog

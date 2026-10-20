@@ -2,6 +2,18 @@
 
 Approved decisions that shape the implementation. Update this file when a decision changes.
 
+## Preference-based scheduling Stage 1
+
+Head Nurses may apply the entire current preference set directly to a DRAFT or
+PLANNING working schedule, independently of window state. PLANNING was explicitly
+approved during Stage 1 implementation so normal preference collection is usable.
+Current preference cells replace
+existing working/rest decisions; explicit H leave and cells without a preference
+are preserved. There is no incremental cursor, proposal or new workflow state.
+Draft-correctable findings retain their existing severity and acceptance gates.
+Exact replacement, eligibility, locking and workflow scope are documented in
+[monthly-preferences.md](monthly-preferences.md).
+
 ## Feature 19 Stage 1 — Protected official calendar reference data
 
 The official Iranian calendar, every version/day and its independent audit history are
