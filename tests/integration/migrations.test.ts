@@ -24,6 +24,10 @@ const EXPECTED_TABLES = [
   "login_throttles",
   "notifications",
   "nurse_preferences",
+  "official_calendar_audit_events",
+  "official_calendar_version_days",
+  "official_calendar_versions",
+  "official_calendar_years",
   "preference_window_dates",
   "preference_window_nurses",
   "preference_windows",
@@ -240,7 +244,8 @@ describe("migrations (applied to an empty database by the global setup)", () => 
     // 0015 secretary role, 0016 department Excel export templates,
     // 0017 Excel template statistics mapping, 0018 Excel template calendar mapping,
     // 0019 Excel template department foreign key (idempotent; 0016 stays as first applied)
-    expect(before).toBe(20);
+    // 0020 protected official-calendar reference infrastructure.
+    expect(before).toBe(21);
     await runMigrations(url);
     expect(await count()).toBe(before);
   });
