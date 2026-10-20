@@ -15,10 +15,36 @@ import {
 } from "@/features/calendar/jalali";
 import { APP_TIMEZONE } from "@/infrastructure/auth/actor";
 
-import { closePreferencesAction, openPreferencesAction } from "./actions";
+import {
+  applyMonthlyPreferencesAction,
+  closePreferencesAction,
+  openPreferencesAction,
+} from "./actions";
 import { ConfirmScheduleAction } from "./confirm-action";
 import { ROLE_LABELS, SCHEDULE_STATUS_LABELS } from "./labels";
 import { PreferenceStateBadge } from "./status-badges";
+
+export function ApplyMonthlyPreferencesAction({
+  schedule,
+}: {
+  schedule: { id: string; revision: number; status: string };
+}) {
+  if (schedule.status !== "DRAFT" && schedule.status !== "PLANNING")
+    return null;
+  return (
+    <ConfirmScheduleAction
+      action={applyMonthlyPreferencesAction}
+      scheduleId={schedule.id}
+      revision={schedule.revision}
+      icon="preferences"
+      secondary
+      triggerLabel="اعمال ترجیحات ماه"
+      title="اعمال ترجیحات ماه؟"
+      description="تمام ترجیحات فعلی این ماه دوباره اعمال می‌شوند و ممکن است تصمیم‌های قبلی شما در همان خانه‌ها جایگزین شوند. مرخصی (H) و خانه‌های بدون ترجیح حفظ می‌شوند. نتیجه ممکن است کمبود نیرو، پوشش اضافی یا مغایرت با قوانین داشته باشد؛ اعمال ترجیحات به معنی معتبر یا نهایی بودن برنامه نیست. پس از اعمال، برنامه را بررسی و ویرایش کنید."
+      confirmLabel="بله، ترجیحات اعمال شود"
+    />
+  );
+}
 
 /** A department with no schedule at all yet (the page's first state). */
 export function EmptySchedules({ action }: { action: ReactNode }) {

@@ -19,7 +19,8 @@
   gap: 0.5rem;
 }
 
-.primary > p {
+.primary > p,
+.primary > [role="status"] {
   grid-column: 1 / -1;
   inline-size: 0;
   min-inline-size: 100%;
@@ -115,10 +116,13 @@
   .secondary {
     position: relative;
     grid-column: 2;
+    align-self: stretch;
   }
 
   .panel[data-open="true"] {
     position: absolute;
+    /* The primary group can have several rows, including an application summary. */
+    inset-block-start: 100%;
     inset-inline-end: 0;
     z-index: 30;
     inline-size: 20rem;
