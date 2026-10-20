@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { SHIFT_TYPES } from "../../../domain/shifts/shift-type";
 import { hashPassword } from "../../auth/password";
 import type { Database, DbExecutor } from "../database";
+import { resetSchemaBlockers } from "../../repositories/reset-inventory";
 import { snapshotRosterFromMemberships } from "../../repositories/roster";
 import {
   auditEvents,
@@ -51,7 +52,7 @@ import {
 
 /**
  * Every application table except reference data (`shift_types`,
- * `change_reasons`). Staffing rule sets are cleared too and the Hospital
+ * `change_reasons`, protected official-calendar reference data). Staffing rule sets are cleared too and the Hospital
  * Default's legacy baseline (migration 0011) is restored by `resetData`. The legacy
  * Phase 2 change-request tables are cleared too: they reference schedules and
  * users, and this reset only ever runs on development, preview and test
@@ -112,11 +113,17 @@ export function assertSeedAllowed(
 }
 
 /**
- * Deletes all application data (keeps shift types and migration history) and
+ * Deletes operational/demo data (keeps shift types, protected calendar history and migrations) and
  * restores the Hospital Default's legacy baseline rule set exactly as
  * migration 0011 creates it, so new schedules can always be pinned.
  */
 export async function resetData(db: DbExecutor): Promise<void> {
+  // A new FK must never make TRUNCATE ... CASCADE reach protected reference history.
+  const blockers = await resetSchemaBlockers(db);
+  if (blockers.length)
+    throw new SeedNotAllowedError(
+      `Unsafe reset dependencies: ${blockers.join(", ")}`,
+    );
   const tables = sql.join(
     DATA_TABLES.map((t) => sql`${t}`),
     sql`, `,

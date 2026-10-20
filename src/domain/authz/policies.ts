@@ -54,6 +54,8 @@ export const HOSPITAL_ADMIN_ACTIONS = [
    * and retire, for the Hospital Default and every Department Override.
    */
   "staffingRules.manage",
+  /** Protected, system-wide official calendar import, correction and confirmation. */
+  "officialCalendar.manage",
 ] as const;
 export type HospitalAdminAction = (typeof HOSPITAL_ADMIN_ACTIONS)[number];
 

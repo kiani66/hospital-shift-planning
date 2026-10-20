@@ -197,7 +197,7 @@ describe("Excel template migrations across every published history", () => {
     await insertTemplate();
     await migrateToLatest();
     await expectLatestSchema();
-    expect(await appliedCount()).toBe(20);
+    expect(await appliedCount()).toBe(21);
   });
 
   it("database that applied only the rewritten 0016 upgrades", async () => {
@@ -213,7 +213,7 @@ describe("Excel template migrations across every published history", () => {
     expect(await appliedCount()).toBe(19);
     await migrateToLatest();
     await expectLatestSchema();
-    expect(await appliedCount()).toBe(20);
+    expect(await appliedCount()).toBe(21);
   });
 
   it("is idempotent once at the latest migration", async () => {
@@ -221,6 +221,6 @@ describe("Excel template migrations across every published history", () => {
     await insertTemplate();
     await migrateToLatest();
     await expectLatestSchema();
-    expect(await appliedCount()).toBe(20);
+    expect(await appliedCount()).toBe(21);
   });
 });

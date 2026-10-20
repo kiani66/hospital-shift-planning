@@ -27,7 +27,8 @@ Read `docs/decisions.md` for the approved product and technical decisions.
 
 - Store and pass dates as ISO `YYYY-MM-DD` strings (`date` columns). Never use JS `Date` for
   calendar days.
-- Schedules are `period_start` / `period_end`; never store Jalali year/month as data.
+- Schedules are `period_start` / `period_end`; never store Jalali year/month as schedule data.
+  Official-calendar reference lineages alone have a Jalali year identifier (Feature 19); days stay ISO.
 - Solar Hijri (Jalali) conversion and formatting happen only in the presentation/calendar adapter.
   The week starts on Saturday.
 

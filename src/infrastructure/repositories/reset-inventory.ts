@@ -45,35 +45,48 @@ const definitions = [
   schema.staffingRuleSetRequirements,
   schema.staffingRuleSetDateExceptions,
 ];
-export const RESET_TABLES = definitions
-  .map((t) => {
-    const config = getTableConfig(t);
-    return {
-      name: config.name,
-      primaryKey:
-        config.primaryKeys[0]?.columns.map((c) =>
-          c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
-        ) ??
-        config.columns
-          .filter((c) => c.primary)
-          .map((c) =>
+/** Calendar tables are inspected for dependency drift but never enter a deletion plan. */
+const protectedCalendarDefinitions = [
+  schema.officialCalendarYears,
+  schema.officialCalendarVersions,
+  schema.officialCalendarVersionDays,
+  schema.officialCalendarAuditEvents,
+];
+const describeTables = (tables: Parameters<typeof getTableConfig>[0][]) =>
+  tables
+    .map((t) => {
+      const config = getTableConfig(t);
+      return {
+        name: config.name,
+        primaryKey:
+          config.primaryKeys[0]?.columns.map((c) =>
             c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
-          ),
-      foreignKeys: config.foreignKeys.map((f) => {
-        const ref = f.reference();
-        return {
-          columns: ref.columns.map((c) =>
-            c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
-          ),
-          target: getTableConfig(ref.foreignTable).name,
-          targetColumns: ref.foreignColumns.map((c) =>
-            c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
-          ),
-        };
-      }),
-    };
-  })
-  .sort((a, b) => a.name.localeCompare(b.name));
+          ) ??
+          config.columns
+            .filter((c) => c.primary)
+            .map((c) =>
+              c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
+            ),
+        foreignKeys: config.foreignKeys.map((f) => {
+          const ref = f.reference();
+          return {
+            columns: ref.columns.map((c) =>
+              c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
+            ),
+            target: getTableConfig(ref.foreignTable).name,
+            targetColumns: ref.foreignColumns.map((c) =>
+              c.name.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase()),
+            ),
+          };
+        }),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+export const RESET_TABLES = describeTables(definitions);
+export const PROTECTED_CALENDAR_TABLES = describeTables(
+  protectedCalendarDefinitions,
+);
+
 if (
   RESET_TABLES.some((t) => !wanted.has(t.name) || t.primaryKey.length === 0) ||
   [...wanted].some((n) => !RESET_TABLES.some((t) => t.name === n))
@@ -108,21 +121,29 @@ export async function readResetInventory(
 }
 /** Refuse schema drift or unregistered foreign-key dependents rather than widening cleanup. */
 export async function resetSchemaBlockers(db: DbExecutor): Promise<string[]> {
+  const tracked = [...RESET_TABLES, ...PROTECTED_CALENDAR_TABLES];
+  const protectedNames = new Set(PROTECTED_CALENDAR_TABLES.map((t) => t.name));
   const result =
-    await db.execute(sql`select c.conrelid::regclass::text as child, c.confrelid::regclass::text as parent,
+    await db.execute(sql`select c.confdeltype as "deleteAction", c.conrelid::regclass::text as child, c.confrelid::regclass::text as parent,
     array(select a.attname::text from unnest(c.conkey) with ordinality k(attnum,n) join pg_attribute a on a.attrelid=c.conrelid and a.attnum=k.attnum order by k.n) as columns,
     array(select a.attname::text from unnest(c.confkey) with ordinality k(attnum,n) join pg_attribute a on a.attrelid=c.confrelid and a.attnum=k.attnum order by k.n) as "targetColumns"
-   from pg_constraint c where c.contype='f' and c.confrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname in (${sql.join(
-     RESET_TABLES.map((t) => sql`${t.name}`),
+   from pg_constraint c where c.contype='f' and (c.conrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname in (${sql.join(
+     PROTECTED_CALENDAR_TABLES.map((t) => sql`${t.name}`),
      sql`, `,
-   )}))`);
+   )})) or c.confrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname in (${sql.join(
+     tracked.map((t) => sql`${t.name}`),
+     sql`, `,
+   )})))`);
   const blockers: string[] = [];
   for (const r of result.rows) {
     const child = String(r.child).replace(/^public\./, ""),
       parent = String(r.parent).replace(/^public\./, "");
-    const table = RESET_TABLES.find((t) => t.name === child);
+    const table = tracked.find((t) => t.name === child);
     if (
       !table ||
+      (protectedNames.has(child) &&
+        (!protectedNames.has(parent) ||
+          !["a", "r"].includes(String(r.deleteAction)))) ||
       !table.foreignKeys.some(
         (f) =>
           f.target === parent &&

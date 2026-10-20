@@ -2,6 +2,27 @@
 
 Approved decisions that shape the implementation. Update this file when a decision changes.
 
+## Feature 19 Stage 1 — Protected official calendar reference data
+
+The official Iranian calendar, every version/day and its independent audit history are
+protected global reference data. Demo seeding and Full Reset must preserve them. Initialization
+is additive and idempotent. Attribution uses immutable actor snapshots, without user-account
+foreign keys, so users are never retained solely for calendar authorship/confirmation.
+Reset FK guards register protected relationships and fail closed on unsafe schema drift.
+
+Calendar reference lineages use a Jalali year identifier as a narrow exception to D4;
+schedule periods and calendar days remain ISO dates. The existing ICU conversion is shared
+through a calendar adapter, preserving the existing feature API. The initial ten-year
+horizon is derived from the current Tehran day at runtime (current year −5 through +4).
+No generated calendar is confirmed and no official holiday dates are invented.
+
+System-level Hospital Admins import, correct and confirm. Correction appends a new snapshot;
+the current confirmed version stays active until the replacement is confirmed. Confirmation,
+active-pointer switching and independent audit append are atomic under the year lock.
+Source evidence and provisional/unknown status remain explicit. Stage 1 does not connect
+staffing/Excel consumers, enforce FINALIZE, add notifications, operational overrides or UI.
+Schema and later-stage contracts: `docs/official-calendar-stage-1.md`.
+
 | #   | Decision               | Detail                                                                                                                                                                                                                                              |
 | --- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | Stack                  | Next.js 16 (App Router), TypeScript, Tailwind CSS v4, shadcn/ui, PostgreSQL, Drizzle ORM, Auth.js, Zod, React Hook Form, Vitest, Playwright. Single full-stack repository.                                                                          |
