@@ -12,11 +12,11 @@ const row = (page: Page) =>
     .filter({ hasText: "پرستار آزمایشی ۱" });
 const controls = (page: Page) =>
   dialog(page).getByRole("group", { name: "شیفت پرستار آزمایشی ۱" });
-const saved = async (page: Page) => {
+const saved = async (page: Page, message: RegExp) => {
+  // The previous edit's success can still be visible when a new click returns.
+  // Wait for this edit's result before checking that its transition settled.
+  await expect(dialog(page).getByRole("status").first()).toContainText(message);
   await expect(dialog(page).locator("[data-pending]")).toHaveCount(0);
-  await expect(dialog(page).getByRole("status").first()).toContainText(
-    /ثبت شد|پاک شد/,
-  );
 };
 async function confirm(page: Page, trigger: string, label: string) {
   await header(page).getByRole("button", { name: trigger }).click();
@@ -49,29 +49,36 @@ test("explicit OFF, pending clear, independent staffing and publication through 
   await controls(page)
     .getByRole("button", { name: "استراحت (OFF)", exact: true })
     .click();
-  await saved(page);
+  await saved(page, /استراحت \(OFF\) برای «پرستار آزمایشی ۱».*ثبت شد/);
   await expect(row(page)).toContainText("مطابق ترجیح");
   expect((await abanState(d, d.nurseEmail, "2026-10-27")).shift).toBe("OFF");
   await controls(page)
     .getByRole("button", { name: "تعیین‌نشده", exact: true })
     .click();
-  await saved(page);
+  await saved(page, /شیفت «پرستار آزمایشی ۱».*پاک شد/);
   await expect(row(page)).toContainText("در انتظار تخصیص");
   expect((await abanState(d, d.nurseEmail, "2026-10-27")).shift).toBeNull();
   await controls(page)
     .getByRole("button", { name: "استراحت (OFF)", exact: true })
     .focus();
   await page.keyboard.press("o");
-  await saved(page);
+  await saved(page, /استراحت \(OFF\) برای «پرستار آزمایشی ۱».*ثبت شد/);
   await expect(row(page)).toContainText("مطابق ترجیح");
   // Fully decided day, but OFF cannot cover Morning or Evening.
   const head = dialog(page).getByRole("group", {
     name: "شیفت سرپرستار آزمایشی",
   });
-  await head
-    .getByRole("button", { name: "استراحت (OFF)", exact: true })
-    .click();
-  await saved(page);
+  const headOff = head.getByRole("button", {
+    name: "استراحت (OFF)",
+    exact: true,
+  });
+  // WebKit can scroll this dialog on focus between mouse-down and mouse-up.
+  // Complete the keyboard-to-pointer focus handoff before clicking.
+  await headOff.focus();
+  await expect(headOff).toBeFocused();
+  await headOff.click();
+  await saved(page, /استراحت \(OFF\) برای «سرپرستار آزمایشی».*ثبت شد/);
+  expect((await abanState(d, d.headEmail, "2026-10-27")).shift).toBe("OFF");
   await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toContainText(
     "۲ مشکل پوشش (۲ کمبود نیرو)",
@@ -87,7 +94,7 @@ test("explicit OFF, pending clear, independent staffing and publication through 
     .getByRole("group", { name: "شیفت سرپرستار آزمایشی" })
     .getByRole("button", { name: "طولانی (ME)" })
     .click();
-  await saved(page);
+  await saved(page, /طولانی \(ME\) برای «سرپرستار آزمایشی».*ثبت شد/);
   await closeDay(page, url);
   await expect(page.locator("#workflow-blockers")).toHaveCount(0);
   await confirm(page, "نهایی‌سازی برنامه", "بله، نهایی شود");
@@ -137,13 +144,13 @@ for (const width of [360, 390]) {
     await expect(off).toHaveText("OFF");
     expect((await off.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await off.click();
-    await saved(page);
+    await saved(page, /استراحت \(OFF\) برای «پرستار آزمایشی ۱».*ثبت شد/);
     await expect(off).toHaveAttribute("aria-pressed", "true");
     await expect(row(page)).toContainText("مطابق ترجیح");
     await controls(page)
       .getByRole("button", { name: "تعیین‌نشده", exact: true })
       .click();
-    await saved(page);
+    await saved(page, /شیفت «پرستار آزمایشی ۱».*پاک شد/);
     await expect(row(page)).toContainText("در انتظار تخصیص");
     expect(
       await page.evaluate(

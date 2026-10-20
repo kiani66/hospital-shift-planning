@@ -215,6 +215,11 @@ test("NICU workbook: printed personnel numbers, calendar, Fridays, statistics an
   await expect(
     page.getByRole("status").filter({ hasText: "قالب بارگذاری و فعال شد" }),
   ).toBeVisible();
+  // Save feedback precedes router.refresh(); wait for the settings transition.
+  await expect(form.getByRole("button", { name: "بررسی قالب" })).toBeEnabled();
+  await expect(
+    page.getByRole("link", { name: "دانلود قالب فعلی" }),
+  ).toBeVisible();
 
   // 2. Export the partially planned Mehr 1405 DRAFT.
   await page.goto(`/departments/${code}/schedule?month=1405-07`);

@@ -2675,3 +2675,20 @@ findings visible after refresh. Head Nurses correct assignments with existing ed
 controls and reuse existing problematic-day views. No global rule relaxation,
 manual-editor change, schema/migration, persisted validation cache, automatic repair,
 Phase 9 integration or Production operation is introduced.
+
+### D133 · Nurse home dashboard
+
+`/my-shifts` remains the Nurse landing route and defaults to today plus six days.
+A lightweight client preference remembers week/month view, while existing explicit
+month links retain their behavior. The existing month calendar, Jalali adapter,
+day details, publication notices and shift totals are reused.
+
+The dashboard adds next/active-shift selection by actual department-timezone
+intervals, selected-shift coworkers, upcoming explicit OFF dates, and three recent
+requests. Own-shift visibility remains D11/D98. Coworker names use the same
+current-membership, roster and FINALIZED-or-later boundary as request partners;
+approved revisions always use the approved snapshot. No department-grid access,
+personnel details, request state, scheduling rule or schema change is introduced.
+Reads share one read-only repeatable-read snapshot and accept no nurse identity
+from the client. Figures describe scheduled work only. See
+`docs/nurse-dashboard.md` for implementation, limitations and verification.
