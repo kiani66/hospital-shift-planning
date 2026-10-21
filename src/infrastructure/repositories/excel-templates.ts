@@ -11,6 +11,7 @@ import {
   scheduleRoster,
   users,
 } from "../db/schema";
+import { sortPeople } from "./personnel-order";
 
 /** A template without its bytes (what lists and pages show). */
 export interface ExcelTemplateRecord {
@@ -297,7 +298,7 @@ export async function listExportRoster(
   db: DbExecutor,
   scheduleId: string,
 ): Promise<ExportRosterEntry[]> {
-  return db
+  const rows = await db
     .select({
       userId: scheduleRoster.userId,
       displayName: users.displayName,
@@ -307,8 +308,8 @@ export async function listExportRoster(
     })
     .from(scheduleRoster)
     .innerJoin(users, eq(users.id, scheduleRoster.userId))
-    .where(eq(scheduleRoster.scheduleId, scheduleId))
-    .orderBy(asc(users.displayName), asc(scheduleRoster.userId));
+    .where(eq(scheduleRoster.scheduleId, scheduleId));
+  return sortPeople(rows, (r) => r.userId);
 }
 
 /** A department member as a template row can be assigned to (D124). */
@@ -330,7 +331,7 @@ export async function listTemplatePersonnel(
   departmentId: string,
   onDate: IsoDate,
 ): Promise<TemplatePersonnelEntry[]> {
-  return db
+  const rows = await db
     .selectDistinctOn([users.displayName, users.id], {
       userId: users.id,
       displayName: users.displayName,
@@ -354,4 +355,6 @@ export async function listTemplatePersonnel(
       asc(users.id),
       asc(departmentMemberships.startedOn),
     );
+  // `distinct on` fixes the SQL order above; the personnel policy applies after.
+  return sortPeople(rows, (r) => r.userId);
 }

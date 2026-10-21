@@ -28,7 +28,14 @@ let passwordHash: Promise<string> | undefined;
  * or each other (tests run in parallel, per browser project, and on retry).
  * Uses the same database as the server under test (DATABASE_URL).
  */
-export async function provisionDepartment(): Promise<E2eDepartment> {
+export async function provisionDepartment(
+  options: {
+    /** Personnel numbers by person key (head, nurse1…nurse3); others get none. */
+    personnelNumbers?: Partial<
+      Record<"head" | "nurse1" | "nurse2" | "nurse3", string>
+    >;
+  } = {},
+): Promise<E2eDepartment> {
   loadEnvConfig(process.cwd());
   if (!process.env.DATABASE_URL && existsSync(".env.local"))
     process.loadEnvFile(".env.local");
@@ -53,6 +60,7 @@ export async function provisionDepartment(): Promise<E2eDepartment> {
       for (const [key, role, displayName] of people) {
         const user = await createUser(tx, {
           email: `${key}.${suffix}@e2e.invalid`,
+          personnelNumber: options.personnelNumbers?.[key] ?? null,
           displayName,
           passwordHash: await passwordHash,
         });

@@ -121,6 +121,62 @@ describe("workforce report presentation", () => {
       }).map((r) => r.userId),
     ).toEqual([first, second]);
   });
+  describe("personnel-number order", () => {
+    const person = (
+      id: string,
+      personnelNumber: string | null,
+      name = "الف",
+    ) => ({
+      ...report.rows[0]!,
+      userId: id,
+      displayName: name,
+      personnelNumber,
+    });
+    const rows = [
+      person("a", "100"),
+      person("b", null, "ب"),
+      person("c", "۹"),
+      person("d", "10"),
+      person("e", "2"),
+      person("f", "10", "ا"),
+    ];
+    const ids = (r: readonly { userId: string }[]) => r.map((x) => x.userId);
+
+    it("is the default sort", () => {
+      expect(state.sort).toBe("personnelNumber");
+      expect(ids(visibleWorkforceRows(rows, state))).toEqual([
+        "e",
+        "c",
+        "f",
+        "d",
+        "a",
+        "b",
+      ]);
+    });
+    it("keeps missing numbers last when descending", () => {
+      expect(
+        ids(visibleWorkforceRows(rows, { ...state, order: "desc" })),
+      ).toEqual(["a", "d", "f", "c", "e", "b"]);
+    });
+    it("keeps the order when the list is searched", () => {
+      expect(ids(visibleWorkforceRows(rows, { ...state, q: "10" }))).toEqual([
+        "f",
+        "d",
+        "a",
+      ]);
+    });
+    it("is the tie-break of every other sort", () => {
+      const tied = rows.map((r) => ({ ...r, scheduledMinutes: 0 }));
+      expect(
+        ids(visibleWorkforceRows(tied, { ...state, sort: "minutes" })),
+      ).toEqual(["e", "c", "f", "d", "a", "b"]);
+    });
+    it("remains available as a name sort", () => {
+      expect(
+        ids(visibleWorkforceRows(rows, { ...state, sort: "name" }))[0],
+      ).toBe("f");
+    });
+  });
   it("keeps cards on the whole roster while filtering the table", () => {
     expect(workforceTotals(report.rows)).toEqual({
       people: 2,

@@ -12,10 +12,12 @@ import {
   users,
 } from "../db/schema";
 import { activeOn } from "./memberships";
+import { sortPeople } from "./personnel-order";
 
 export interface RosterEntry {
   readonly userId: string;
   readonly displayName: string;
+  readonly personnelNumber: string | null;
   /** Department role at snapshot time. */
   readonly role: MembershipRole;
 }
@@ -99,16 +101,17 @@ export async function listRoster(
   db: DbExecutor,
   scheduleId: string,
 ): Promise<RosterEntry[]> {
-  return db
+  const rows = await db
     .select({
       userId: scheduleRoster.userId,
       displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
       role: scheduleRoster.role,
     })
     .from(scheduleRoster)
     .innerJoin(users, eq(users.id, scheduleRoster.userId))
-    .where(eq(scheduleRoster.scheduleId, scheduleId))
-    .orderBy(asc(users.displayName));
+    .where(eq(scheduleRoster.scheduleId, scheduleId));
+  return sortPeople(rows, (r) => r.userId);
 }
 
 export async function isOnRoster(
@@ -188,18 +191,19 @@ export async function listSchedulingRoster(
   db: DbExecutor,
   scheduleId: string,
 ): Promise<RosterEntry[]> {
-  return db
+  const rows = await db
     .select({
       userId: scheduleRoster.userId,
       displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
       role: scheduleRoster.role,
     })
     .from(scheduleRoster)
     .innerJoin(users, eq(users.id, scheduleRoster.userId))
     .where(
       and(eq(scheduleRoster.scheduleId, scheduleId), eq(users.isActive, true)),
-    )
-    .orderBy(asc(users.displayName));
+    );
+  return sortPeople(rows, (r) => r.userId);
 }
 
 export interface RosterMemberOnDate {
@@ -212,7 +216,7 @@ export interface RosterMemberOnDate {
 /**
  * Roster entries of the schedule that are schedulable on `onDate`: an active
  * account and a membership of the schedule's own department in effect on
- * that day (D19, inclusive bounds). One query, ordered by user id,
+ * that day (D19, inclusive bounds). One query, in personnel-number order,
  * optionally restricted to some users. The roster itself is never changed;
  * members not on it are never included.
  */
@@ -226,7 +230,7 @@ export async function listRosterMembersOn(
   },
 ): Promise<RosterMemberOnDate[]> {
   const m = departmentMemberships;
-  return db
+  const rows = await db
     .select({
       userId: users.id,
       displayName: users.displayName,
@@ -246,8 +250,8 @@ export async function listRosterMembersOn(
         eq(users.isActive, true),
         sql`exists (select 1 from ${m} where ${m.userId} = ${users.id} and ${m.departmentId} = ${schedules.departmentId} and ${activeOn(m, input.onDate)} ${input.nursingOnly ? sql`and ${m.role} <> 'SECRETARY'` : sql``})`,
       ),
-    )
-    .orderBy(asc(users.id));
+    );
+  return sortPeople(rows, (r) => r.userId);
 }
 
 /**
@@ -349,7 +353,8 @@ export async function listRosterCandidateMemberships(
   const rows = input.lock
     ? await query.for("share", { of: [m, users] })
     : await query;
-  return rows.map((r) => ({
+  // Stable: a person's memberships keep their `startedOn` order.
+  return sortPeople(rows, (r) => r.userId).map((r) => ({
     ...r,
     startedOn: r.startedOn as IsoDate,
     endedOn: r.endedOn as IsoDate | null,

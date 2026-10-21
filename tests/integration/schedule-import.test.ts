@@ -146,6 +146,7 @@ describe("atomic monthly schedule import", () => {
     expect(await listRoster(db, result.scheduleId)).toContainEqual({
       userId: secretary.id,
       displayName: secretary.displayName,
+      personnelNumber: secretary.personnelNumber,
       role: "SECRETARY",
     });
     expect(

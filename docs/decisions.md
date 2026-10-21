@@ -2,6 +2,24 @@
 
 Approved decisions that shape the implementation. Update this file when a decision changes.
 
+## Personnel lists — default order by personnel number
+
+Every personnel list is ordered by `users.personnel_number` ascending unless the UI
+offers an explicit sort (the workforce report keeps its name/minutes/shift sorts and
+gains «شماره پرسنلی», now its default). One policy,
+`src/domain/identity/personnel-order.ts`: Persian/Arabic digits normalized; digit runs
+compare numerically (exact beyond `Number` precision); other text compares
+case-insensitively, so alphanumerics sort naturally; missing or blank numbers last;
+numerically equal values (`7`, `07`) shorter first; then display name (the model has
+one name field, not first/last) and the immutable user id. Stored and displayed values
+are never rewritten, so leading zeros survive. Repositories apply it to every roster,
+export-roster, template-personnel, department-people and candidate read; the paginated
+directory and user search use its SQL form (`personnelOrderBy`, digits-only column),
+pinned to the domain comparator by an integration test. Coverage-candidate ties and
+the daily-assistant and copy previews follow it; availability, staffing, rules,
+assignments, permissions and memberships are untouched. Excel exports keep the order
+of the uploaded template. No migration: sorting is computed, not stored.
+
 ## Daily preference assistant Stage 2 — acceptance service
 
 Head Nurses may preview and accept current daily preferences in DRAFT/PLANNING,

@@ -9,8 +9,14 @@ import {
   normalizeDisplayName,
   normalizeIdentifierText,
 } from "@/domain/identity/normalize";
+import {
+  comparePersonnelOrder,
+  normalizePersonnelNumberForOrder,
+  type PersonnelOrderKey,
+} from "@/domain/identity/personnel-order";
 
 export const SORT_LABELS = {
+  personnelNumber: "شماره پرسنلی",
   name: "نام",
   minutes: "ساعات برنامه‌ریزی‌شده",
   shifts: "تعداد شیفت کاری",
@@ -24,8 +30,15 @@ export const workforceParams = z.object({
   source: z.enum(["DEFAULT", "REVISION_DRAFT"]).default("DEFAULT"),
   q: z.string().max(200).default(""),
   sort: z
-    .enum(["name", "minutes", "shifts", "night", "undecided"])
-    .default("name"),
+    .enum([
+      "personnelNumber",
+      "name",
+      "minutes",
+      "shifts",
+      "night",
+      "undecided",
+    ])
+    .default("personnelNumber"),
   order: z.enum(["asc", "desc"]).default("asc"),
   person: z.uuid().optional(),
 });
@@ -65,6 +78,12 @@ const searchText = (value: string) =>
   normalizeDisplayName(normalizeIdentifierText(value)).toLocaleLowerCase("fa");
 const names = new Intl.Collator("fa");
 
+const orderKey = (row: WorkforceReportRow): PersonnelOrderKey => ({
+  personnelNumber: row.personnelNumber,
+  displayName: row.displayName,
+  id: row.userId,
+});
+
 /** Presentation only: numeric comparisons use the domain engine's integer totals. */
 export function visibleWorkforceRows(
   rows: readonly WorkforceReportRow[],
@@ -81,6 +100,7 @@ export function visibleWorkforceRows(
         return row.counts.N;
       case "undecided":
         return row.counts.UNDECIDED;
+      case "personnelNumber":
       case "name":
         return 0;
     }
@@ -92,17 +112,25 @@ export function visibleWorkforceRows(
       ),
     )
     .sort((a, b) => {
+      // Missing personnel numbers stay last in either direction.
+      if (state.sort === "personnelNumber") {
+        const x = normalizePersonnelNumberForOrder(a.personnelNumber);
+        const y = normalizePersonnelNumberForOrder(b.personnelNumber);
+        if ((x === null) !== (y === null)) return x === null ? 1 : -1;
+      }
       const comparison =
-        state.sort === "name"
-          ? names.compare(
-              normalizeDisplayName(a.displayName),
-              normalizeDisplayName(b.displayName),
-            )
-          : value(a) - value(b);
+        state.sort === "personnelNumber"
+          ? comparePersonnelOrder(orderKey(a), orderKey(b))
+          : state.sort === "name"
+            ? names.compare(
+                normalizeDisplayName(a.displayName),
+                normalizeDisplayName(b.displayName),
+              )
+            : value(a) - value(b);
+      // Every other sort breaks ties by the default personnel order.
       return (
         comparison * (state.order === "desc" ? -1 : 1) ||
-        names.compare(a.displayName, b.displayName) ||
-        a.userId.localeCompare(b.userId)
+        comparePersonnelOrder(orderKey(a), orderKey(b))
       );
     });
 }

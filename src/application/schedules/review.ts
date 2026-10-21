@@ -142,6 +142,8 @@ export interface ReviewNurse {
 
 /** A rostered nurse on the selected day, with their shift (null: undecided). */
 export interface ReviewRosterNurse extends ReviewNurse {
+  /** Shown to the editor only (null for read-only viewers); lists are ordered by it. */
+  readonly personnelNumber: string | null;
   readonly shift: AssignmentCode | null;
 }
 
@@ -189,7 +191,7 @@ export interface DayReview {
   readonly off: readonly ReviewNurse[];
   /** Rostered nurses on recorded leave (H, D118): apart from OFF and undecided. */
   readonly leave: readonly ReviewNurse[];
-  /** Everyone on the roster (sorted by name), assigned or not: the editing list. */
+  /** Everyone on the roster (in personnel-number order), assigned or not: the editing list. */
   readonly roster: readonly ReviewRosterNurse[];
   /** Whether the actor may edit this day's assignments, and why not. */
   readonly edit: Decision<AssignmentEditDenial | "NOT_AUTHORIZED">;
@@ -384,6 +386,7 @@ export async function getScheduleReview(
       unassigned: roster.filter((r) => !shiftOf.has(r.userId)).map(nurse),
       roster: roster.map((r) => ({
         ...nurse(r),
+        personnelNumber: mayEdit ? r.personnelNumber : null,
         shift: shiftOf.get(r.userId) ?? null,
       })),
       edit: mayEdit

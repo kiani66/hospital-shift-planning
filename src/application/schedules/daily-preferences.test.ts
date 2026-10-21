@@ -106,7 +106,9 @@ beforeEach(() => {
   });
   vi.mocked(listRosterAssignments).mockResolvedValue({
     assignments: [],
-    roster: [{ userId: N, displayName: "پرستار", role: "NURSE" }],
+    roster: [
+      { userId: N, displayName: "پرستار", personnelNumber: "1", role: "NURSE" },
+    ],
   });
   vi.mocked(listPreferences).mockResolvedValue([
     { userId: N, date, value: "ME" },

@@ -8,6 +8,7 @@ import {
   supervisorAssignments,
   users,
 } from "../db/schema";
+import { personnelOrderBy, sortPeople, withoutNumber } from "./personnel-order";
 
 /** Account lifecycle, authority writes and first-admin bootstrap share this lock. */
 export async function lockHospitalAdministration(
@@ -236,7 +237,7 @@ export async function searchHospitalUsers(
         ilike(users.personnelNumber, `%${escaped}%`),
       ),
     )
-    .orderBy(asc(users.displayName), asc(users.id))
+    .orderBy(...personnelOrderBy(users))
     .limit(limit);
 }
 
@@ -245,11 +246,12 @@ export async function listDepartmentPersonnel(
   db: DbExecutor,
   departmentId: string,
 ) {
-  return db
+  const rows = await db
     .select({
       id: departmentMemberships.id,
       userId: users.id,
       displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
       isActive: users.isActive,
       role: departmentMemberships.role,
       startedOn: departmentMemberships.startedOn,
@@ -259,10 +261,12 @@ export async function listDepartmentPersonnel(
     .innerJoin(users, eq(users.id, departmentMemberships.userId))
     .where(eq(departmentMemberships.departmentId, departmentId))
     .orderBy(
-      asc(users.displayName),
+      asc(users.id),
       asc(departmentMemberships.startedOn),
       asc(departmentMemberships.id),
     );
+  // Stable: one person's memberships keep their `startedOn` order.
+  return sortPeople(rows, (r) => r.userId).map(withoutNumber);
 }
 
 /** Share locks serialize new scheduling eligibility with account deactivation. */

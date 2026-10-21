@@ -1,3 +1,4 @@
+import { sortByPersonnelOrder } from "../../domain/identity/personnel-order";
 import { unwrap } from "../../domain/shared/result";
 import {
   summarizeWorkforce,
@@ -54,15 +55,18 @@ export async function getWorkforceReport(
       return {
         ...summary,
         ...metadata,
-        rows: summary.rows.map((row) => {
-          const member = identities.get(row.userId)!;
-          return {
-            ...row,
-            displayName: member.displayName,
-            personnelNumber: member.personnelNumber,
-            isActive: member.isActive,
-          };
-        }),
+        rows: sortByPersonnelOrder(
+          summary.rows.map((row) => {
+            const member = identities.get(row.userId)!;
+            return {
+              ...row,
+              displayName: member.displayName,
+              personnelNumber: member.personnelNumber,
+              isActive: member.isActive,
+            };
+          }),
+          (row) => ({ ...row, id: row.userId }),
+        ),
       };
     },
   );

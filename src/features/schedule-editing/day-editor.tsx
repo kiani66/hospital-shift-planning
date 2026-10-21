@@ -75,6 +75,8 @@ import { editorKeyCommand, shortcutHelp } from "./shortcuts";
 export interface EditorNurse {
   readonly userId: string;
   readonly displayName: string;
+  /** Shown as stored (leading zeros kept); the server lists nurses in this order. */
+  readonly personnelNumber?: string | null;
   readonly role: MembershipRole;
   readonly shift: AssignmentCode | null;
   readonly preference: PreferenceValue | null;
@@ -609,7 +611,7 @@ export function DayEditor({
           </button>
         </div>
         <label className="relative md:ms-auto md:w-56 md:shrink-0">
-          <span className="sr-only">جستجوی نام</span>
+          <span className="sr-only">جستجوی نام یا شماره پرسنلی</span>
           <Search
             aria-hidden="true"
             className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -619,7 +621,7 @@ export function DayEditor({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="جستجوی نام…"
+            placeholder="جستجوی نام یا شماره پرسنلی…"
             className="min-h-9 w-full rounded-md border border-input bg-background ps-8 pe-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:text-base"
           />
         </label>
@@ -838,6 +840,15 @@ function NurseRow({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-1 basis-44 flex-col gap-0.5">
           <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            {nurse.personnelNumber && (
+              <bdi
+                dir="ltr"
+                title="شماره پرسنلی"
+                className="shrink-0 rounded bg-muted px-1.5 text-xs font-medium text-muted-foreground tabular-nums"
+              >
+                {nurse.personnelNumber}
+              </bdi>
+            )}
             <span
               title={nurse.displayName}
               className="max-w-full min-w-0 truncate text-sm font-medium"

@@ -39,6 +39,18 @@ export function CopyPreviewPanel({
   onApply: () => void;
 }) {
   const names = new Map(preview.nurses.map((n) => [n.userId, n.displayName]));
+  // `preview.nurses` is in personnel-number order; rows keep their day order.
+  const rank = new Map(preview.nurses.map((n, i) => [n.userId, i]));
+  const byDayThenPersonnel = <T extends { nurseId: string }>(
+    rows: readonly T[],
+    day: (row: T) => string,
+  ) =>
+    rows.toSorted(
+      (a, b) =>
+        day(a).localeCompare(day(b)) ||
+        (rank.get(a.nurseId) ?? Number.MAX_SAFE_INTEGER) -
+          (rank.get(b.nurseId) ?? Number.MAX_SAFE_INTEGER),
+    );
   const skippedLeaveCount = preview.rows.filter(
     (row) => row.reason === "SOURCE_LEAVE_NOT_COPIED",
   ).length;
@@ -149,12 +161,14 @@ export function CopyPreviewPanel({
             (توصیه‌ای)
           </summary>
           <ul className="list-inside list-disc text-sm">
-            {preview.preferenceNotes.map((n) => (
-              <li key={`${n.nurseId}:${n.date}`}>
-                {names.get(n.nurseId)} · {formatJalaliDate(n.date)}: انتساب با
-                ترجیح این روز متفاوت است؛ مانع ثبت نیست.
-              </li>
-            ))}
+            {byDayThenPersonnel(preview.preferenceNotes, (n) => n.date).map(
+              (n) => (
+                <li key={`${n.nurseId}:${n.date}`}>
+                  {names.get(n.nurseId)} · {formatJalaliDate(n.date)}: انتساب با
+                  ترجیح این روز متفاوت است؛ مانع ثبت نیست.
+                </li>
+              ),
+            )}
           </ul>
         </details>
       )}
@@ -163,7 +177,7 @@ export function CopyPreviewPanel({
           جزئیات انتساب‌ها و موارد منتقل‌نشده
         </summary>
         <ul className="max-h-64 divide-y overflow-y-auto text-sm">
-          {preview.rows.map((r) => (
+          {byDayThenPersonnel(preview.rows, (r) => r.sourceDate).map((r) => (
             <li
               key={`${r.nurseId}:${r.sourceDate}`}
               className="flex flex-wrap items-center gap-2 py-3"

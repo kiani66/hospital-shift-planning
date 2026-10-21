@@ -10,6 +10,7 @@ import {
   users,
 } from "../db/schema";
 import { activeOn } from "./memberships";
+import { personnelOrderBy, sortPeople, withoutNumber } from "./personnel-order";
 
 const accountColumns = {
   id: users.id,
@@ -95,7 +96,7 @@ export async function readPersonnelPage(
             : undefined,
       ),
     )
-    .orderBy(asc(users.displayName), asc(users.id))
+    .orderBy(...personnelOrderBy(users))
     .limit(26)
     .offset((input.page - 1) * 25);
 }
@@ -182,6 +183,7 @@ export async function readCurrentDepartmentPeople(
   const person = {
     userId: users.id,
     displayName: users.displayName,
+    personnelNumber: users.personnelNumber,
     isActive: users.isActive,
   };
   const [memberships, supervisors] = await Promise.all([
@@ -195,7 +197,7 @@ export async function readCurrentDepartmentPeople(
           activeOn(departmentMemberships, today),
         ),
       )
-      .orderBy(asc(users.displayName), asc(users.id)),
+      .orderBy(asc(users.id)),
     db
       .select(person)
       .from(supervisorAssignments)
@@ -206,7 +208,11 @@ export async function readCurrentDepartmentPeople(
           activeOn(supervisorAssignments, today),
         ),
       )
-      .orderBy(asc(users.displayName), asc(users.id)),
+      .orderBy(asc(users.id)),
   ]);
-  return { memberships, supervisors };
+  // The number orders the lists but is not part of this operational projection.
+  return {
+    memberships: sortPeople(memberships, (r) => r.userId).map(withoutNumber),
+    supervisors: sortPeople(supervisors, (r) => r.userId).map(withoutNumber),
+  };
 }
