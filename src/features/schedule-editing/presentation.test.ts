@@ -185,6 +185,40 @@ describe("editDenialLabel and preferenceFitLabel", () => {
   });
 });
 
+describe("filterEditorNurses: personnel-number search keeps the given order", () => {
+  const nurses = [
+    { userId: "a", displayName: "ب", personnelNumber: "2", preference: null },
+    {
+      userId: "b",
+      displayName: "الف",
+      personnelNumber: "10",
+      preference: null,
+    },
+    {
+      userId: "c",
+      displayName: "پ",
+      personnelNumber: "0100",
+      preference: null,
+    },
+    { userId: "d", displayName: "ت", personnelNumber: null, preference: null },
+  ];
+  const ids = (query: string) =>
+    filterEditorNurses(nurses, () => null, { ...NO_FILTERS, query }).map(
+      (n) => n.userId,
+    );
+
+  it("matches a number typed with Persian digits, leading zeros included", () => {
+    expect(ids("۱۰")).toEqual(["b", "c"]);
+    expect(ids("۰۱۰۰")).toEqual(["c"]);
+    expect(ids("2")).toEqual(["a"]);
+  });
+  it("still matches names, never reorders, and tolerates a missing number", () => {
+    expect(ids("الف")).toEqual(["b"]);
+    expect(ids("")).toEqual(["a", "b", "c", "d"]);
+    expect(ids("99")).toEqual([]);
+  });
+});
+
 describe("filterEditorNurses: filters combine and never change assignments", () => {
   const nurses = [
     { userId: "a", displayName: "سارا احمدی", preference: "N" as const },

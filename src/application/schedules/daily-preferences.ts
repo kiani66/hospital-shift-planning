@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { authorize } from "../../domain/authz/policies";
+import { sortByPersonnelOrder } from "../../domain/identity/personnel-order";
 import {
   planDailyPreferences,
   type DailyPreferenceGroupSkip,
@@ -55,6 +56,19 @@ import {
   loadScheduleForAssignmentUpdate,
   saveSchedule,
 } from "./load-for-update";
+
+/** Displayed nurse lists follow the shared personnel-number order (the planner's own order is by id). */
+function personnelOrderOf(
+  roster: readonly {
+    userId: string;
+    displayName: string;
+    personnelNumber: string | null;
+  }[],
+) {
+  const keys = new Map(roster.map((r) => [r.userId, { ...r, id: r.userId }]));
+  return <T extends { nurseId: string }>(rows: readonly T[]): T[] =>
+    sortByPersonnelOrder(rows, (r) => keys.get(r.nurseId) ?? { id: r.nurseId });
+}
 
 const uuidInput = z.uuid().transform((value) => value.toLowerCase());
 export const readDailyPreferencesInput = z.object({
@@ -233,6 +247,7 @@ export async function readDailyPreferences(ctx: AppContext, raw: unknown) {
       );
       const plan = planDailyPreferences(input);
       const names = new Map(input.roster.map((r) => [r.userId, r.displayName]));
+      const inOrder = personnelOrderOf(input.roster);
       const person = (row: DailyPreferenceSuggestion) => ({
         ...row,
         displayName: names.get(row.nurseId) ?? null,
@@ -249,9 +264,9 @@ export async function readDailyPreferences(ctx: AppContext, raw: unknown) {
         groups: plan.groups.map((g) => ({
           ...g,
           bulkEligible: !plan.skippedGroups.some((s) => s.shift === g.shift),
-          suggestions: g.suggestions.map(person),
+          suggestions: inOrder(g.suggestions).map(person),
         })),
-        offPreferences: plan.offPreferences.map(person),
+        offPreferences: inOrder(plan.offPreferences).map(person),
       };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
@@ -392,29 +407,32 @@ export const acceptDailyPreferences = defineCommand({
     });
     const created = new Set(proposed.map((a) => a.nurseId));
     const names = new Map(input.roster.map((r) => [r.userId, r.displayName]));
-    const outcomes = selectedRows.map((r): DailyPreferenceOutcome => {
-      let outcome: DailyPreferenceOutcome["outcome"] = "SKIPPED";
-      let reason: DailyPreferenceOutcome["reason"] = r.reason;
-      if (created.has(r.nurseId)) {
-        outcome = "CREATED";
-        reason = null;
-      } else if (r.status === "ALREADY_ASSIGNED") outcome = "ALREADY_ASSIGNED";
-      else if (r.status === "INFORMATIONAL") outcome = "INFORMATIONAL";
-      else if (reason === null)
-        reason = excluded.has(r.nurseId)
-          ? "SESSION_EXCLUDED"
-          : (plan.skippedGroups.find((s) => s.shift === r.preference)?.reason ??
-            null);
-      return {
-        nurseId: r.nurseId,
-        displayName: names.get(r.nurseId) ?? null,
-        preference: r.preference,
-        previousAssignment: r.currentAssignment,
-        outcome,
-        reason,
-        violations: r.assessment?.blocking ?? [],
-      };
-    });
+    const outcomes = personnelOrderOf(input.roster)(selectedRows).map(
+      (r): DailyPreferenceOutcome => {
+        let outcome: DailyPreferenceOutcome["outcome"] = "SKIPPED";
+        let reason: DailyPreferenceOutcome["reason"] = r.reason;
+        if (created.has(r.nurseId)) {
+          outcome = "CREATED";
+          reason = null;
+        } else if (r.status === "ALREADY_ASSIGNED")
+          outcome = "ALREADY_ASSIGNED";
+        else if (r.status === "INFORMATIONAL") outcome = "INFORMATIONAL";
+        else if (reason === null)
+          reason = excluded.has(r.nurseId)
+            ? "SESSION_EXCLUDED"
+            : (plan.skippedGroups.find((s) => s.shift === r.preference)
+                ?.reason ?? null);
+        return {
+          nurseId: r.nurseId,
+          displayName: names.get(r.nurseId) ?? null,
+          preference: r.preference,
+          previousAssignment: r.currentAssignment,
+          outcome,
+          reason,
+          violations: r.assessment?.blocking ?? [],
+        };
+      },
+    );
     return {
       scheduleId: schedule.id,
       date: target.date,

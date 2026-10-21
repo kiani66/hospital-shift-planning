@@ -9,6 +9,7 @@ import {
   type CandidatePreference,
   type CandidateShift,
 } from "../../domain/candidates/evaluate-candidates";
+import { comparePersonnelOrder } from "../../domain/identity/personnel-order";
 import { toDiagnostic } from "../../domain/rules/diagnostic";
 import {
   bucketCoverage,
@@ -252,6 +253,9 @@ export async function getCoverageCandidates(
     revisionScoped ? findOpenRevision(db, schedule.id) : null,
   ]);
   const nurseIds = universe.map((n) => n.userId);
+  const orderKeyOf = new Map(
+    universe.map((n) => [n.userId, { ...n, id: n.userId }]),
+  );
   // Boundary days for the whole universe, not only for nurses who already
   // have shifts in this schedule: a nurse with no shift this month can still
   // follow a Night on the previous schedule's last day (D7, D20).
@@ -273,6 +277,8 @@ export async function getCoverageCandidates(
       staffingRequirements: requirements,
       staffingNurseIds,
       preferences: new Map(preferences.map((p) => [p.userId, p.value])),
+      tieBreak: (a, b) =>
+        comparePersonnelOrder(orderKeyOf.get(a)!, orderKeyOf.get(b)!),
     }),
   );
 

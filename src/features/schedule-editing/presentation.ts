@@ -1,4 +1,5 @@
 import type { ActionError } from "@/application/result";
+import { normalizeIdentifierText } from "@/domain/identity/normalize";
 import { conflictsWithPreference } from "@/domain/preferences/preference-alignment";
 import type { PreferenceFit } from "@/domain/preferences/preference-fit";
 import type {
@@ -182,6 +183,7 @@ export function filterEditorNurses<
   N extends {
     readonly userId: string;
     readonly displayName: string;
+    readonly personnelNumber?: string | null;
     readonly preference: PreferenceValue | null;
   },
 >(
@@ -191,8 +193,17 @@ export function filterEditorNurses<
   kept: ReadonlySet<string> = new Set(),
 ): N[] {
   const needle = normalizeName(filters.query);
+  const digits = normalizeIdentifierText(filters.query);
+  // Order is the caller's (personnel-number order); filtering never reorders.
   return nurses.filter((n) => {
-    if (needle !== "" && !normalizeName(n.displayName).includes(needle))
+    if (
+      needle !== "" &&
+      !normalizeName(n.displayName).includes(needle) &&
+      !(
+        digits !== "" &&
+        normalizeIdentifierText(n.personnelNumber ?? "").includes(digits)
+      )
+    )
       return false;
     if (kept.has(n.userId)) return true;
     const shift = shiftOf(n.userId);

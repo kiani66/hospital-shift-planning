@@ -28,6 +28,7 @@ export * from "./schedule/publication";
 export * from "./schedule/day-health";
 export * from "./scope/date-scope";
 export * from "./preferences/preference-window";
+export * from "./identity/personnel-order";
 export * from "./preferences/can-edit-preference";
 export * from "./preferences/my-preferences";
 export * from "./preferences/preference-fit";

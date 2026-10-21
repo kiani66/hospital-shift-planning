@@ -24,6 +24,7 @@ import {
 import { loadActor } from "../../infrastructure/repositories/memberships";
 import { listPreferences } from "../../infrastructure/repositories/preferences";
 import { findOpenRevision } from "../../infrastructure/repositories/revisions";
+import { sortPeople } from "../../infrastructure/repositories/personnel-order";
 import { listRoster } from "../../infrastructure/repositories/roster";
 import {
   listImportPeriodMembers,
@@ -251,14 +252,18 @@ export async function previewScheduleCopy(ctx: AppContext, raw: unknown) {
       };
       return {
         ...result.plan,
-        nurses: [
-          ...new Map(
-            [
-              ...(await listRoster(tx, input.sourceScheduleId)),
-              ...result.roster,
-            ].map((nurse) => [nurse.userId, nurse]),
-          ).values(),
-        ],
+        // In personnel-number order; the panel lists each day's rows by it.
+        nurses: sortPeople(
+          [
+            ...new Map(
+              [
+                ...(await listRoster(tx, input.sourceScheduleId)),
+                ...result.roster,
+              ].map((nurse) => [nurse.userId, nurse]),
+            ).values(),
+          ],
+          (nurse) => nurse.userId,
+        ),
         sourceLabel: result.source.label,
         targetLabel: result.target.label,
         payload: {

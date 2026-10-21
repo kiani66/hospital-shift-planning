@@ -97,9 +97,9 @@ export type Candidate = AvailableCandidate | NotAllowedCandidate;
 export interface CandidateEvaluation {
   readonly date: IsoDate;
   readonly shift: CandidateShift;
-  /** Day status, then preference, then nurse id. */
+  /** Day status, then preference, then the tie-break (nurse id by default). */
   readonly available: readonly AvailableCandidate[];
-  /** Nurse id only. */
+  /** The tie-break only (nurse id by default). */
   readonly notAllowed: readonly NotAllowedCandidate[];
 }
 
@@ -122,6 +122,12 @@ export interface CandidateEvaluationInput {
    * night-rest context across the period boundary (D7, D20).
    */
   readonly adjacentAssignments: readonly Assignment[];
+  /**
+   * Final tie-break between nurses that rank equally (default: nurse id). The
+   * application passes the shared personnel-number order; it never affects who
+   * is available or blocked.
+   */
+  readonly tieBreak?: (a: string, b: string) => number;
   /** The pinned rule-set version's bounds (D106). */
   readonly staffingRequirements: ReadonlyMap<IsoDate, StaffingRequirement>;
   /** Each nurse's stored preference for `date`; absent means none (D35). */
@@ -142,14 +148,15 @@ const rank =
 const byDayStatus = rank<CandidateDayStatus>(CANDIDATE_DAY_STATUSES);
 const byPreference = rank<CandidatePreference>(CANDIDATE_PREFERENCES);
 
-/** Available order: day status, then preference, then nurse id. No score. */
+/** Available order: day status, then preference, then the tie-break (nurse id by default). No score. */
 export const compareAvailableCandidates = (
   a: AvailableCandidate,
   b: AvailableCandidate,
+  tieBreak: (a: string, b: string) => number = compareCandidateIds,
 ): number =>
   byDayStatus(a.dayStatus, b.dayStatus) ||
   byPreference(a.preference, b.preference) ||
-  compareCandidateIds(a.nurseId, b.nurseId);
+  tieBreak(a.nurseId, b.nurseId);
 
 /**
  * Evaluates every nurse of the universe for the candidate shift on `date`:
@@ -165,6 +172,7 @@ export function evaluateCandidates(
   input: CandidateEvaluationInput,
 ): Result<CandidateEvaluation, ValidationError> {
   const { period, date, shift } = input;
+  const tieBreak = input.tieBreak ?? compareCandidateIds;
   if (!isCandidateShift(shift))
     return err(
       new ValidationError("The candidate shift must be M, E or N", "shift"),
@@ -218,9 +226,9 @@ export function evaluateCandidates(
   return ok({
     date,
     shift,
-    available: available.sort(compareAvailableCandidates),
-    notAllowed: notAllowed.sort((a, b) =>
-      compareCandidateIds(a.nurseId, b.nurseId),
+    available: available.sort((a, b) =>
+      compareAvailableCandidates(a, b, tieBreak),
     ),
+    notAllowed: notAllowed.sort((a, b) => tieBreak(a.nurseId, b.nurseId)),
   });
 }

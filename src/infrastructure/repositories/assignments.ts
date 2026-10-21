@@ -4,6 +4,7 @@ import type { IsoDate } from "../../domain/shared/dates";
 import type { Assignment } from "../../domain/shifts/assignment";
 import type { AssignmentCode } from "../../domain/shifts/shift-type";
 import type { DbExecutor } from "../db/database";
+import { sortPeople } from "./personnel-order";
 import type { RosterEntry } from "./roster";
 import {
   schedules,
@@ -187,6 +188,7 @@ export async function listRosterAssignments(
       userId: scheduleRoster.userId,
       role: scheduleRoster.role,
       displayName: users.displayName,
+      personnelNumber: users.personnelNumber,
       date: shiftAssignments.date,
       shift: shiftAssignments.shiftCode,
     })
@@ -207,6 +209,7 @@ export async function listRosterAssignments(
     roster.set(row.userId, {
       userId: row.userId,
       displayName: row.displayName,
+      personnelNumber: row.personnelNumber,
       role: row.role,
     });
     if (row.date !== null && row.shift !== null)
@@ -218,5 +221,8 @@ export async function listRosterAssignments(
     (a, b) =>
       a.date.localeCompare(b.date) || a.nurseId.localeCompare(b.nurseId),
   );
-  return { roster: [...roster.values()], assignments };
+  return {
+    roster: sortPeople([...roster.values()], (r) => r.userId),
+    assignments,
+  };
 }

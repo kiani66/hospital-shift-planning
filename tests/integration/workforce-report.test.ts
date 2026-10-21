@@ -21,6 +21,7 @@ import {
   type WorkforceReportInput,
   type WorkforceReportSource,
 } from "../../src/application/workforce-report/queries";
+import { sortByPersonnelOrder } from "../../src/domain/identity/personnel-order";
 import { addDays, isoDate } from "../../src/domain/shared/dates";
 import { ValidationError } from "../../src/domain/shared/errors";
 import { unwrap } from "../../src/domain/shared/result";
@@ -561,7 +562,15 @@ describe("workforce report roster, history and calculation contract", () => {
         assignments: await listAssignments(db, scheduleId),
       }),
     );
-    expect(result.rows).toMatchObject(calculated.rows);
+    // Same figures as Stage 1; only the row order differs (personnel number).
+    const byId = <T extends { userId: string }>(rows: readonly T[]) =>
+      rows.toSorted((a, b) => a.userId.localeCompare(b.userId));
+    expect(byId(result.rows)).toMatchObject(byId(calculated.rows));
+    expect(result.rows.map((r) => r.userId)).toEqual(
+      sortByPersonnelOrder(result.rows, (r) => ({ ...r, id: r.userId })).map(
+        (r) => r.userId,
+      ),
+    );
     expect(result.rows).toHaveLength(7);
     expect(result.rows.find((r) => r.userId === U.icuHead.id)).toMatchObject({
       role: "HEAD_NURSE",

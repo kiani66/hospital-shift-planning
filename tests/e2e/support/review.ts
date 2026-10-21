@@ -49,8 +49,10 @@ export interface ReviewDepartment extends E2eDepartment {
  * - 4 Aban (2026-10-26): nurse 1 works M after that night → needs attention.
  * - every other day: unplanned.
  */
-export async function provisionReviewDepartment(): Promise<ReviewDepartment> {
-  const department = await provisionDepartment();
+export async function provisionReviewDepartment(
+  options?: Parameters<typeof provisionDepartment>[0],
+): Promise<ReviewDepartment> {
+  const department = await provisionDepartment(options);
   loadEnvConfig(process.cwd());
   if (!process.env.DATABASE_URL && existsSync(".env.local"))
     process.loadEnvFile(".env.local");

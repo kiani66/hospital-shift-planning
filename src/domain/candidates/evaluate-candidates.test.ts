@@ -253,6 +253,18 @@ describe("Available ordering: day status → preference → users.id", () => {
     ).toEqual([N1, N2, N3, N4, N5]);
   });
 
+  it("lets the caller replace only the final tie-break (never availability)", () => {
+    const universe = [N1, N2, N3];
+    const reversed = (x: string, y: string) => compareCandidateIds(y, x);
+    const result = evaluate({ nurseIds: universe, tieBreak: reversed });
+    expect(ids(result.available)).toEqual([N3, N2, N1]);
+    expect(ids(evaluate({ nurseIds: universe }).available)).toEqual([
+      N1,
+      N2,
+      N3,
+    ]);
+  });
+
   it("compares ids by code unit, not by locale", () => {
     expect(compareCandidateIds("a", "b")).toBe(-1);
     expect(compareCandidateIds("b", "a")).toBe(1);
