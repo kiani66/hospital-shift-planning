@@ -2,6 +2,19 @@
 
 Approved decisions that shape the implementation. Update this file when a decision changes.
 
+## Daily preference assistant Stage 2 — acceptance service
+
+Head Nurses may preview and accept current daily preferences in DRAFT/PLANNING,
+independently of window status. Preview is read-only; acceptance revalidates an
+actor-bound snapshot and expected revision under the established assignment,
+boundary and eligibility locks. ONE is an explicit manual choice; BULK uses the
+merged planner without ranking or resolving contention through exclusions.
+Persistence is insertion-only, audited and atomic, with one revision increment
+per nonempty acceptance. Existing assignments, hard-rule severity and publication
+gates are preserved. No UI, rejection persistence or schema change is added.
+Contracts, concurrency and aggregate-rule review:
+[daily-preferences-acceptance.md](daily-preferences-acceptance.md).
+
 ## Daily preference assistant Stage 2 — domain planner
 
 The daily planner preserves every existing assignment and groups registered
