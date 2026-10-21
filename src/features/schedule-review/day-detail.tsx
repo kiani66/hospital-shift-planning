@@ -496,6 +496,7 @@ export const flaggedNurses = (day: DayReview): ReadonlySet<string> =>
  * no shift, read-only.
  */
 export function DayDetail({
+  assistant,
   candidates,
   day,
   editor,
@@ -503,6 +504,7 @@ export function DayDetail({
   directSwap,
   shiftLabels,
 }: {
+  assistant?: ReactNode;
   candidates?: ReactNode;
   day: DayReview;
   editor?: ReactNode;
@@ -553,6 +555,7 @@ export function DayDetail({
       </div>
 
       <div className={cn("min-w-0", editor && "order-1 lg:order-2")}>
+        {assistant}
         {editor ?? (
           <div className="flex flex-col gap-3">
             <div className="grid gap-3 xl:grid-cols-2">

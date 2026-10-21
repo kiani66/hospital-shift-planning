@@ -55,6 +55,7 @@ import {
   DayDetail,
   flaggedNurses,
 } from "@/features/schedule-review/day-detail";
+import { DailyPreferenceAssistant } from "@/features/daily-preferences/assistant";
 import { ShortageCandidates } from "@/features/coverage-candidates/shortage-candidates";
 import { DayDetailDialog } from "@/features/schedule-review/day-detail-dialog";
 import { DayNav, type DayLink } from "@/features/schedule-review/day-nav";
@@ -430,6 +431,20 @@ export default async function DepartmentSchedulePage({
           navigation={<DayNav {...dayLinks} />}
         >
           <DayDetail
+            assistant={
+              review.day.edit.allowed &&
+              (selected.status === "DRAFT" ||
+                selected.status === "PLANNING") ? (
+                <DailyPreferenceAssistant
+                  key={`${selected.id}-${review.day.date}`}
+                  scheduleId={selected.id}
+                  date={review.day.date}
+                  revision={review.month.revision}
+                  period={review.month.period}
+                  shiftLabels={shiftLabels}
+                />
+              ) : undefined
+            }
             candidates={
               <ShortageCandidates
                 key={`${selected.id}-${review.day.date}`}
