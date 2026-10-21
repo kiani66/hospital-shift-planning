@@ -103,7 +103,7 @@ test("individual and bulk persist immediately; rejections reset; actual coverage
   await expect(row(page, d.names[3]!)).toContainText("قبلاً تخصیص یافته");
 });
 
-test("contention remains manual after rejection; independent night group proceeds; RTL layout fits 320px", async ({
+test("contention remains manual after rejection; independent night group proceeds; RTL layout fits 320/768/1280px", async ({
   page,
 }, info) => {
   const d = await provisionDailyPreferences(true);
@@ -164,6 +164,7 @@ test("contention remains manual after rejection; independent night group proceed
           ).map((e) => e.scrollWidth - e.clientWidth),
         ),
       ),
+      `Horizontal overflow at ${width}px`,
     ).toBeLessThanOrEqual(1);
   }
   await row(page, d.names[0]!)

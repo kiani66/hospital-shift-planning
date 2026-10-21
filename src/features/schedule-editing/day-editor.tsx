@@ -543,7 +543,7 @@ export function DayEditor({
         shiftLabels={shiftLabels}
       />
 
-      <div className="flex flex-col gap-2 md:flex-row md:items-start">
+      <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-start">
         <div className="flex flex-wrap items-center gap-1">
           <div
             role="group"
