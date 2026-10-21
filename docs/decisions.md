@@ -2,6 +2,18 @@
 
 Approved decisions that shape the implementation. Update this file when a decision changes.
 
+## Daily preference assistant Stage 2 — domain planner
+
+The daily planner preserves every existing assignment and groups registered
+working preferences by M/E/N/ME. OFF and non-nursing preferences are informational.
+New nursing suggestions reuse the existing hard-rule assessment and the schedule's
+pinned staffing resolution. Shared-capacity contention requires manual selection
+for every contributing group; no nurse or group wins by order. Session exclusions
+never reduce contention demand. Safe groups form one assessed insertion-only
+batch, with remaining shortages visible. This first slice adds only pure domain
+logic and tests; no acceptance command, UI, persisted rejection or migration.
+Contract and integration boundaries: [daily-preferences-domain.md](daily-preferences-domain.md).
+
 ## Preference-based scheduling Stage 1
 
 Head Nurses may apply the entire current preference set directly to a DRAFT or
